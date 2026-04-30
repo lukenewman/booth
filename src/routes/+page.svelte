@@ -23,6 +23,7 @@
   let shortcutsOpen = $state(false);
   let scanError = $state<string | null>(null);
   let searchBar: { focus: () => void } | undefined = $state();
+  let tokenStatus = $state<'checking' | 'ok' | 'missing' | 'invalid'>('checking');
 
   $effect(() => {
     const q = query.trim();
@@ -126,7 +127,13 @@
     highlightedIndex = (highlightedIndex + 1) % results.length;
   }
 
-  onMount(() => {
+  onMount(async () => {
+    const probe = await fetch('/api/discogs/search?q=test');
+    const probeData = await probe.json().catch(() => ({}));
+    if (probeData?.error === 'no_token') tokenStatus = 'missing';
+    else if (probeData?.error === 'invalid_token') tokenStatus = 'invalid';
+    else tokenStatus = 'ok';
+
     return installKeyboard(
       {
         focusSearch: () => searchBar?.focus(),
@@ -170,40 +177,63 @@
   }
 </script>
 
-<div class="app">
-  <header>
-    <span class="logo">booth</span>
-    <button type="button" class="hint" onclick={() => (shortcutsOpen = true)}>
-      <span class="kbd">?</span> shortcuts
-    </button>
-  </header>
+{#if tokenStatus === 'checking'}
+  <div class="app"><div class="loading">Loading…</div></div>
+{:else if tokenStatus === 'missing' || tokenStatus === 'invalid'}
+  <div class="app">
+    <header><span class="logo">booth</span></header>
+    <div class="setup">
+      <h2>{tokenStatus === 'missing' ? 'Setup needed' : 'Token rejected'}</h2>
+      <p>
+        {#if tokenStatus === 'missing'}
+          The <code>DISCOGS_TOKEN</code> environment variable isn't set.
+        {:else}
+          Your Discogs token was rejected (401). It may be expired or mistyped.
+        {/if}
+      </p>
+      <ol>
+        <li>Get a personal access token at <code>discogs.com/settings/developers</code>.</li>
+        <li>Add it to <code>.env</code> as <code>DISCOGS_TOKEN=&lt;token&gt;</code>.</li>
+        <li>Restart <code>pnpm dev</code>.</li>
+      </ol>
+    </div>
+  </div>
+{:else}
+  <div class="app">
+    <header>
+      <span class="logo">booth</span>
+      <button type="button" class="hint" onclick={() => (shortcutsOpen = true)}>
+        <span class="kbd">?</span> shortcuts
+      </button>
+    </header>
 
-  {#if mode.current === 'search'}
-    <SearchBar bind:this={searchBar} bind:value={query} onScan={() => mode.setScanner()} />
+    {#if mode.current === 'search'}
+      <SearchBar bind:this={searchBar} bind:value={query} onScan={() => mode.setScanner()} />
 
-    {#if loading}
-      <div class="loading">Searching…</div>
-    {:else if query.trim()}
-      <ResultsList {results} {highlightedIndex} onSelect={handleSelect} />
+      {#if loading}
+        <div class="loading">Searching…</div>
+      {:else if query.trim()}
+        <ResultsList {results} {highlightedIndex} onSelect={handleSelect} />
+      {/if}
+    {:else}
+      <Scanner onDecode={handleBarcode} onError={() => {}} />
+      <div class="exit-hint"><span class="kbd">esc</span> to exit scanner</div>
     {/if}
-  {:else}
-    <Scanner onDecode={handleBarcode} onError={() => {}} />
-    <div class="exit-hint"><span class="kbd">esc</span> to exit scanner</div>
+    <SessionLog onUndo={undoLast} />
+  </div>
+
+  {#if pending}
+    <ConfirmModal
+      release={pending}
+      onConfirm={confirmAdd}
+      onCancel={cancelAdd}
+      {submitting}
+      error={modalError}
+    />
   {/if}
-  <SessionLog onUndo={undoLast} />
-</div>
 
-{#if pending}
-  <ConfirmModal
-    release={pending}
-    onConfirm={confirmAdd}
-    onCancel={cancelAdd}
-    {submitting}
-    error={modalError}
-  />
+  <ShortcutOverlay open={shortcutsOpen} onClose={() => (shortcutsOpen = false)} />
 {/if}
-
-<ShortcutOverlay open={shortcutsOpen} onClose={() => (shortcutsOpen = false)} />
 
 <style>
   .app {
@@ -242,5 +272,36 @@
     text-align: center;
     color: var(--text-muted);
     font-size: 12px;
+  }
+  .setup {
+    margin-top: 24px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .setup h2 {
+    font-size: 16px;
+    margin: 0 0 8px;
+  }
+  .setup p {
+    color: var(--text-muted);
+    margin: 0 0 12px;
+  }
+  .setup code {
+    background: var(--bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .setup ol {
+    margin: 0;
+    padding-left: 20px;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+  .setup li {
+    margin-bottom: 4px;
   }
 </style>
