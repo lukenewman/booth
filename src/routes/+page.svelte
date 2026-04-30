@@ -3,6 +3,9 @@
   import ResultsList from '$lib/components/ResultsList.svelte';
   import ConfirmModal from '$lib/components/ConfirmModal.svelte';
   import SessionLog from '$lib/components/SessionLog.svelte';
+  import ShortcutOverlay from '$lib/components/ShortcutOverlay.svelte';
+  import { installKeyboard } from '$lib/keyboard.svelte';
+  import { onMount } from 'svelte';
   import { mode } from '$lib/stores/mode.svelte';
   import { session } from '$lib/stores/session.svelte';
   import { toast } from '$lib/stores/toast.svelte';
@@ -16,6 +19,8 @@
   let submitting = $state(false);
   let modalError = $state<string | null>(null);
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  let shortcutsOpen = $state(false);
+  let searchBar: { focus: () => void } | undefined = $state();
 
   $effect(() => {
     const q = query.trim();
@@ -82,6 +87,37 @@
     modalError = null;
   }
 
+  function selectHighlighted() {
+    const r = results[highlightedIndex];
+    if (r) handleSelect(r);
+  }
+
+  function highlightUp() {
+    if (results.length === 0) return;
+    highlightedIndex = (highlightedIndex - 1 + results.length) % results.length;
+  }
+
+  function highlightDown() {
+    if (results.length === 0) return;
+    highlightedIndex = (highlightedIndex + 1) % results.length;
+  }
+
+  onMount(() => {
+    return installKeyboard(
+      {
+        focusSearch: () => searchBar?.focus(),
+        highlightUp,
+        highlightDown,
+        selectHighlighted,
+        confirmModal: () => confirmAdd(),
+        cancelModal: () => cancelAdd(),
+        undoLast,
+        toggleShortcuts: () => (shortcutsOpen = !shortcutsOpen),
+      },
+      { modalOpen: () => pending !== null },
+    );
+  });
+
   async function undoLast() {
     const last = session.last;
     if (!last) return;
@@ -113,11 +149,13 @@
 <div class="app">
   <header>
     <span class="logo">booth</span>
-    <span class="hint"><span class="kbd">?</span> shortcuts</span>
+    <button type="button" class="hint" onclick={() => (shortcutsOpen = true)}>
+      <span class="kbd">?</span> shortcuts
+    </button>
   </header>
 
   {#if mode.current === 'search'}
-    <SearchBar bind:value={query} onScan={() => mode.setScanner()} />
+    <SearchBar bind:this={searchBar} bind:value={query} onScan={() => mode.setScanner()} />
 
     {#if loading}
       <div class="loading">Searching…</div>
@@ -139,6 +177,8 @@
     error={modalError}
   />
 {/if}
+
+<ShortcutOverlay open={shortcutsOpen} onClose={() => (shortcutsOpen = false)} />
 
 <style>
   .app {
@@ -165,5 +205,12 @@
     text-align: center;
     color: var(--text-muted);
     font-size: 13px;
+  }
+  .hint {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 0;
   }
 </style>
