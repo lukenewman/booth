@@ -1,13 +1,19 @@
 <script lang="ts">
   import SearchBar from '$lib/components/SearchBar.svelte';
   import ResultsList from '$lib/components/ResultsList.svelte';
+  import ConfirmModal from '$lib/components/ConfirmModal.svelte';
   import { mode } from '$lib/stores/mode.svelte';
-  import type { DiscogsRelease } from '$lib/types';
+  import { session } from '$lib/stores/session.svelte';
+  import { toast } from '$lib/stores/toast.svelte';
+  import type { DiscogsRelease, AddResponse, ApiError } from '$lib/types';
 
   let query = $state('');
   let results = $state<DiscogsRelease[]>([]);
   let highlightedIndex = $state(0);
   let loading = $state(false);
+  let pending = $state<DiscogsRelease | null>(null);
+  let submitting = $state(false);
+  let modalError = $state<string | null>(null);
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
   $effect(() => {
@@ -33,7 +39,46 @@
   }
 
   function handleSelect(release: DiscogsRelease) {
-    console.log('selected', release);
+    pending = release;
+    modalError = null;
+  }
+
+  async function confirmAdd() {
+    if (!pending) return;
+    submitting = true;
+    modalError = null;
+    try {
+      const res = await fetch('/api/discogs/collection/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ releaseId: pending.id }),
+      });
+      const data: AddResponse | ApiError = await res.json();
+      if (!res.ok) {
+        modalError = (data as ApiError).message ?? 'Add failed';
+        return;
+      }
+      const ok = data as AddResponse;
+      session.add({
+        releaseId: ok.releaseId,
+        instanceId: ok.instanceId,
+        title: pending.title,
+        artist: pending.artist,
+        addedAt: Date.now(),
+      });
+      toast.show(`Added: ${pending.artist} — ${pending.title}`);
+      pending = null;
+    } catch (e) {
+      modalError = e instanceof Error ? e.message : 'Network error';
+    } finally {
+      submitting = false;
+    }
+  }
+
+  function cancelAdd() {
+    if (submitting) return;
+    pending = null;
+    modalError = null;
   }
 </script>
 
@@ -55,6 +100,16 @@
     <div class="placeholder">Scanner mode (coming soon)</div>
   {/if}
 </div>
+
+{#if pending}
+  <ConfirmModal
+    release={pending}
+    onConfirm={confirmAdd}
+    onCancel={cancelAdd}
+    {submitting}
+    error={modalError}
+  />
+{/if}
 
 <style>
   .app {
