@@ -4,6 +4,7 @@
   import ConfirmModal from '$lib/components/ConfirmModal.svelte';
   import SessionLog from '$lib/components/SessionLog.svelte';
   import ShortcutOverlay from '$lib/components/ShortcutOverlay.svelte';
+  import Scanner from '$lib/components/Scanner.svelte';
   import { installKeyboard } from '$lib/keyboard.svelte';
   import { onMount } from 'svelte';
   import { mode } from '$lib/stores/mode.svelte';
@@ -20,6 +21,7 @@
   let modalError = $state<string | null>(null);
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
   let shortcutsOpen = $state(false);
+  let scanError = $state<string | null>(null);
   let searchBar: { focus: () => void } | undefined = $state();
 
   $effect(() => {
@@ -39,6 +41,28 @@
       const data = await res.json();
       results = data.results ?? [];
       highlightedIndex = 0;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function handleBarcode(code: string) {
+    loading = true;
+    try {
+      const res = await fetch(`/api/discogs/barcode/${encodeURIComponent(code)}`);
+      const data = await res.json();
+      results = data.results ?? [];
+      highlightedIndex = 0;
+      if (results.length === 0) {
+        query = code;
+        mode.setSearch();
+        toast.show(`No match for ${code}. Try search instead.`, { kind: 'error' });
+      } else {
+        mode.setSearch();
+      }
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : 'Lookup failed', { kind: 'error' });
+      mode.setSearch();
     } finally {
       loading = false;
     }
@@ -163,7 +187,8 @@
       <ResultsList {results} {highlightedIndex} onSelect={handleSelect} />
     {/if}
   {:else}
-    <div class="placeholder">Scanner mode (coming soon)</div>
+    <Scanner onDecode={handleBarcode} onError={() => {}} />
+    <div class="exit-hint"><span class="kbd">esc</span> to exit scanner</div>
   {/if}
   <SessionLog onUndo={undoLast} />
 </div>
@@ -212,5 +237,10 @@
     color: var(--text-muted);
     font-size: 12px;
     padding: 0;
+  }
+  .exit-hint {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12px;
   }
 </style>
