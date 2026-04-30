@@ -2,6 +2,7 @@
   import SearchBar from '$lib/components/SearchBar.svelte';
   import ResultsList from '$lib/components/ResultsList.svelte';
   import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+  import SessionLog from '$lib/components/SessionLog.svelte';
   import { mode } from '$lib/stores/mode.svelte';
   import { session } from '$lib/stores/session.svelte';
   import { toast } from '$lib/stores/toast.svelte';
@@ -80,6 +81,33 @@
     pending = null;
     modalError = null;
   }
+
+  async function undoLast() {
+    const last = session.last;
+    if (!last) return;
+    try {
+      const res = await fetch('/api/discogs/collection/remove', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ releaseId: last.releaseId, instanceId: last.instanceId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.show(data.message ?? 'Undo failed', {
+          kind: 'error',
+          action: { label: 'retry', onClick: () => undoLast() },
+        });
+        return;
+      }
+      session.removeById(last.releaseId, last.instanceId);
+      toast.show(`Undone: ${last.artist} — ${last.title}`);
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : 'Network error', {
+        kind: 'error',
+        action: { label: 'retry', onClick: () => undoLast() },
+      });
+    }
+  }
 </script>
 
 <div class="app">
@@ -99,6 +127,7 @@
   {:else}
     <div class="placeholder">Scanner mode (coming soon)</div>
   {/if}
+  <SessionLog onUndo={undoLast} />
 </div>
 
 {#if pending}
