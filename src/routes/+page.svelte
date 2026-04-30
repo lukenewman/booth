@@ -40,8 +40,21 @@
     try {
       const res = await fetch(`/api/discogs/search?q=${encodeURIComponent(q)}`);
       const data = await res.json();
+      if (!res.ok) {
+        if (data?.error === 'rate_limited') {
+          toast.show(`Rate limited. Try again in ${data.retryAfter ?? 60}s.`, { kind: 'error' });
+        } else {
+          toast.show(data?.message ?? 'Search failed', { kind: 'error' });
+        }
+        return;
+      }
       results = data.results ?? [];
       highlightedIndex = 0;
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : 'Network error', {
+        kind: 'error',
+        action: { label: 'retry', onClick: () => runSearch(q) },
+      });
     } finally {
       loading = false;
     }
@@ -52,6 +65,15 @@
     try {
       const res = await fetch(`/api/discogs/barcode/${encodeURIComponent(code)}`);
       const data = await res.json();
+      if (!res.ok) {
+        if (data?.error === 'rate_limited') {
+          toast.show(`Rate limited. Try again in ${data.retryAfter ?? 60}s.`, { kind: 'error' });
+        } else {
+          toast.show(data?.message ?? `Lookup failed for ${code}`, { kind: 'error' });
+        }
+        mode.setSearch();
+        return;
+      }
       results = data.results ?? [];
       highlightedIndex = 0;
       if (results.length === 0) {
