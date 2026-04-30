@@ -1,3 +1,4 @@
+import { env } from '$env/dynamic/private';
 import type { ApiError } from '$lib/types';
 
 const BASE = 'https://api.discogs.com';
@@ -10,7 +11,7 @@ export class DiscogsError extends Error {
 }
 
 function getToken(): string {
-  const token = process.env.DISCOGS_TOKEN;
+  const token = env.DISCOGS_TOKEN;
   if (!token) {
     throw new DiscogsError({ error: 'no_token', message: 'DISCOGS_TOKEN not set in .env' }, 500);
   }
