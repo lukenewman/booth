@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Library Persistent ID</key><string>ABC123</string>
+  <key>Tracks</key>
+  <dict>
+    <key>12345</key>
+    <dict>
+      <key>Track ID</key><integer>12345</integer>
+      <key>Name</key><string>Around the World</string>
+      <key>Artist</key><string>Daft Punk</string>
+      <key>Album Artist</key><string>Daft Punk</string>
+      <key>Album</key><string>Homework</string>
+      <key>Year</key><integer>1997</integer>
+      <key>Total Time</key><integer>429000</integer>
+      <key>Track Number</key><integer>7</integer>
+      <key>Rating</key><integer>100</integer>
+      <key>Play Count</key><integer>47</integer>
+      <key>Genre</key><string>Electronic</string>
+      <key>Kind</key><string>Apple Lossless audio file</string>
+      <key>Location</key><string>file:///Users/luke/Music/Homework/07%20Around%20the%20World.m4a</string>
+    </dict>
+    <key>67890</key>
+    <dict>
+      <key>Track ID</key><integer>67890</integer>
+      <key>Name</key><string>Da Funk</string>
+      <key>Artist</key><string>Daft Punk</string>
+      <key>Album Artist</key><string>Daft Punk</string>
+      <key>Album</key><string>Homework</string>
+      <key>Year</key><integer>1997</integer>
+      <key>Total Time</key><integer>328000</integer>
+      <key>Track Number</key><integer>3</integer>
+      <key>Location</key><string>file:///Users/luke/Music/Homework/03%20Da%20Funk.m4a</string>
+    </dict>
+    <key>99999</key>
+    <dict>
+      <key>Track ID</key><integer>99999</integer>
+      <key>Name</key><string>Cloud-Only</string>
+      <key>Artist</key><string>Some Artist</string>
+      <key>Kind</key><string>Apple Music AAC audio file</string>
+    </dict>
+  </dict>
+</dict>
+</plist>

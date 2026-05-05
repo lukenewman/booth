@@ -2043,7 +2043,7 @@ git commit -m "feat(library): inspection endpoints + auto-sync-on-boot hook"
 - Create: `scripts/verify-itunes-parse.ts`
 - Create: `scripts/fixtures/itunes-tiny.xml`
 
-- [ ] **Step 1: Add a tiny fixture**
+- [x] **Step 1: Add a tiny fixture**
 
 Create `scripts/fixtures/itunes-tiny.xml`:
 
@@ -2097,13 +2097,13 @@ Create `scripts/fixtures/itunes-tiny.xml`:
 
 (The third track has no `Location` — it's a cloud-only entry that the parser must skip.)
 
-- [ ] **Step 2: Implement the parser**
+- [x] **Step 2: Implement the parser**
 
 Create `src/lib/server/sources/itunes/parse.ts`:
 
 ```ts
 import { readFileSync } from 'node:fs';
-import plist from 'plist';
+import * as plist from 'plist';
 
 export interface ITunesTrack {
   trackId: number;
@@ -2171,7 +2171,7 @@ export function parseITunesLibrary(xmlPath: string): ITunesLibrary {
 }
 ```
 
-- [ ] **Step 3: Verify against the fixture**
+- [x] **Step 3: Verify against the fixture**
 
 Create `scripts/verify-itunes-parse.ts`:
 
@@ -2202,7 +2202,7 @@ console.log('OK: itunes parse');
 Run: `pnpm verify scripts/verify-itunes-parse.ts`
 Expected: `OK: itunes parse`. Exit code 0.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add scripts/fixtures src/lib/server/sources/itunes/parse.ts scripts/verify-itunes-parse.ts
