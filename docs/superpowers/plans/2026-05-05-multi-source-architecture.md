@@ -2551,7 +2551,7 @@ git commit -m "feat(sources): rekordbox + plex stubs registered"
 **Files:**
 - Modify: `docs/CONTEXT.md`
 
-- [ ] **Step 1: Rewrite `docs/CONTEXT.md`**
+- [x] **Step 1: Rewrite `docs/CONTEXT.md`**
 
 The current CONTEXT.md is the source-of-truth for what's currently shipped. Update it to reflect Slice 1's realities. Replace the file's content sections (everything after the first heading) with the structure below, filling in details from the codebase as it now stands:
 
@@ -2564,7 +2564,7 @@ The current CONTEXT.md is the source-of-truth for what's currently shipped. Upda
 - **Known gaps / future work** — replace with the spec's §9 "Future work" list (verbatim or paraphrased).
 - **Local development** — add `pnpm verify scripts/<name>.ts` for the verification scripts; document that the DB is auto-initialized on first server boot.
 
-- [ ] **Step 2: Verify nothing in CONTEXT.md references deleted files**
+- [x] **Step 2: Verify nothing in CONTEXT.md references deleted files**
 
 Run:
 
@@ -2574,7 +2574,7 @@ grep -nE 'collection-cache|collection/ids' docs/CONTEXT.md
 
 Expected: zero matches.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs/CONTEXT.md
