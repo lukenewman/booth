@@ -46,6 +46,12 @@ export function installKeyboard(actions: KeyboardActions, state: KeyboardState) 
     }
 
     // Search mode
+    if (e.key === 'Escape' && inEditable) {
+      e.preventDefault();
+      target?.blur();
+      return;
+    }
+
     if (e.key === '/' && !inEditable) {
       e.preventDefault();
       actions.focusSearch();

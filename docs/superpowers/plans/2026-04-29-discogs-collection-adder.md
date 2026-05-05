@@ -1,6 +1,8 @@
 # Discogs Collection Adder Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **STATUS — Shipped 2026-05-04.** All 28 tasks completed. For the source-of-truth on what's actually in the codebase today (including post-MVP polish that diverges from this plan), see [`docs/CONTEXT.md`](../../CONTEXT.md). This plan is preserved as the original blueprint.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Build a single-user, local SvelteKit web app that makes adding records to a Discogs collection fast — supporting both text search and webcam barcode scanning, with keyboard shortcuts throughout.
 
@@ -26,7 +28,7 @@
 
 The current directory `/Users/luke/code/booth` already contains `docs/` and `.superpowers/`. The `sv create` CLI will warn that the directory is non-empty — answer "yes, continue" / use `--force`.
 
-- [ ] **Step 1: Scaffold with the `sv` CLI**
+- [x] **Step 1: Scaffold with the `sv` CLI**
 
 Run from `/Users/luke/code/booth`:
 ```bash
@@ -35,13 +37,13 @@ pnpm dlx sv@latest create . --template minimal --types ts --no-add-ons
 
 If prompted "Directory not empty. Continue?", answer **yes**. If the flag form differs in the installed `sv` version, run `pnpm dlx sv@latest create .` and answer interactively: template = **minimal**, type checking = **TypeScript**, add-ons = **none**.
 
-- [ ] **Step 2: Install dependencies**
+- [x] **Step 2: Install dependencies**
 
 ```bash
 pnpm install
 ```
 
-- [ ] **Step 3: Update `.gitignore`**
+- [x] **Step 3: Update `.gitignore`**
 
 Append to existing `.gitignore`:
 ```
@@ -50,7 +52,7 @@ Append to existing `.gitignore`:
 .env.local
 ```
 
-- [ ] **Step 4: Create `.env.example`**
+- [x] **Step 4: Create `.env.example`**
 
 Create `/Users/luke/code/booth/.env.example`:
 ```
@@ -61,14 +63,14 @@ DISCOGS_TOKEN=
 # DISCOGS_FOLDER_ID=1
 ```
 
-- [ ] **Step 5: Verify dev server boots**
+- [x] **Step 5: Verify dev server boots**
 
 ```bash
 pnpm dev
 ```
 Expected: Vite prints `Local: http://localhost:5173/`. Open it in a browser. The default SvelteKit "Welcome" page renders. Stop the server (`Ctrl+C`).
 
-- [ ] **Step 6: Initialize git and commit**
+- [x] **Step 6: Initialize git and commit**
 
 ```bash
 cd /Users/luke/code/booth
@@ -86,7 +88,7 @@ git commit -m "chore: scaffold SvelteKit + TS project"
 - Create: `src/app.css`
 - Modify: `src/routes/+layout.svelte` (create if not present)
 
-- [ ] **Step 1: Create `src/app.css`**
+- [x] **Step 1: Create `src/app.css`**
 
 ```css
 :root {
@@ -156,7 +158,7 @@ input::placeholder {
 }
 ```
 
-- [ ] **Step 2: Update `src/app.html`**
+- [x] **Step 2: Update `src/app.html`**
 
 Replace the content of `src/app.html` with:
 ```html
@@ -175,7 +177,7 @@ Replace the content of `src/app.html` with:
 </html>
 ```
 
-- [ ] **Step 3: Create `src/routes/+layout.svelte`**
+- [x] **Step 3: Create `src/routes/+layout.svelte`**
 
 ```svelte
 <script lang="ts">
@@ -186,14 +188,14 @@ Replace the content of `src/app.html` with:
 {@render children()}
 ```
 
-- [ ] **Step 4: Verify dark theme renders**
+- [x] **Step 4: Verify dark theme renders**
 
 ```bash
 pnpm dev
 ```
 Open http://localhost:5173. The default Welcome page should now have a near-black background and light text. Stop the server.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .
@@ -207,7 +209,7 @@ git commit -m "feat: add dark theme baseline and global tokens"
 **Files:**
 - Create: `src/lib/types.ts`
 
-- [ ] **Step 1: Create `src/lib/types.ts`**
+- [x] **Step 1: Create `src/lib/types.ts`**
 
 ```ts
 // The trimmed Discogs release shape we use throughout the app.
@@ -255,7 +257,7 @@ export interface AddResponse {
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/lib/types.ts
@@ -269,7 +271,7 @@ git commit -m "feat: add shared TypeScript types"
 **Files:**
 - Create: `src/lib/server/discogs.ts`
 
-- [ ] **Step 1: Create `src/lib/server/discogs.ts`**
+- [x] **Step 1: Create `src/lib/server/discogs.ts`**
 
 ```ts
 import type { ApiError } from '$lib/types';
@@ -336,7 +338,7 @@ export async function discogsFetch(path: string, init: RequestInit = {}): Promis
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/lib/server/discogs.ts
@@ -350,7 +352,7 @@ git commit -m "feat: add server-side Discogs fetch wrapper"
 **Files:**
 - Create: `src/lib/server/username.ts`
 
-- [ ] **Step 1: Create `src/lib/server/username.ts`**
+- [x] **Step 1: Create `src/lib/server/username.ts`**
 
 ```ts
 import { discogsFetch } from './discogs';
@@ -369,7 +371,7 @@ export async function getUsername(): Promise<string> {
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/lib/server/username.ts
@@ -383,7 +385,7 @@ git commit -m "feat: add lazy username cache for Discogs identity"
 **Files:**
 - Create: `src/routes/api/discogs/search/+server.ts`
 
-- [ ] **Step 1: Create the endpoint**
+- [x] **Step 1: Create the endpoint**
 
 ```ts
 import { json, error } from '@sveltejs/kit';
@@ -447,7 +449,7 @@ export const GET: RequestHandler = async ({ url }) => {
 };
 ```
 
-- [ ] **Step 2: Manually verify with `.env` set**
+- [x] **Step 2: Manually verify with `.env` set**
 
 Create a real `.env`:
 ```bash
@@ -463,7 +465,7 @@ curl 'http://localhost:5173/api/discogs/search?q=spirit%20of%20eden'
 ```
 Expected: JSON like `{"results":[{"id":..., "artist":"Talk Talk", "title":"Spirit Of Eden", ...}, ...]}`. Stop the dev server.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/routes/api/discogs/search/+server.ts
@@ -477,7 +479,7 @@ git commit -m "feat: add /api/discogs/search endpoint"
 **Files:**
 - Create: `src/lib/stores/mode.svelte.ts`
 
-- [ ] **Step 1: Create the store**
+- [x] **Step 1: Create the store**
 
 ```ts
 import type { AppMode } from '$lib/types';
@@ -501,7 +503,7 @@ class ModeStore {
 export const mode = new ModeStore();
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/lib/stores/mode.svelte.ts
@@ -515,7 +517,7 @@ git commit -m "feat: add mode store (search/scanner)"
 **Files:**
 - Create: `src/lib/components/ResultRow.svelte`
 
-- [ ] **Step 1: Create the component**
+- [x] **Step 1: Create the component**
 
 ```svelte
 <script lang="ts">
@@ -604,7 +606,7 @@ git commit -m "feat: add mode store (search/scanner)"
 </style>
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/lib/components/ResultRow.svelte
@@ -618,7 +620,7 @@ git commit -m "feat: add ResultRow component"
 **Files:**
 - Create: `src/lib/components/ResultsList.svelte`
 
-- [ ] **Step 1: Create the component**
+- [x] **Step 1: Create the component**
 
 ```svelte
 <script lang="ts">
@@ -664,7 +666,7 @@ git commit -m "feat: add ResultRow component"
 </style>
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/lib/components/ResultsList.svelte
@@ -678,7 +680,7 @@ git commit -m "feat: add ResultsList component"
 **Files:**
 - Create: `src/lib/components/SearchBar.svelte`
 
-- [ ] **Step 1: Create the component**
+- [x] **Step 1: Create the component**
 
 ```svelte
 <script lang="ts">
@@ -757,7 +759,7 @@ git commit -m "feat: add ResultsList component"
 </style>
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/lib/components/SearchBar.svelte
@@ -771,7 +773,7 @@ git commit -m "feat: add SearchBar component"
 **Files:**
 - Modify: `src/routes/+page.svelte`
 
-- [ ] **Step 1: Replace `src/routes/+page.svelte`**
+- [x] **Step 1: Replace `src/routes/+page.svelte`**
 
 ```svelte
 <script lang="ts">
@@ -861,14 +863,14 @@ git commit -m "feat: add SearchBar component"
 </style>
 ```
 
-- [ ] **Step 2: Manually verify search end-to-end**
+- [x] **Step 2: Manually verify search end-to-end**
 
 ```bash
 pnpm dev
 ```
 Open http://localhost:5173. Type `spirit of eden`. After ~250ms, results appear with cover thumbnails, artist/title, and metadata sub-line. The first row is highlighted in blue. Click a row — check the browser console for the `selected ...` log. Stop the server.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/routes/+page.svelte
@@ -882,7 +884,7 @@ git commit -m "feat: wire up search bar with debounced results"
 **Files:**
 - Create: `src/lib/components/ConfirmModal.svelte`
 
-- [ ] **Step 1: Create the component**
+- [x] **Step 1: Create the component**
 
 ```svelte
 <script lang="ts">
@@ -1026,7 +1028,7 @@ git commit -m "feat: wire up search bar with debounced results"
 </style>
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/lib/components/ConfirmModal.svelte
@@ -1040,7 +1042,7 @@ git commit -m "feat: add ConfirmModal component"
 **Files:**
 - Create: `src/routes/api/discogs/collection/add/+server.ts`
 
-- [ ] **Step 1: Create the endpoint**
+- [x] **Step 1: Create the endpoint**
 
 ```ts
 import { json, error } from '@sveltejs/kit';
@@ -1085,7 +1087,7 @@ export const POST: RequestHandler = async ({ request }) => {
 };
 ```
 
-- [ ] **Step 2: Manually verify with curl**
+- [x] **Step 2: Manually verify with curl**
 
 ```bash
 pnpm dev
@@ -1100,7 +1102,7 @@ Expected: `{"releaseId":13455,"instanceId":<number>}`. Verify in your Discogs co
 
 (If you don't want a test release in your collection, use a release you actually want — the next task adds undo, but a manual remove on Discogs is also fine.)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/routes/api/discogs/collection/add/+server.ts
@@ -1115,7 +1117,7 @@ git commit -m "feat: add /api/discogs/collection/add endpoint"
 - Create: `src/lib/components/Toast.svelte`
 - Create: `src/lib/stores/toast.svelte.ts`
 
-- [ ] **Step 1: Create the toast store `src/lib/stores/toast.svelte.ts`**
+- [x] **Step 1: Create the toast store `src/lib/stores/toast.svelte.ts`**
 
 ```ts
 export interface ToastMessage {
@@ -1147,7 +1149,7 @@ class ToastStore {
 export const toast = new ToastStore();
 ```
 
-- [ ] **Step 2: Create `src/lib/components/Toast.svelte`**
+- [x] **Step 2: Create `src/lib/components/Toast.svelte`**
 
 ```svelte
 <script lang="ts">
@@ -1209,7 +1211,7 @@ export const toast = new ToastStore();
 </style>
 ```
 
-- [ ] **Step 3: Mount Toast in `src/routes/+layout.svelte`**
+- [x] **Step 3: Mount Toast in `src/routes/+layout.svelte`**
 
 Replace the contents:
 ```svelte
@@ -1223,7 +1225,7 @@ Replace the contents:
 <Toast />
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/lib/stores/toast.svelte.ts src/lib/components/Toast.svelte src/routes/+layout.svelte
@@ -1237,7 +1239,7 @@ git commit -m "feat: add Toast component and store"
 **Files:**
 - Create: `src/lib/stores/session.svelte.ts`
 
-- [ ] **Step 1: Create the store**
+- [x] **Step 1: Create the store**
 
 ```ts
 import type { SessionEntry } from '$lib/types';
@@ -1262,7 +1264,7 @@ class SessionStore {
 export const session = new SessionStore();
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/lib/stores/session.svelte.ts
@@ -1276,7 +1278,7 @@ git commit -m "feat: add session log store"
 **Files:**
 - Modify: `src/routes/+page.svelte`
 
-- [ ] **Step 1: Update `src/routes/+page.svelte`**
+- [x] **Step 1: Update `src/routes/+page.svelte`**
 
 Replace the entire file contents with:
 ```svelte
@@ -1422,14 +1424,14 @@ Replace the entire file contents with:
 </style>
 ```
 
-- [ ] **Step 2: Manually verify the full add flow**
+- [x] **Step 2: Manually verify the full add flow**
 
 ```bash
 pnpm dev
 ```
 Open http://localhost:5173. Search for a record. Click a result → confirm modal appears. Click "Add" → modal closes, toast appears at the bottom: "Added: ...". Verify in Discogs that the record appears in your collection. Stop the server.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/routes/+page.svelte
@@ -1443,7 +1445,7 @@ git commit -m "feat: wire up full add flow with confirm modal and toast"
 **Files:**
 - Create: `src/lib/components/SessionLog.svelte`
 
-- [ ] **Step 1: Create the component**
+- [x] **Step 1: Create the component**
 
 ```svelte
 <script lang="ts">
@@ -1489,7 +1491,7 @@ git commit -m "feat: wire up full add flow with confirm modal and toast"
 </style>
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/lib/components/SessionLog.svelte
@@ -1503,7 +1505,7 @@ git commit -m "feat: add SessionLog component"
 **Files:**
 - Create: `src/routes/api/discogs/collection/remove/+server.ts`
 
-- [ ] **Step 1: Create the endpoint**
+- [x] **Step 1: Create the endpoint**
 
 ```ts
 import { json, error } from '@sveltejs/kit';
@@ -1541,7 +1543,7 @@ export const DELETE: RequestHandler = async ({ request }) => {
 };
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/routes/api/discogs/collection/remove/+server.ts
@@ -1555,7 +1557,7 @@ git commit -m "feat: add /api/discogs/collection/remove endpoint"
 **Files:**
 - Modify: `src/routes/+page.svelte`
 
-- [ ] **Step 1: Add SessionLog import and undo logic**
+- [x] **Step 1: Add SessionLog import and undo logic**
 
 In `src/routes/+page.svelte`, add to the imports near the top:
 ```ts
@@ -1603,14 +1605,14 @@ In the template, add `<SessionLog onUndo={undoLast} />` inside `.app`, just befo
 </div>
 ```
 
-- [ ] **Step 2: Manually verify undo**
+- [x] **Step 2: Manually verify undo**
 
 ```bash
 pnpm dev
 ```
 Open http://localhost:5173. Search → add a record → confirm. Session log appears with count = 1 and "undo last" button. Click "undo last" → toast appears, count goes to 0. Verify in Discogs that the record was removed from your collection. Stop the server.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/routes/+page.svelte
@@ -1624,7 +1626,7 @@ git commit -m "feat: wire up undo for session log"
 **Files:**
 - Create: `src/lib/keyboard.svelte.ts`
 
-- [ ] **Step 1: Create the handler**
+- [x] **Step 1: Create the handler**
 
 ```ts
 import { mode } from '$lib/stores/mode.svelte';
@@ -1735,7 +1737,7 @@ export function installKeyboard(actions: KeyboardActions, state: KeyboardState) 
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/lib/keyboard.svelte.ts
@@ -1749,7 +1751,7 @@ git commit -m "feat: add global keyboard handler"
 **Files:**
 - Create: `src/lib/components/ShortcutOverlay.svelte`
 
-- [ ] **Step 1: Create the component**
+- [x] **Step 1: Create the component**
 
 ```svelte
 <script lang="ts">
@@ -1831,7 +1833,7 @@ git commit -m "feat: add global keyboard handler"
 </style>
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/lib/components/ShortcutOverlay.svelte
@@ -1845,7 +1847,7 @@ git commit -m "feat: add ShortcutOverlay component"
 **Files:**
 - Modify: `src/routes/+page.svelte`
 
-- [ ] **Step 1: Integrate keyboard + overlay**
+- [x] **Step 1: Integrate keyboard + overlay**
 
 In `src/routes/+page.svelte`, add to imports:
 ```ts
@@ -1925,7 +1927,7 @@ And add to the `<style>` block:
 }
 ```
 
-- [ ] **Step 2: Manually verify all shortcuts**
+- [x] **Step 2: Manually verify all shortcuts**
 
 ```bash
 pnpm dev
@@ -1943,7 +1945,7 @@ Open http://localhost:5173. Test each shortcut:
 
 Stop the server.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/routes/+page.svelte
@@ -1957,7 +1959,7 @@ git commit -m "feat: wire up keyboard shortcuts and overlay"
 **Files:**
 - Create: `src/routes/api/discogs/barcode/[code]/+server.ts`
 
-- [ ] **Step 1: Create the endpoint**
+- [x] **Step 1: Create the endpoint**
 
 ```ts
 import { json, error } from '@sveltejs/kit';
@@ -2021,7 +2023,7 @@ export const GET: RequestHandler = async ({ params }) => {
 
 > **Note on duplication:** the `parseTitle` / `trim` / type definitions are duplicated from `search/+server.ts`. That's intentional for MVP — both endpoints are thin and the logic is small. Extracting a shared helper module is fine if you'd rather DRY it up; create `src/lib/server/release-mapping.ts` and import from both. Either way is reasonable.
 
-- [ ] **Step 2: Manually verify with a known barcode**
+- [x] **Step 2: Manually verify with a known barcode**
 
 ```bash
 pnpm dev
@@ -2032,7 +2034,7 @@ curl http://localhost:5173/api/discogs/barcode/077778591115
 ```
 Expected: `{"results":[...], "barcode":"077778591115"}` with at least one result. Stop the server.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/routes/api/discogs/barcode/
@@ -2047,13 +2049,13 @@ git commit -m "feat: add /api/discogs/barcode/:code endpoint"
 - Modify: `package.json` (via pnpm add)
 - Create: `src/lib/components/Scanner.svelte`
 
-- [ ] **Step 1: Install `@zxing/browser`**
+- [x] **Step 1: Install `@zxing/browser`**
 
 ```bash
 pnpm add @zxing/browser
 ```
 
-- [ ] **Step 2: Create `src/lib/components/Scanner.svelte`**
+- [x] **Step 2: Create `src/lib/components/Scanner.svelte`**
 
 ```svelte
 <script lang="ts">
@@ -2190,7 +2192,7 @@ pnpm add @zxing/browser
 </style>
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add package.json pnpm-lock.yaml src/lib/components/Scanner.svelte
@@ -2204,7 +2206,7 @@ git commit -m "feat: add Scanner component with ZXing barcode reader"
 **Files:**
 - Modify: `src/routes/+page.svelte`
 
-- [ ] **Step 1: Replace the scanner placeholder with the real Scanner**
+- [x] **Step 1: Replace the scanner placeholder with the real Scanner**
 
 In `src/routes/+page.svelte`, add to imports:
 ```ts
@@ -2256,14 +2258,14 @@ Add to `<style>`:
 }
 ```
 
-- [ ] **Step 2: Manually verify scanner end-to-end**
+- [x] **Step 2: Manually verify scanner end-to-end**
 
 ```bash
 pnpm dev
 ```
 Open http://localhost:5173. Press `s` to enter scanner mode. The browser will request camera permission — grant it. The viewfinder shows your webcam feed. Hold any UPC/EAN barcode (a record, a book, a grocery item) up to the camera. On a successful decode you should hear a beep, the app jumps back to search-results state, and results appear (or a "no match" toast). Press `Esc` to exit scanner mode. Stop the server.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/routes/+page.svelte
@@ -2277,7 +2279,7 @@ git commit -m "feat: wire up scanner mode with barcode lookup"
 **Files:**
 - Modify: `src/routes/+page.svelte`
 
-- [ ] **Step 1: Detect missing/invalid token and show a setup screen**
+- [x] **Step 1: Detect missing/invalid token and show a setup screen**
 
 The simplest approach: on page mount, fire a low-cost search (`?q=test`) and watch for `error: 'no_token'` or `error: 'invalid_token'`. If detected, render a setup screen instead of the normal app.
 
@@ -2362,7 +2364,7 @@ Add to `<style>`:
 }
 ```
 
-- [ ] **Step 2: Manually verify the setup screen**
+- [x] **Step 2: Manually verify the setup screen**
 
 Temporarily blank the token in `.env` (`DISCOGS_TOKEN=`), then:
 ```bash
@@ -2370,7 +2372,7 @@ pnpm dev
 ```
 Open http://localhost:5173. The setup screen should render with the "Setup needed" heading and instructions. Restore your real token, restart `pnpm dev`, and verify the normal app reappears. Stop the server.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/routes/+page.svelte
@@ -2384,7 +2386,7 @@ git commit -m "feat: add setup screen for missing or invalid token"
 **Files:**
 - Modify: `src/routes/+page.svelte`
 
-- [ ] **Step 1: Show a non-blocking banner on 429**
+- [x] **Step 1: Show a non-blocking banner on 429**
 
 In `src/routes/+page.svelte`, update `runSearch` and `handleBarcode` to check for `error === 'rate_limited'` and show a toast instead of (or in addition to) other handling.
 
@@ -2420,7 +2422,7 @@ Update `handleBarcode` similarly — check for `rate_limited` and route through 
 
 (Add/Remove flows already surface server errors via `modalError` and toast retry — they handle 429 by showing the message text. That's enough.)
 
-- [ ] **Step 2: Manually verify error path**
+- [x] **Step 2: Manually verify error path**
 
 This is hard to test naturally since hitting Discogs's rate limit takes 60+ requests/min. Smoke-test instead by temporarily editing `src/lib/server/discogs.ts` to throw a fake rate-limit error in `discogsFetch`:
 ```ts
@@ -2429,7 +2431,7 @@ throw new DiscogsError({ error: 'rate_limited', retryAfter: 30 }, 429);
 ```
 Run `pnpm dev`, type a search query, confirm the toast: "Rate limited. Try again in 30s." Then **revert the temporary throw** before committing.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/routes/+page.svelte
@@ -2443,7 +2445,7 @@ git commit -m "feat: show toast on rate-limit and network errors"
 **Files:**
 - (Verification only — adjustments inline as needed)
 
-- [ ] **Step 1: Walk through the whole product**
+- [x] **Step 1: Walk through the whole product**
 
 ```bash
 pnpm dev
@@ -2460,14 +2462,14 @@ Verify all of the following work end-to-end:
 8. `?` shows shortcut overlay. `?` hides it.
 9. Blank `DISCOGS_TOKEN`, restart, see setup screen. Restore.
 
-- [ ] **Step 2: Fix anything broken**
+- [x] **Step 2: Fix anything broken**
 
 Fix any issues spotted in step 1 inline. Common things to watch for:
 - Search-bar focus not restoring after exiting scanner → in the `mode` change to `'search'`, call `searchBar?.focus()` from the page (an `$effect` watching `mode.current` is the cleanest way).
 - Camera not stopping when navigating away → confirmed by `Scanner.svelte`'s `onDestroy`, but verify in DevTools that the camera indicator turns off when leaving scanner mode.
 - `Cmd+Z` may be intercepted by the browser if the search input is focused (it'll undo typed text first). Acceptable — the on-screen "undo last" button and the `u` key both work.
 
-- [ ] **Step 3: Final commit**
+- [x] **Step 3: Final commit**
 
 ```bash
 git add -A

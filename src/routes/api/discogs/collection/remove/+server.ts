@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { discogsFetch, DiscogsError } from '$lib/server/discogs';
 import { getUsername } from '$lib/server/username';
+import { markRemoved } from '$lib/server/collection-cache';
 import { env } from '$env/dynamic/private';
 
 const FOLDER_ID = env.DISCOGS_FOLDER_ID ?? '1';
@@ -24,6 +25,7 @@ export const DELETE: RequestHandler = async ({ request }) => {
       `/users/${encodeURIComponent(username)}/collection/folders/${FOLDER_ID}/releases/${releaseId}/instances/${instanceId}`,
       { method: 'DELETE' },
     );
+    markRemoved(releaseId);
     return json({ ok: true });
   } catch (e) {
     if (e instanceof DiscogsError) {

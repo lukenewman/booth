@@ -9,6 +9,7 @@ interface DiscogsSearchResult {
   year?: string;
   country?: string;
   label?: string[];
+  catno?: string;
   format?: string[];
   thumb?: string;
   cover_image?: string;
@@ -24,6 +25,13 @@ function parseTitle(combined: string): { artist: string; title: string } {
   return { artist: combined.slice(0, idx), title: combined.slice(idx + 3) };
 }
 
+function byYearAsc(a: DiscogsRelease, b: DiscogsRelease): number {
+  if (a.year === null && b.year === null) return 0;
+  if (a.year === null) return 1;
+  if (b.year === null) return -1;
+  return a.year - b.year;
+}
+
 function trim(r: DiscogsSearchResult): DiscogsRelease {
   const { artist, title } = parseTitle(r.title);
   return {
@@ -33,6 +41,7 @@ function trim(r: DiscogsSearchResult): DiscogsRelease {
     year: r.year ? Number(r.year) || null : null,
     country: r.country ?? null,
     label: r.label?.[0] ?? null,
+    catno: r.catno?.trim() || null,
     format: r.format?.join(', ') ?? null,
     thumb: r.thumb ?? null,
     coverImage: r.cover_image ?? null,
@@ -48,7 +57,7 @@ export const GET: RequestHandler = async ({ url }) => {
     const data = (await discogsFetch(
       `/database/search?${params}`,
     )) as DiscogsSearchResponse;
-    const results = (data.results ?? []).map(trim);
+    const results = (data.results ?? []).map(trim).sort(byYearAsc);
     return json({ results });
   } catch (e) {
     if (e instanceof DiscogsError) {

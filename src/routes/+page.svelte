@@ -6,13 +6,15 @@
   import ShortcutOverlay from '$lib/components/ShortcutOverlay.svelte';
   import Scanner from '$lib/components/Scanner.svelte';
   import { installKeyboard } from '$lib/keyboard.svelte';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
+  import { page } from '$app/state';
   import { mode } from '$lib/stores/mode.svelte';
   import { session } from '$lib/stores/session.svelte';
   import { toast } from '$lib/stores/toast.svelte';
+  import { collection } from '$lib/stores/collection.svelte';
   import type { DiscogsRelease, AddResponse, ApiError } from '$lib/types';
 
-  let query = $state('');
+  let query = $state(page.url.searchParams.get('q') ?? '');
   let results = $state<DiscogsRelease[]>([]);
   let highlightedIndex = $state(0);
   let loading = $state(false);
@@ -21,12 +23,17 @@
   let modalError = $state<string | null>(null);
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
   let shortcutsOpen = $state(false);
-  let scanError = $state<string | null>(null);
   let searchBar: { focus: () => void } | undefined = $state();
   let tokenStatus = $state<'checking' | 'ok' | 'missing' | 'invalid'>('checking');
 
   $effect(() => {
     const q = query.trim();
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (q) url.searchParams.set('q', q);
+      else url.searchParams.delete('q');
+      history.replaceState(null, '', url);
+    }
     clearTimeout(debounceTimer);
     if (!q) {
       results = [];
@@ -60,35 +67,9 @@
     }
   }
 
-  async function handleBarcode(code: string) {
-    loading = true;
-    try {
-      const res = await fetch(`/api/discogs/barcode/${encodeURIComponent(code)}`);
-      const data = await res.json();
-      if (!res.ok) {
-        if (data?.error === 'rate_limited') {
-          toast.show(`Rate limited. Try again in ${data.retryAfter ?? 60}s.`, { kind: 'error' });
-        } else {
-          toast.show(data?.message ?? `Lookup failed for ${code}`, { kind: 'error' });
-        }
-        mode.setSearch();
-        return;
-      }
-      results = data.results ?? [];
-      highlightedIndex = 0;
-      if (results.length === 0) {
-        query = code;
-        mode.setSearch();
-        toast.show(`No match for ${code}. Try search instead.`, { kind: 'error' });
-      } else {
-        mode.setSearch();
-      }
-    } catch (e) {
-      toast.show(e instanceof Error ? e.message : 'Lookup failed', { kind: 'error' });
-      mode.setSearch();
-    } finally {
-      loading = false;
-    }
+  function handleBarcode(code: string) {
+    query = code;
+    mode.setSearch();
   }
 
   function handleSelect(release: DiscogsRelease) {
@@ -119,6 +100,7 @@
         artist: pending.artist,
         addedAt: Date.now(),
       });
+      collection.markAdded(ok.releaseId);
       toast.show(`Added: ${pending.artist} — ${pending.title}`);
       pending = null;
     } catch (e) {
@@ -154,7 +136,12 @@
     const probeData = await probe.json().catch(() => ({}));
     if (probeData?.error === 'no_token') tokenStatus = 'missing';
     else if (probeData?.error === 'invalid_token') tokenStatus = 'invalid';
-    else tokenStatus = 'ok';
+    else {
+      tokenStatus = 'ok';
+      collection.load();
+      await tick();
+      searchBar?.focus();
+    }
 
     return installKeyboard(
       {
@@ -189,6 +176,7 @@
         return;
       }
       session.removeById(last.releaseId, last.instanceId);
+      collection.markRemoved(last.releaseId);
       toast.show(`Undone: ${last.artist} — ${last.title}`);
     } catch (e) {
       toast.show(e instanceof Error ? e.message : 'Network error', {
@@ -234,8 +222,16 @@
 
       {#if loading}
         <div class="loading">Searching…</div>
-      {:else if query.trim()}
+      {:else if query.trim() || results.length > 0}
         <ResultsList {results} {highlightedIndex} onSelect={handleSelect} />
+        {#if query.trim()}
+          <a
+            class="open-discogs"
+            href={`https://www.discogs.com/search/?q=${encodeURIComponent(query.trim())}&type=all`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >Open this search in Discogs ↗</a>
+        {/if}
       {/if}
     {:else}
       <Scanner onDecode={handleBarcode} onError={() => {}} />
@@ -294,6 +290,18 @@
     text-align: center;
     color: var(--text-muted);
     font-size: 12px;
+  }
+  .open-discogs {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 4px 0;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-decoration: none;
+  }
+  .open-discogs:hover {
+    color: var(--accent);
+    text-decoration: underline;
   }
   .setup {
     margin-top: 24px;

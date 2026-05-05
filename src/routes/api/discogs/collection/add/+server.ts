@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import type { AddResponse } from '$lib/types';
 import { discogsFetch, DiscogsError } from '$lib/server/discogs';
 import { getUsername } from '$lib/server/username';
+import { markAdded } from '$lib/server/collection-cache';
 import { env } from '$env/dynamic/private';
 
 interface AddDiscogsResponse {
@@ -30,6 +31,7 @@ export const POST: RequestHandler = async ({ request }) => {
       `/users/${encodeURIComponent(username)}/collection/folders/${FOLDER_ID}/releases/${releaseId}`,
       { method: 'POST' },
     )) as AddDiscogsResponse;
+    markAdded(releaseId);
     const response: AddResponse = { releaseId, instanceId: data.instance_id };
     return json(response);
   } catch (e) {

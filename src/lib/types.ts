@@ -6,6 +6,7 @@ export interface DiscogsRelease {
   year: number | null;
   country: string | null;
   label: string | null;
+  catno: string | null;
   format: string | null;
   thumb: string | null;
   coverImage: string | null;

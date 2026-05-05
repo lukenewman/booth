@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { DiscogsRelease } from '$lib/types';
+  import { collection } from '$lib/stores/collection.svelte';
 
   let {
     release,
@@ -12,47 +13,59 @@
   } = $props();
 
   let metaParts = $derived(
-    [release.format, release.year, release.country, release.label].filter(Boolean).join(' · '),
+    [release.format, release.year, release.country, release.label, release.catno]
+      .filter(Boolean)
+      .join(' · '),
   );
+  let owned = $derived(collection.has(release.id));
 </script>
 
-<button class="row" class:highlighted {onclick} type="button">
-  <div class="cover">
-    {#if release.thumb}
-      <img src={release.thumb} alt="" />
-    {/if}
-  </div>
-  <div class="meta">
-    <div class="title">
-      {#if release.artist}<span class="artist">{release.artist}</span> — {/if}{release.title}
+<div class="row" class:highlighted class:owned>
+  <button class="select" {onclick} type="button">
+    <div class="cover">
+      {#if release.thumb}
+        <img src={release.thumb} alt="" />
+      {/if}
     </div>
-    <div class="sub">{metaParts || '—'}</div>
-  </div>
-  {#if highlighted}
-    <span class="kbd">↵</span>
-  {/if}
-</button>
+    <div class="meta">
+      <div class="title">
+        {#if release.artist}<span class="artist">{release.artist}</span> — {/if}{release.title}
+        {#if owned}<span class="badge">✓ in collection</span>{/if}
+      </div>
+      <div class="sub">{metaParts || '—'}</div>
+    </div>
+    {#if highlighted}
+      <span class="kbd">↵</span>
+    {/if}
+  </button>
+</div>
 
 <style>
   .row {
-    display: flex;
-    gap: 10px;
-    padding: 8px;
     border-radius: var(--radius-sm);
     margin-bottom: 4px;
-    align-items: center;
     background: transparent;
     border: 1px solid transparent;
-    width: 100%;
-    text-align: left;
   }
   .row.highlighted {
     background: var(--accent-bg);
     border-color: var(--accent-border);
   }
+  .select {
+    display: flex;
+    gap: 12px;
+    padding: 8px;
+    align-items: center;
+    background: transparent;
+    border: none;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    color: inherit;
+  }
   .cover {
-    width: 40px;
-    height: 40px;
+    width: 80px;
+    height: 80px;
     background: #2a2a2a;
     border-radius: 3px;
     flex-shrink: 0;
@@ -80,5 +93,23 @@
   .sub {
     font-size: 11px;
     color: var(--text-muted);
+  }
+  .row.owned .cover {
+    outline: 2px solid #4caf50;
+    outline-offset: -2px;
+  }
+  .row.owned .title {
+    color: var(--text-muted);
+  }
+  .badge {
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: rgba(76, 175, 80, 0.15);
+    color: #6fcf72;
+    font-size: 10px;
+    font-weight: 500;
+    vertical-align: middle;
+    white-space: nowrap;
   }
 </style>

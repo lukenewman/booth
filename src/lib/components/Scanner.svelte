@@ -34,7 +34,7 @@
     }
   }
 
-  onMount(async () => {
+  async function start(attempt = 0) {
     if (!videoEl) return;
     const reader = new BrowserMultiFormatReader();
     try {
@@ -50,16 +50,25 @@
         },
       );
     } catch (e) {
-      const err = e as { name?: string };
+      const err = e as { name?: string; message?: string };
+      if (err?.name === 'NotReadableError' && attempt < 3) {
+        await new Promise((r) => setTimeout(r, 250));
+        return start(attempt + 1);
+      }
+      console.warn('[Scanner] camera failed to start', err);
       if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
         cameraError = 'Camera blocked — enable in browser settings, or use search instead.';
       } else if (err?.name === 'NotFoundError') {
         cameraError = 'No camera found.';
       } else {
-        cameraError = 'Could not start camera.';
+        cameraError = `Could not start camera${err?.name ? ` (${err.name})` : ''}.`;
       }
       onError?.(e);
     }
+  }
+
+  onMount(() => {
+    start();
   });
 
   onDestroy(() => {
