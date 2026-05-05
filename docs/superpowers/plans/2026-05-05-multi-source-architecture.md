@@ -543,7 +543,7 @@ git commit -m "feat(library): match-key normalization helpers"
 - Create: `src/lib/server/library/collate.ts`
 - Create: `scripts/verify-collate.ts`
 
-- [ ] **Step 1: Implement collate**
+- [x] **Step 1: Implement collate**
 
 Create `src/lib/server/library/collate.ts`:
 
@@ -896,7 +896,7 @@ function pruneSource(
 }
 ```
 
-- [ ] **Step 2: Write verification covering matching, idempotency, deletion, conflict**
+- [x] **Step 2: Write verification covering matching, idempotency, deletion, conflict**
 
 Create `scripts/verify-collate.ts`:
 
@@ -1038,17 +1038,17 @@ assert(linksAfter.length === 1 && linksAfter[0].source === 'itunes', 'only itune
 console.log('OK: collate');
 ```
 
-- [ ] **Step 3: Run verification**
+- [x] **Step 3: Run verification**
 
 Run: `pnpm verify scripts/verify-collate.ts`
 Expected: `OK: collate`. Exit code 0.
 
-- [ ] **Step 4: Type-check**
+- [x] **Step 4: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/server/library/collate.ts scripts/verify-collate.ts
