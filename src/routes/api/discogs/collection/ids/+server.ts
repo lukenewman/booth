@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getCollectionIds } from '$lib/server/collection-cache';
-import { DiscogsError } from '$lib/server/discogs';
+import { DiscogsError } from '$lib/server/sources/discogs/api';
 
 export const GET: RequestHandler = async () => {
   try {

@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { discogsFetch, DiscogsError } from '$lib/server/discogs';
-import { getUsername } from '$lib/server/username';
+import { discogsFetch, DiscogsError } from '$lib/server/sources/discogs/api';
+import { getUsername } from '$lib/server/sources/discogs/username';
 import { markRemoved } from '$lib/server/collection-cache';
 import { env } from '$env/dynamic/private';
 

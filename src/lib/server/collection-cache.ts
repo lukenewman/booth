@@ -1,5 +1,5 @@
-import { discogsFetch } from './discogs';
-import { getUsername } from './username';
+import { discogsFetch } from './sources/discogs/api';
+import { getUsername } from './sources/discogs/username';
 
 interface CollectionItem {
   basic_information: { id: number };

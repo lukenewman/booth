@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { DiscogsRelease } from '$lib/types';
-import { discogsFetch, DiscogsError } from '$lib/server/discogs';
+import { discogsFetch, DiscogsError } from '$lib/server/sources/discogs/api';
 
 interface DiscogsSearchResult {
   id: number;

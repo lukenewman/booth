@@ -1069,7 +1069,7 @@ git commit -m "feat(library): collation engine with deterministic matching"
 - Create: `src/lib/server/sources/discogs/index.ts`
 - Modify: `src/lib/server/sources/registry.ts` (register discogs)
 
-- [ ] **Step 1: Move files**
+- [x] **Step 1: Move files**
 
 ```bash
 mkdir -p src/lib/server/sources/discogs
@@ -1089,7 +1089,7 @@ to:
 import { discogsFetch } from './api';
 ```
 
-- [ ] **Step 2: Update importers**
+- [x] **Step 2: Update importers**
 
 The four routes and `collection-cache.ts` import from `$lib/server/discogs` and `$lib/server/username`. Update each:
 
@@ -1102,12 +1102,12 @@ The four routes and `collection-cache.ts` import from `$lib/server/discogs` and 
 `src/routes/api/discogs/collection/ids/+server.ts`: same (only the discogs one).
 `src/lib/server/collection-cache.ts`: same.
 
-- [ ] **Step 3: Type-check before adding new code**
+- [x] **Step 3: Type-check before adding new code**
 
 Run: `pnpm tsc`
 Expected: no errors. (This proves the rename + import update is clean before we layer new behavior on top.)
 
-- [ ] **Step 4: Implement `sources/discogs/sync.ts`**
+- [x] **Step 4: Implement `sources/discogs/sync.ts`**
 
 Create `src/lib/server/sources/discogs/sync.ts`:
 
@@ -1207,7 +1207,7 @@ export async function syncDiscogsCollection(): Promise<SyncResult> {
 
 > Note: the duplicated pagination loop is intentional simplicity for Slice 1 — Discogs's collection endpoint is fast and we'd rather have clear code than clever code at this stage. If perf becomes a problem, fold the two loops together.
 
-- [ ] **Step 5: Implement the adapter and register it**
+- [x] **Step 5: Implement the adapter and register it**
 
 Create `src/lib/server/sources/discogs/index.ts`:
 
@@ -1230,12 +1230,12 @@ import { discogsSource } from './discogs';
 registerSource(discogsSource);
 ```
 
-- [ ] **Step 6: Type-check**
+- [x] **Step 6: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 7: Smoke-test in dev**
+- [x] **Step 7: Smoke-test in dev**
 
 Run: `pnpm dev`. Open `http://localhost:5173`. The existing Discogs UX (search, badge from in-memory cache) must still work — we haven't migrated reads yet, just renamed files and added the sync function. Verify:
 - Search returns results.
@@ -1244,7 +1244,7 @@ Run: `pnpm dev`. Open `http://localhost:5173`. The existing Discogs UX (search, 
 
 Stop the dev server (`ctrl-C`).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add -A

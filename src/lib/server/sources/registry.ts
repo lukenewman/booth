@@ -16,3 +16,6 @@ export function getSource(id: string): MusicSource | undefined {
 export function listSources(): readonly MusicSource[] {
   return sources;
 }
+
+import { discogsSource } from './discogs';
+registerSource(discogsSource);

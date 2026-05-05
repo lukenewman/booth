@@ -1,4 +1,4 @@
-import { discogsFetch } from './discogs';
+import { discogsFetch } from './api';
 
 let cached: string | null = null;
 
