@@ -1802,7 +1802,7 @@ git commit -m "feat(discogs): adapter writes through to DB; remove in-memory cac
 - Create: `src/routes/api/library/releases/+server.ts`
 - Modify: `src/lib/server/library/queries.ts` (add `listTracks`, `listReleases`)
 
-- [ ] **Step 1: Add list queries**
+- [x] **Step 1: Add list queries**
 
 Append to `src/lib/server/library/queries.ts`:
 
@@ -1934,7 +1934,7 @@ function safeJson(s: string): unknown {
 
 Make sure `import type Database from 'better-sqlite3';` is at the top of the file (it should already be — verify).
 
-- [ ] **Step 2: Implement the inspection endpoints**
+- [x] **Step 2: Implement the inspection endpoints**
 
 Create `src/routes/api/library/tracks/+server.ts`:
 
@@ -1966,7 +1966,7 @@ export const GET: RequestHandler = async ({ url }) => {
 };
 ```
 
-- [ ] **Step 3: Auto-sync-once-if-empty hook**
+- [x] **Step 3: Auto-sync-once-if-empty hook**
 
 Create `src/hooks.server.ts`:
 
@@ -2005,12 +2005,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 > If `src/hooks.server.ts` already exists in your worktree, merge the `handle` chain instead of replacing.
 
-- [ ] **Step 4: Type-check**
+- [x] **Step 4: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 5: Verify both endpoints**
+- [x] **Step 5: Verify both endpoints**
 
 Run: `pnpm dev`.
 
@@ -2025,7 +2025,7 @@ To verify auto-sync: stop dev server, delete the DB (`rm -rf .booth`), restart `
 
 Stop dev server.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
