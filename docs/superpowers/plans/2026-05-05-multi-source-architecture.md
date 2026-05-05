@@ -302,7 +302,7 @@ git commit -m "feat(db): sqlite connection + migration runner + initial schema"
 - Create: `src/lib/server/sources/types.ts`
 - Create: `src/lib/server/sources/registry.ts`
 
-- [ ] **Step 1: Define contract types**
+- [x] **Step 1: Define contract types**
 
 Create `src/lib/server/sources/types.ts`:
 
@@ -364,7 +364,7 @@ export class NotImplementedError extends Error {
 }
 ```
 
-- [ ] **Step 2: Empty registry**
+- [x] **Step 2: Empty registry**
 
 Create `src/lib/server/sources/registry.ts`:
 
@@ -389,12 +389,12 @@ export function listSources(): readonly MusicSource[] {
 }
 ```
 
-- [ ] **Step 3: Type-check**
+- [x] **Step 3: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/lib/server/sources/types.ts src/lib/server/sources/registry.ts
