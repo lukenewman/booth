@@ -24,14 +24,14 @@
 - Modify: `.env.example` (document new env vars)
 - Create: `scripts/.gitkeep`
 
-- [ ] **Step 1: Install deps**
+- [x] **Step 1: Install deps**
 
 ```bash
 pnpm add better-sqlite3 plist ulid
 pnpm add -D @types/better-sqlite3 @types/plist tsx
 ```
 
-- [ ] **Step 2: Update `.env.example`**
+- [x] **Step 2: Update `.env.example`**
 
 Replace contents with:
 
@@ -52,7 +52,7 @@ ITUNES_XML_PATH=
 # BOOTH_DB_PATH=
 ```
 
-- [ ] **Step 3: Update `.gitignore`**
+- [x] **Step 3: Update `.gitignore`**
 
 Append after the existing `# Project-specific` section:
 
@@ -61,7 +61,7 @@ Append after the existing `# Project-specific` section:
 .booth/
 ```
 
-- [ ] **Step 4: Create scripts directory + add convenience scripts**
+- [x] **Step 4: Create scripts directory + add convenience scripts**
 
 ```bash
 mkdir -p scripts
@@ -83,12 +83,12 @@ Add these entries to `package.json` `"scripts"`:
 }
 ```
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run: `pnpm install && pnpm check`
 Expected: `0 errors and 0 warnings`. Lockfile updated.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add package.json pnpm-lock.yaml .gitignore .env.example scripts/.gitkeep

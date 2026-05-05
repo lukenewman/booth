@@ -26,3 +26,6 @@ vite.config.ts.timestamp-*
 .superpowers/
 .env
 .env.local
+
+# booth's local sqlite store
+.booth/
