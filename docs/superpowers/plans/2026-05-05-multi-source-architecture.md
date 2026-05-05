@@ -1331,7 +1331,7 @@ git commit -m "feat(sources): generic POST /api/sources/:id/sync route"
 
 (`ResultRow.svelte` does not change — the store keeps its `Set<number>` shape, so the badge keying is unaffected.)
 
-- [ ] **Step 1: Implement queries**
+- [x] **Step 1: Implement queries**
 
 Create `src/lib/server/library/queries.ts`:
 
@@ -1353,7 +1353,7 @@ export function getMembershipExternalIds(
 }
 ```
 
-- [ ] **Step 2: Implement membership endpoint**
+- [x] **Step 2: Implement membership endpoint**
 
 Create `src/routes/api/library/membership/+server.ts`:
 
@@ -1373,7 +1373,7 @@ export const GET: RequestHandler = async ({ url }) => {
 };
 ```
 
-- [ ] **Step 3: Update the client store**
+- [x] **Step 3: Update the client store**
 
 Replace `src/lib/stores/collection.svelte.ts` with:
 
@@ -1418,13 +1418,13 @@ export const collection = new CollectionStore();
 
 The store still keys on `number` so `ResultRow.svelte` and `+page.svelte` don't change. The conversion `Number(s)` is safe — Discogs release ids are integers stringified in our DB.
 
-- [ ] **Step 4: Delete the old endpoint**
+- [x] **Step 4: Delete the old endpoint**
 
 ```bash
 git rm src/routes/api/discogs/collection/ids/+server.ts
 ```
 
-- [ ] **Step 5: Type-check + smoke**
+- [x] **Step 5: Type-check + smoke**
 
 Run: `pnpm tsc`
 Expected: no errors.
@@ -1441,7 +1441,7 @@ Expected: `{"externalIds":["...","..."]}` with as many entries as your collectio
 
 Stop the dev server.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A

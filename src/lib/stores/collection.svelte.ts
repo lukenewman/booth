@@ -4,10 +4,10 @@ class CollectionStore {
 
   async load() {
     try {
-      const res = await fetch('/api/discogs/collection/ids');
+      const res = await fetch('/api/library/membership?source=discogs');
       if (!res.ok) return;
-      const data = await res.json();
-      this.ids = new Set(data.ids ?? []);
+      const data = (await res.json()) as { externalIds: string[] };
+      this.ids = new Set((data.externalIds ?? []).map((s) => Number(s)));
       this.loaded = true;
     } catch {
       // silent: badges just won't show
