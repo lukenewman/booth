@@ -22,3 +22,8 @@ registerSource(discogsSource);
 
 import { itunesSource } from './itunes';
 registerSource(itunesSource);
+
+import { rekordboxSource } from './rekordbox';
+import { plexSource } from './plex';
+registerSource(rekordboxSource);
+registerSource(plexSource);

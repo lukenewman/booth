@@ -2466,7 +2466,7 @@ git commit -m "docs: cross-source verification notes"
 - Create: `src/lib/server/sources/plex/index.ts`
 - Modify: `src/lib/server/sources/registry.ts`
 
-- [ ] **Step 1: Stub adapters**
+- [x] **Step 1: Stub adapters**
 
 Create `src/lib/server/sources/rekordbox/index.ts`:
 
@@ -2504,7 +2504,7 @@ export const plexSource: MusicSource = {
 };
 ```
 
-- [ ] **Step 2: Register**
+- [x] **Step 2: Register**
 
 Append to `src/lib/server/sources/registry.ts`:
 
@@ -2515,7 +2515,7 @@ registerSource(rekordboxSource);
 registerSource(plexSource);
 ```
 
-- [ ] **Step 3: Verify the 501 path**
+- [x] **Step 3: Verify the 501 path**
 
 Run: `pnpm dev`
 
@@ -2534,7 +2534,7 @@ Expected: HTTP 404.
 
 Stop dev server.
 
-- [ ] **Step 4: Type-check + commit**
+- [x] **Step 4: Type-check + commit**
 
 Run: `pnpm tsc`
 Expected: no errors.
