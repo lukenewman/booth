@@ -105,16 +105,11 @@ git commit -m "chore: add deps + env scaffolding for multi-source architecture"
 - Create: `src/lib/server/db/migrations/001_init.sql`
 - Create: `scripts/verify-db.ts`
 
-- [ ] **Step 1: Write `001_init.sql`**
+- [x] **Step 1: Write `001_init.sql`**
 
-Create `src/lib/server/db/migrations/001_init.sql` with the full schema from the spec:
+Create `src/lib/server/db/migrations/001_init.sql` with the entity tables from the spec. (Note: the `_migrations` table itself is created by the migration runner's bootstrap — see Step 2 — so it is intentionally omitted from this file. Including it here would conflict with that bootstrap on first run.)
 
 ```sql
-CREATE TABLE _migrations (
-  id          TEXT PRIMARY KEY,
-  applied_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-);
-
 CREATE TABLE release (
   id          TEXT PRIMARY KEY,
   title       TEXT NOT NULL,
@@ -173,7 +168,7 @@ CREATE TABLE match_key (
 CREATE INDEX idx_match_key_entity ON match_key(entity_kind, entity_id);
 ```
 
-- [ ] **Step 2: Write the migration runner**
+- [x] **Step 2: Write the migration runner**
 
 Create `src/lib/server/db/migrate.ts`:
 
@@ -213,7 +208,7 @@ export function runMigrations(db: Database.Database): void {
 }
 ```
 
-- [ ] **Step 3: Write the connection singleton**
+- [x] **Step 3: Write the connection singleton**
 
 Create `src/lib/server/db/index.ts`:
 
@@ -241,7 +236,7 @@ export function getDb(): Database.Database {
 }
 ```
 
-- [ ] **Step 4: Write a verification script**
+- [x] **Step 4: Write a verification script**
 
 Create `scripts/verify-db.ts`:
 
@@ -282,17 +277,17 @@ if (applied2.length !== 1) {
 console.log('OK: tables created, migration recorded, re-run idempotent');
 ```
 
-- [ ] **Step 5: Run verification**
+- [x] **Step 5: Run verification**
 
 Run: `pnpm verify scripts/verify-db.ts`
 Expected: `[db] applied 001_init.sql` followed by `OK: tables created, migration recorded, re-run idempotent`. Exit code 0.
 
-- [ ] **Step 6: Type-check**
+- [x] **Step 6: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/lib/server/db scripts/verify-db.ts
