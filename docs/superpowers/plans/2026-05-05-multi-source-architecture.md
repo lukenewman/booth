@@ -409,7 +409,7 @@ git commit -m "feat(sources): adapter contract types + empty registry"
 - Create: `src/lib/server/library/normalize.ts`
 - Create: `scripts/verify-normalize.ts`
 
-- [ ] **Step 1: Implement normalizers**
+- [x] **Step 1: Implement normalizers**
 
 Create `src/lib/server/library/normalize.ts`:
 
@@ -457,7 +457,7 @@ export function normalizeFilePath(input: string): string {
 }
 ```
 
-- [ ] **Step 2: Write verification**
+- [x] **Step 2: Write verification**
 
 Create `scripts/verify-normalize.ts`:
 
@@ -523,12 +523,12 @@ assertEq(
 console.log('OK: normalize');
 ```
 
-- [ ] **Step 3: Run verification**
+- [x] **Step 3: Run verification**
 
 Run: `pnpm verify scripts/verify-normalize.ts`
 Expected: `OK: normalize`. Exit code 0.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/lib/server/library/normalize.ts scripts/verify-normalize.ts
