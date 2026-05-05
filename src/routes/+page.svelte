@@ -85,7 +85,17 @@
       const res = await fetch('/api/discogs/collection/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ releaseId: pending.id }),
+        body: JSON.stringify({
+          releaseId: pending.id,
+          title: pending.title,
+          artist: pending.artist,
+          year: pending.year,
+          country: pending.country,
+          label: pending.label,
+          catno: pending.catno,
+          thumb: pending.thumb,
+          coverImage: pending.coverImage,
+        }),
       });
       const data: AddResponse | ApiError = await res.json();
       if (!res.ok) {

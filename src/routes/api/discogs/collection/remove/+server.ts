@@ -1,11 +1,8 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { discogsFetch, DiscogsError } from '$lib/server/sources/discogs/api';
-import { getUsername } from '$lib/server/sources/discogs/username';
-import { markRemoved } from '$lib/server/collection-cache';
-import { env } from '$env/dynamic/private';
-
-const FOLDER_ID = env.DISCOGS_FOLDER_ID ?? '1';
+import { DiscogsError } from '$lib/server/sources/discogs/api';
+import { discogsSource } from '$lib/server/sources/discogs';
+import { getDb } from '$lib/server/db';
 
 export const DELETE: RequestHandler = async ({ request }) => {
   let body: { releaseId?: number; instanceId?: number };
@@ -19,13 +16,16 @@ export const DELETE: RequestHandler = async ({ request }) => {
     throw error(400, 'releaseId and instanceId (numbers) required');
   }
 
+  const link = getDb()
+    .prepare(
+      `SELECT entity_id FROM source_link
+        WHERE entity_kind='release' AND source='discogs' AND external_id=?`,
+    )
+    .get(String(releaseId)) as { entity_id: string } | undefined;
+  if (!link) throw error(404, 'release not in local DB');
+
   try {
-    const username = await getUsername();
-    await discogsFetch(
-      `/users/${encodeURIComponent(username)}/collection/folders/${FOLDER_ID}/releases/${releaseId}/instances/${instanceId}`,
-      { method: 'DELETE' },
-    );
-    markRemoved(releaseId);
+    await discogsSource.removeFromCollection({ entityId: link.entity_id, instanceId: String(instanceId) });
     return json({ ok: true });
   } catch (e) {
     if (e instanceof DiscogsError) {

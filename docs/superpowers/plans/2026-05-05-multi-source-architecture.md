@@ -1460,7 +1460,7 @@ git commit -m "feat(library): membership endpoint + queries.ts; switch client st
 - Modify: `src/lib/types.ts` (extend the add request body shape)
 - Delete: `src/lib/server/collection-cache.ts`
 
-- [ ] **Step 1: Extend `discogsSource` with write capabilities**
+- [x] **Step 1: Extend `discogsSource` with write capabilities**
 
 Replace `src/lib/server/sources/discogs/index.ts` with:
 
@@ -1504,7 +1504,7 @@ export const discogsSource: MusicSource & CollectionWritable = {
       { method: 'POST' },
     )) as DiscogsAddResponse;
 
-    return { externalId: link.external_id, instanceId: data.instance_id };
+    return { externalId: link.external_id, instanceId: String(data.instance_id) };
   },
 
   async removeFromCollection({ entityId, instanceId }) {
@@ -1623,7 +1623,7 @@ export function ensureDiscogsReleaseEntity(args: {
 
 > Note: `ensureDiscogsReleaseEntity` reuses `normalizeArtistAlbumYear` from `library/normalize.ts` so a future change to normalization rules only has to be made in one place. The boundary we care about is "no adapter imports another adapter" — adapters reaching into shared `library/` helpers is fine.
 
-- [ ] **Step 2: Update the `add` route**
+- [x] **Step 2: Update the `add` route**
 
 Replace `src/routes/api/discogs/collection/add/+server.ts` with:
 
@@ -1675,7 +1675,7 @@ export const POST: RequestHandler = async ({ request }) => {
     const { externalId, instanceId } = await discogsSource.addToCollection({ entityId });
     const response: AddResponse = {
       releaseId: Number(externalId),
-      instanceId: instanceId!,
+      instanceId: Number(instanceId!),
     };
     return json(response);
   } catch (e) {
@@ -1687,7 +1687,7 @@ export const POST: RequestHandler = async ({ request }) => {
 };
 ```
 
-- [ ] **Step 3: Update the `remove` route**
+- [x] **Step 3: Update the `remove` route**
 
 Replace `src/routes/api/discogs/collection/remove/+server.ts` with:
 
@@ -1719,7 +1719,7 @@ export const DELETE: RequestHandler = async ({ request }) => {
   if (!link) throw error(404, 'release not in local DB');
 
   try {
-    await discogsSource.removeFromCollection({ entityId: link.entity_id, instanceId });
+    await discogsSource.removeFromCollection({ entityId: link.entity_id, instanceId: String(instanceId) });
     return json({ ok: true });
   } catch (e) {
     if (e instanceof DiscogsError) {
@@ -1730,7 +1730,7 @@ export const DELETE: RequestHandler = async ({ request }) => {
 };
 ```
 
-- [ ] **Step 4: Update the client to send the extra fields**
+- [x] **Step 4: Update the client to send the extra fields**
 
 In `src/routes/+page.svelte`, find the `add` fetch (around line 85) and replace its body. The `pending` variable holds a `DiscogsRelease`; we already have all the fields we need.
 
@@ -1764,18 +1764,18 @@ const res = await fetch('/api/discogs/collection/add', {
 });
 ```
 
-- [ ] **Step 5: Delete the old in-memory cache**
+- [x] **Step 5: Delete the old in-memory cache**
 
 ```bash
 git rm src/lib/server/collection-cache.ts
 ```
 
-- [ ] **Step 6: Type-check**
+- [x] **Step 6: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 7: End-to-end smoke**
+- [x] **Step 7: End-to-end smoke**
 
 Run: `pnpm dev`. In the browser:
 - Search for a release you don't own → click → confirm add.
@@ -1785,7 +1785,7 @@ Run: `pnpm dev`. In the browser:
 
 Stop dev server.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add -A
