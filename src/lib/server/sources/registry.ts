@@ -19,3 +19,6 @@ export function listSources(): readonly MusicSource[] {
 
 import { discogsSource } from './discogs';
 registerSource(discogsSource);
+
+import { itunesSource } from './itunes';
+registerSource(itunesSource);

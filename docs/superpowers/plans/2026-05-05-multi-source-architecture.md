@@ -2219,7 +2219,7 @@ git commit -m "feat(itunes): plist parser + tiny fixture"
 - Modify: `src/lib/server/sources/registry.ts`
 - Create: `scripts/verify-itunes-sync.ts`
 
-- [ ] **Step 1: Implement `sync.ts` (group tracks → emergent releases)**
+- [x] **Step 1: Implement `sync.ts` (group tracks → emergent releases)**
 
 Create `src/lib/server/sources/itunes/sync.ts`:
 
@@ -2319,7 +2319,7 @@ function pickDefined<T extends Record<string, unknown>>(o: T): Partial<T> {
 }
 ```
 
-- [ ] **Step 2: Adapter + register**
+- [x] **Step 2: Adapter + register**
 
 Create `src/lib/server/sources/itunes/index.ts`:
 
@@ -2342,12 +2342,12 @@ import { itunesSource } from './itunes';
 registerSource(itunesSource);
 ```
 
-- [ ] **Step 3: Type-check**
+- [x] **Step 3: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 4: Smoke-verify via dev server**
+- [x] **Step 4: Smoke-verify via dev server**
 
 We deliberately don't add a `tsx` verification script for `syncITunesLibrary` because it imports `$env/dynamic/private` (a SvelteKit virtual module that doesn't resolve under raw Node/tsx). The parser was already verified standalone in Task 11 and the collation engine was verified standalone in Task 5; running `syncITunesLibrary` through the live dev server is the simplest end-to-end check.
 
@@ -2376,7 +2376,7 @@ Expected: two rows, both with non-null release titles ("Homework").
 
 Stop the dev server. Remove the temporary `ITUNES_XML_PATH` line from `.env` before continuing (or replace it with your real library path now if you'd prefer).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
