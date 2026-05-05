@@ -1258,7 +1258,7 @@ git commit -m "refactor(discogs): move under sources/, add MusicSource adapter"
 **Files:**
 - Create: `src/routes/api/sources/[id]/sync/+server.ts`
 
-- [ ] **Step 1: Implement the route**
+- [x] **Step 1: Implement the route**
 
 Create `src/routes/api/sources/[id]/sync/+server.ts`:
 
@@ -1290,7 +1290,7 @@ export const POST: RequestHandler = async ({ params }) => {
 };
 ```
 
-- [ ] **Step 2: Verify the Discogs sync end-to-end**
+- [x] **Step 2: Verify the Discogs sync end-to-end**
 
 Run: `pnpm dev` (in one terminal).
 
@@ -1312,7 +1312,7 @@ Expected: both counts equal and match the size of your Discogs collection.
 
 Stop the dev server.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/routes/api/sources
