@@ -2743,7 +2743,7 @@ git commit -m "feat(ui): Rail (Library + Sources + Add sections)"
 **Files:**
 - Create: `src/lib/components/Explorer.svelte`
 
-- [ ] **Step 1: Implement the component**
+- [x] **Step 1: Implement the component**
 
 Create `src/lib/components/Explorer.svelte`. This is the shell that wires URL state, fetches data, and composes Rail / ListviewToolbar / List / Detail. It is large; it earns its size by holding all the orchestration in one place.
 
@@ -3277,12 +3277,14 @@ Create `src/lib/components/Explorer.svelte`. This is the shell that wires URL st
 
 Note: the `Scanner.svelte` component currently emits decoded codes via a different prop name. Check `src/lib/components/Scanner.svelte` and adjust the `onCode={...}` line if needed (it may be `onDecode` or use `dispatch('decode', ...)` — match its API).
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `pnpm tsc`
 Expected: errors in this Explorer file are likely (especially around the Scanner prop name; resolve by reading `Scanner.svelte` and matching its API). All other type errors should be confined to the unmodified `+page.svelte`. Fix Explorer-internal errors before committing.
 
-- [ ] **Step 3: Commit**
+(Implementation note: tsc came back fully clean. Two small adjustments were needed during implementation: `SessionEntry.addedAt` is `number`, not `string`, so the call uses `Date.now()`; the unused `navToString` was dropped from the explorerState import.)
+
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/lib/components/Explorer.svelte
