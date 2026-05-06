@@ -66,6 +66,14 @@ export function collate(
     ]);
     summary.releasesDeleted = pruneSource(db, 'release', sourceId, externalIds);
     summary.tracksDeleted = pruneSource(db, 'track', sourceId, externalIds);
+
+    db.prepare(
+      `INSERT INTO source_state (source, last_synced_at, last_summary)
+       VALUES (?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?)
+       ON CONFLICT(source) DO UPDATE SET
+         last_synced_at = excluded.last_synced_at,
+         last_summary   = excluded.last_summary`,
+    ).run(sourceId, JSON.stringify(summary));
   });
 
   tx();

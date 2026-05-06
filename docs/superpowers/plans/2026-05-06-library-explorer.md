@@ -23,7 +23,7 @@
 - Modify: `src/lib/server/library/collate.ts` (write a `source_state` row inside the existing transaction)
 - Create: `scripts/verify-source-state.ts`
 
-- [ ] **Step 1: Write the migration**
+- [x] **Step 1: Write the migration**
 
 Create `src/lib/server/db/migrations/002_source_state.sql`:
 
@@ -35,7 +35,7 @@ CREATE TABLE source_state (
 );
 ```
 
-- [ ] **Step 2: Write the upsert inside `collate()`**
+- [x] **Step 2: Write the upsert inside `collate()`**
 
 Open `src/lib/server/library/collate.ts`. At the top of the file's imports, add nothing new (we'll use `db` directly). Find the `collate()` function. Inside its existing transaction, immediately *before* the function returns the `summary` object, add:
 
@@ -51,7 +51,7 @@ db.prepare(
 
 The `summary` object is the same one currently returned by `collate()` (`{ rowsIn, releasesUpserted, … }`). The `sourceId` is the function's first parameter. Both are already in scope.
 
-- [ ] **Step 3: Write the verification script**
+- [x] **Step 3: Write the verification script**
 
 Create `scripts/verify-source-state.ts`:
 
@@ -113,17 +113,17 @@ assert(all[0].n === 1, `expected 1 row in source_state, got ${all[0].n}`);
 console.log('PASS: source_state migration + collate write');
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `pnpm verify scripts/verify-source-state.ts`
 Expected: `PASS: source_state migration + collate write`
 
-- [ ] **Step 5: Type-check**
+- [x] **Step 5: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/lib/server/db/migrations/002_source_state.sql src/lib/server/library/collate.ts scripts/verify-source-state.ts
