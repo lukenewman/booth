@@ -2153,7 +2153,7 @@ git commit -m "feat(ui): ListviewToolbar — search + contextual right-side cont
 **Files:**
 - Create: `src/lib/components/ReleaseDetail.svelte`
 
-- [ ] **Step 1: Implement the component**
+- [x] **Step 1: Implement the component**
 
 Create `src/lib/components/ReleaseDetail.svelte`:
 
@@ -2369,12 +2369,12 @@ Create `src/lib/components/ReleaseDetail.svelte`:
 </style>
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `pnpm tsc`
 Expected: no NEW errors (the existing `+page.svelte` errors from prior tasks remain).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/lib/components/ReleaseDetail.svelte
