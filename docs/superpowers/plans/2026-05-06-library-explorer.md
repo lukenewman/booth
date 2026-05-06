@@ -2388,7 +2388,7 @@ git commit -m "feat(ui): ReleaseDetail with source panels + tracklist section"
 **Files:**
 - Create: `src/lib/components/TrackDetail.svelte`
 
-- [ ] **Step 1: Implement the component**
+- [x] **Step 1: Implement the component**
 
 Create `src/lib/components/TrackDetail.svelte`:
 
@@ -2535,12 +2535,12 @@ Create `src/lib/components/TrackDetail.svelte`:
 </style>
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `pnpm tsc`
 Expected: no new errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/lib/components/TrackDetail.svelte
