@@ -176,26 +176,13 @@ docs/
 - **Auto-focus search on load + Esc-to-blur** added (plan only had `/` to focus).
 - **`normalize.ts` in `library/`.** The spec put normalization inline in `collate.ts`; extracted to `src/lib/server/library/normalize.ts` in the actual implementation.
 
-## Known gaps / future work
+## Known gaps in shipped code
+
+Limitations of code that's currently in production. For deferred features and not-yet-implemented work, see `docs/BACKLOG.md`.
 
 - **No automated tests.** Verification is via `pnpm verify scripts/<name>.ts`, curl, sqlite3, and manual browser testing.
-- **Slice 2: Library explorer UI.** iTunes-style three-pane (sources/playlists, content list, detail). Reads from the unified store; surfaces source-aware panels (Discogs metadata, Rekordbox BPM/key, Plex play button).
-- **Rekordbox adapter implementation.** Read `master.db` (SQLite), contribute tracks with `bpm`, `key`, `cuePoints`, etc. as facets. File-path match key for local↔local linking.
-- **Plex adapter implementation.** HTTP API client; contribute tracks with `streamUrl` facet. File-path match key on `Part.file`. Auth via `X-Plex-Token` in `.env`.
-- **Fuzzy matching upgrade.** Levenshtein/token-based scoring fallback when deterministic match fails. Add `confidence` column to `source_link` and a `match_overrides` table.
-- **Track-level Discogs matching.** Match individual iTunes tracks to specific tracks in Discogs release tracklists. Probably a separate adapter run-mode rather than collate-time.
-- **Catno match-key.** Promote `catno` to a `match_key.key_type='catno'`. Useful for distinguishing pressings.
-- **Incremental sync.** Per-source cursor (Discogs `instance_id` order, Plex `updatedAt`). Sync gets faster, file watching becomes possible.
-- **File watching / scheduled sync.** Auto-trigger sync on `Library.xml` mtime changes; periodic Plex polls.
-- **Artist as first-class entity.** Migration: add `artist` table, `track`/`release` get `artist_id` FKs, `source_link`/`facets` extend to `entity_kind='artist'`.
-- **Booth-owned ratings/play counts.** A `user_track_data` table for ratings/plays not mirrored from a source. UI for editing.
-- **Playlists.** New entity type (`playlist`, `playlist_track`), source-attributed. iTunes adapter starts contributing them.
-- **Sync-run logging.** `sync_run` table for debugging — currently the summary is only returned in the HTTP response.
-- **Auth / multi-user.** Currently single-user, dev-only.
-- **LAN / phone access.** Currently dev-only on localhost.
-- **Bandcamp wishlist adapter** (eventual; release-first).
-- **YouTube adapter** (eventual; track-first via playlist; streaming via embed).
 - **`Cmd+Z` is intercepted by the browser** when the search input is focused (it'll undo typed text first). The on-screen button and `u` key still work.
+- **Pre-existing svelte-check error at `src/routes/+page.svelte:134`** (async function passed to `$effect`). Invisible to `pnpm tsc`. Will dissolve when Slice 2 rewrites the page.
 
 ## Local development
 
