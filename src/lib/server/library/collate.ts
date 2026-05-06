@@ -243,8 +243,8 @@ function upsertSourceLink(
   method: MatchMethod,
   summary: CollateSummary,
 ): void {
-  // Detect conflict: a row already exists for (kind, source, external_id) but it
-  // points at a different entity_id than what our match logic just resolved.
+  // Detect PK conflict: a row already exists for (kind, source, external_id) but
+  // it points at a different entity_id than what our match logic just resolved.
   const existing = db
     .prepare(
       `SELECT entity_id FROM source_link
@@ -252,6 +252,20 @@ function upsertSourceLink(
     )
     .get(kind, sourceId, externalId) as { entity_id: string } | undefined;
   if (existing && existing.entity_id !== entityId) {
+    summary.conflicts++;
+    return; // leave existing alone in Slice 1
+  }
+
+  // Detect UQ conflict: this source already has a link to this entity via a
+  // different external_id (e.g. iTunes contributing two Track IDs whose file
+  // paths normalize to the same value, like a duplicate import).
+  const existingByEntity = db
+    .prepare(
+      `SELECT external_id FROM source_link
+        WHERE entity_kind=? AND entity_id=? AND source=?`,
+    )
+    .get(kind, entityId, sourceId) as { external_id: string } | undefined;
+  if (existingByEntity && existingByEntity.external_id !== externalId) {
     summary.conflicts++;
     return; // leave existing alone in Slice 1
   }

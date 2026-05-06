@@ -793,8 +793,8 @@ function upsertSourceLink(
   method: MatchMethod,
   summary: CollateSummary,
 ): void {
-  // Detect conflict: a row already exists for (kind, source, external_id) but it
-  // points at a different entity_id than what our match logic just resolved.
+  // Detect PK conflict: a row already exists for (kind, source, external_id) but
+  // it points at a different entity_id than what our match logic just resolved.
   const existing = db
     .prepare(
       `SELECT entity_id FROM source_link
@@ -802,6 +802,20 @@ function upsertSourceLink(
     )
     .get(kind, sourceId, externalId) as { entity_id: string } | undefined;
   if (existing && existing.entity_id !== entityId) {
+    summary.conflicts++;
+    return; // leave existing alone in Slice 1
+  }
+
+  // Detect UQ conflict: this source already has a link to this entity via a
+  // different external_id (e.g. iTunes contributing two Track IDs whose file
+  // paths normalize to the same value, like a duplicate import).
+  const existingByEntity = db
+    .prepare(
+      `SELECT external_id FROM source_link
+        WHERE entity_kind=? AND entity_id=? AND source=?`,
+    )
+    .get(kind, entityId, sourceId) as { external_id: string } | undefined;
+  if (existingByEntity && existingByEntity.external_id !== externalId) {
     summary.conflicts++;
     return; // leave existing alone in Slice 1
   }
@@ -1034,6 +1048,33 @@ const releaseCount5 = db.prepare('SELECT COUNT(*) AS n FROM release').get() as a
 assert(releaseCount5.n === 1, `release should survive while itunes still references it, got ${releaseCount5.n}`);
 const linksAfter = db.prepare("SELECT source FROM source_link WHERE entity_kind='release'").all() as any[];
 assert(linksAfter.length === 1 && linksAfter[0].source === 'itunes', 'only itunes link remains');
+
+// --- Run 6: itunes contributes two Track IDs that share the same file path.
+//           Both resolve to the same entity via match_key; the second insert
+//           must be detected as a UQ conflict, not crash with SqliteError.
+const db2 = new Database(':memory:');
+runMigrations(db2);
+const r6 = collate(db2, 'itunes', {
+  releases: [],
+  tracks: [
+    {
+      externalId: 'tA',
+      title: 'Same Song',
+      artist: 'Artist',
+      filePath: 'file:///Users/x/Music/song.m4a',
+    },
+    {
+      externalId: 'tB',
+      title: 'Same Song (dupe import)',
+      artist: 'Artist',
+      filePath: 'file:///Users/x/Music/song.m4a',
+    },
+  ],
+});
+assert(r6.tracksUpserted === 2, `both tracks attempted upsert, got ${r6.tracksUpserted}`);
+assert(r6.conflicts === 1, `expected 1 UQ conflict, got ${r6.conflicts}`);
+const linkCount6 = db2.prepare("SELECT COUNT(*) AS n FROM source_link WHERE entity_kind='track' AND source='itunes'").get() as any;
+assert(linkCount6.n === 1, `expected 1 itunes track source_link (the second is dropped as conflict), got ${linkCount6.n}`);
 
 console.log('OK: collate');
 ```
