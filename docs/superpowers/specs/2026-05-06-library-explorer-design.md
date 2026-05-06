@@ -71,22 +71,24 @@ src/
         collate.ts                                     EXTEND — write source_state row in same transaction
         queries.ts                                     EXTEND — getReleaseDetail, getTrackDetail, listSources, paginated listing helpers
     components/
-      Explorer.svelte                                  NEW — top-level shell, owns URL state and rail/list/detail wiring
+      Explorer.svelte                                  NEW — top-level shell, owns URL ↔ store sync, composes rail + middle + detail
       Rail.svelte                                      NEW — left rail (Library / Sources / Add sections)
       ListviewToolbar.svelte                           NEW — middle-pane top bar (search input, scanner btn, sync chip, entity-type toggle)
-      ReleaseList.svelte                               NEW — paginated release listview
-      TrackList.svelte                                 NEW — paginated track listview
+      Listview.svelte                                  NEW — generic paginated listview shell (column-header strip, scrollable body, sentinel/intersection-observer, selection plumbing). Takes row snippet + headers from caller.
+      ReleaseList.svelte                               NEW — thin wrapper around Listview; defines release-row snippet + column headers
+      TrackList.svelte                                 NEW — thin wrapper around Listview; defines track-row snippet + column headers
       SourceGrid.svelte                                NEW — the 4-slot D/i/R/P widget (used in row + rail + header)
       ReleaseDetail.svelte                             NEW — right-pane release detail with tracklist section
       TrackDetail.svelte                               NEW — right-pane track detail with parent-release link
       SourcePanel.svelte                               NEW — generic per-source detail panel (header + key/value rows)
       SyncChip.svelte                                  NEW — last-synced indicator + sync trigger
-      SearchBar.svelte                                 REMOVED — replaced by ListviewToolbar's input
+      EmptyState.svelte                                NEW — centered "nothing here" pattern with optional CTA (stubs, never-synced, no-results, no-selection)
+      SearchBar.svelte                                 REFACTORED — shrinks to a debounced input + focus(); URL sync moves to Explorer.svelte; scan button moves to ListviewToolbar. Used inside ListviewToolbar.
       ResultsList.svelte                               REMOVED — replaced by ReleaseList in Add → Discogs context
-      ResultRow.svelte                                 REMOVED — replaced by ReleaseList row component
+      ResultRow.svelte                                 REMOVED — replaced by inline row snippet in ReleaseList
       ConfirmModal.svelte                              REMOVED — detail-pane CTA replaces it
       SessionLog.svelte                                KEPT, refactored — surfaces inside Add → Discogs view (footer of middle pane)
-      Scanner.svelte                                   KEPT — invoked from toolbar button rather than mode flip
+      Scanner.svelte                                   KEPT — invoked from ListviewToolbar's scanner button (popover) rather than mode flip
       Toast.svelte                                     KEPT — unchanged
       ShortcutOverlay.svelte                           KEPT — content updated for new shortcuts
     stores/
@@ -100,12 +102,16 @@ src/
 
 ### Why these boundaries
 
-- **`Explorer.svelte`** owns URL ↔ state synchronization (parses `?nav=`, `?id=`, `?q=` on mount; replace-state writes on change). Children are pure renderers driven by `explorerState`.
+- **`Explorer.svelte`** owns URL ↔ store synchronization (parses `?nav=`, `?id=`, `?q=` on mount; replace-state writes on change). Children are pure renderers driven by `explorerState`.
 - **`Rail.svelte`** is dumb — receives the source list (from `/api/sources`) and the current `nav` value, emits selection events.
-- **The middle pane is split** into `ListviewToolbar` + `ReleaseList`/`TrackList`. The toolbar's controls (sync chip, entity-type toggle) are shown/hidden by the parent based on the current rail context, not by the toolbar inspecting state — keeps the toolbar contextless.
+- **The middle pane is split** into `ListviewToolbar` + a list component (`ReleaseList` or `TrackList`). The toolbar's controls (sync chip, entity-type toggle) are shown/hidden by the parent based on the current rail context, not by the toolbar inspecting state — keeps the toolbar contextless.
+- **Pagination plumbing is generic** in `Listview.svelte` — column-header strip, scrollable body, sentinel + intersection observer, selection-by-index, scroll-position preservation. `ReleaseList`/`TrackList` are thin wrappers that pass row snippet + column headers in. Saves duplicating the scroll/load logic; row markup lives next to its column-header definition (good co-location).
 - **`SourceGrid.svelte`** is reused in three places: list rows, the column header, and (faded) the rail's per-source items. One component, one source-of-truth for the visual vocabulary.
 - **`SourcePanel.svelte`** is the right-pane atomic unit. Both `ReleaseDetail` and `TrackDetail` compose source panels from a `sources[]` array on the entity payload — no per-source-id branching at the detail level.
-- **`mode.svelte.ts` is removed**. Search and scanner are no longer "modes"; the rail is the navigation, and the scanner is a toolbar button that opens an overlay (Scanner component mounted into a popover, dismissed on decode).
+- **`SearchBar.svelte` is refactored, not removed** — its current concerns (debounce + focus + URL sync) shrink to debounce + focus once URL sync moves to `Explorer.svelte`. Used inside `ListviewToolbar`. Debounced-input is a pattern likely to recur (filter inputs, etc.) so the encapsulation pays off.
+- **`mode.svelte.ts` is removed**. Search and scanner are no longer "modes"; the rail is the navigation, and the scanner is a toolbar button that opens a popover (Scanner component mounted into a popover, dismissed on decode).
+- **`KeyHint` is intentionally not a component** — the existing `.kbd` CSS class in `app.css` is sufficient for inline keyboard hints. Don't componentize one CSS rule.
+- **Row components (`ReleaseRow`/`TrackRow`) are intentionally inlined** as snippets within their parent List component, not extracted into separate files. Row markup is short (~15 lines) and lives best next to its column-header definition.
 
 ## 3. Routing & app shell
 
