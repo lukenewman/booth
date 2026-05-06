@@ -138,7 +138,7 @@ git commit -m "feat(db): source_state table + write inside collate transaction"
 - Modify: `src/lib/server/library/queries.ts` (add helpers; keep existing `getMembershipExternalIds`)
 - Create: `scripts/verify-queries.ts`
 
-- [ ] **Step 1: Append query helpers**
+- [x] **Step 1: Append query helpers**
 
 Open `src/lib/server/library/queries.ts`. Append the following helpers — do not remove existing exports:
 
@@ -474,7 +474,7 @@ export function listSourcesWithState(
 
 If `import type Database from 'better-sqlite3'` is not already at the top of the file, add it.
 
-- [ ] **Step 2: Write the verification script**
+- [x] **Step 2: Write the verification script**
 
 Create `scripts/verify-queries.ts`:
 
@@ -623,17 +623,17 @@ assert(rb?.count === 0, 'rekordbox count should be 0');
 console.log('PASS: queries — listReleases, listTracks, details, sources-with-state');
 ```
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 Run: `pnpm verify scripts/verify-queries.ts`
 Expected: `PASS: queries — listReleases, listTracks, details, sources-with-state`
 
-- [ ] **Step 4: Type-check**
+- [x] **Step 4: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/server/library/queries.ts scripts/verify-queries.ts
