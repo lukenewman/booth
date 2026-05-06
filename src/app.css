@@ -1,6 +1,6 @@
 :root {
   --bg: #0a0a0a;
-  --bg-raised: #1a1a1a;
+  --bg-raised: #131313;
   --bg-input: #181818;
   --border: #2a2a2a;
   --border-strong: #333;
@@ -10,6 +10,14 @@
   --accent: #5a8edb;
   --accent-bg: #1f2a3a;
   --accent-border: #2c4a7a;
+  --bg-row-hover: #161616;
+  --accent-strong: #6fa3e6;
+
+  --src-discogs:   #c89a5b;
+  --src-itunes:    #d36b6b;
+  --src-rekordbox: #5b9cd6;
+  --src-plex:      #d4a04b;
+  --src-empty:     #2a2a2a;
   --danger: #db5a5a;
 
   --space-1: 4px;

@@ -923,7 +923,7 @@ git commit -m "feat(api): single-entity detail endpoints + GET /api/sources"
 **Files:**
 - Modify: `src/app.css`
 
-- [ ] **Step 1: Update tokens**
+- [x] **Step 1: Update tokens**
 
 Open `src/app.css`. Inside the `:root { … }` block (alongside the existing `--bg`, `--border`, etc.), add the new tokens. The existing `--bg-raised` value also changes from `#1a1a1a` to `#131313` to support hairline aesthetics.
 
@@ -940,14 +940,14 @@ Replace the `--bg-raised: #1a1a1a;` line with `--bg-raised: #131313;` and add th
   --src-empty:     #2a2a2a;
 ```
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 Run: `pnpm tsc`
 Expected: no errors (CSS doesn't type-check, but ensures the rest of the project still compiles).
 
 Run: `pnpm dev` and load `http://localhost:5173`. The existing search page should still render correctly with no visual regressions in the dark theme. Stop the dev server.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/app.css
