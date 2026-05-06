@@ -1163,7 +1163,7 @@ git commit -m "feat(ui): SourcePanel component (per-source detail block)"
 **Files:**
 - Create: `src/lib/components/SyncChip.svelte`
 
-- [ ] **Step 1: Implement the component**
+- [x] **Step 1: Implement the component**
 
 Create `src/lib/components/SyncChip.svelte`:
 
@@ -1260,12 +1260,12 @@ Create `src/lib/components/SyncChip.svelte`:
 </style>
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/lib/components/SyncChip.svelte
