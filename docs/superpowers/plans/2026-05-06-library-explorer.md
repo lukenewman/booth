@@ -3704,7 +3704,7 @@ git commit -m "feat(keyboard): explorer-aware shortcuts via DOM-driven action wi
 
 After Task 22, none of these are referenced anywhere in `src/`.
 
-- [ ] **Step 1: Confirm zero remaining references**
+- [x] **Step 1: Confirm zero remaining references**
 
 Run:
 
@@ -3714,18 +3714,18 @@ pnpm exec grep -rn "ConfirmModal\|ResultsList\|ResultRow\|stores/mode" src/
 
 Expected: only the four target files themselves should appear. If any importers remain, fix them before deletion.
 
-- [ ] **Step 2: Delete the files**
+- [x] **Step 2: Delete the files**
 
 ```bash
 git rm src/lib/components/ConfirmModal.svelte src/lib/components/ResultsList.svelte src/lib/components/ResultRow.svelte src/lib/stores/mode.svelte.ts
 ```
 
-- [ ] **Step 3: Type-check**
+- [x] **Step 3: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -m "chore(ui): remove ConfirmModal, ResultsList, ResultRow, mode store"
