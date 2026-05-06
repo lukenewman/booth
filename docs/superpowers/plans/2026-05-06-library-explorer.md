@@ -1991,7 +1991,7 @@ git commit -m "refactor(ui): SearchBar — debounced input + focus()/blur()/clea
 **Files:**
 - Create: `src/lib/components/ListviewToolbar.svelte`
 
-- [ ] **Step 1: Implement the component**
+- [x] **Step 1: Implement the component**
 
 Create `src/lib/components/ListviewToolbar.svelte`:
 
@@ -2131,13 +2131,13 @@ Create `src/lib/components/ListviewToolbar.svelte`:
 </style>
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `pnpm tsc`
 
 Same caveat as Task 14 — errors confined to `+page.svelte` are expected.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/lib/components/ListviewToolbar.svelte
