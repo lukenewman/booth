@@ -718,7 +718,7 @@ git commit -m "feat(sources): isStub flag on MusicSource; mark rekordbox + plex"
 - Modify: `src/routes/api/library/releases/+server.ts` (paginate + search + multi_source; new response shape)
 - Modify: `src/routes/api/library/tracks/+server.ts` (paginate + search; new response shape)
 
-- [ ] **Step 1: Replace the releases endpoint**
+- [x] **Step 1: Replace the releases endpoint**
 
 Open `src/routes/api/library/releases/+server.ts`. Replace its contents with:
 
@@ -746,7 +746,7 @@ export const GET: RequestHandler = async ({ url }) => {
 };
 ```
 
-- [ ] **Step 2: Replace the tracks endpoint**
+- [x] **Step 2: Replace the tracks endpoint**
 
 Open `src/routes/api/library/tracks/+server.ts`. Replace its contents with:
 
@@ -773,12 +773,12 @@ export const GET: RequestHandler = async ({ url }) => {
 };
 ```
 
-- [ ] **Step 3: Type-check**
+- [x] **Step 3: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 4: Smoke test with curl**
+- [x] **Step 4: Smoke test with curl**
 
 Run: `pnpm dev` (one terminal).
 
@@ -804,7 +804,7 @@ Expected: same shape; items match `%around%` on title/artist/album.
 
 Stop the dev server.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/routes/api/library/releases/+server.ts src/routes/api/library/tracks/+server.ts
