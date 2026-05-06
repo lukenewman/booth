@@ -3300,7 +3300,7 @@ git commit -m "feat(ui): Explorer shell — URL sync + data fetching + compositi
 
 This task does NOT install the keyboard handler — the existing handler imports `mode.svelte.ts` and assumes the search/scanner mode model. We rip both out together in Task 22 (keyboard rewrite). Until then, the explorer renders without keyboard shortcuts (regression for one task; recovered next task).
 
-- [ ] **Step 1: Replace the file**
+- [x] **Step 1: Replace the file**
 
 Open `src/routes/+page.svelte`. Replace its entire contents with:
 
@@ -3381,12 +3381,12 @@ Open `src/routes/+page.svelte`. Replace its entire contents with:
 
 `shortcutOpen` is mutable state passed to ShortcutOverlay. The keyboard rewrite in Task 22 will toggle it from the `?` shortcut.
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `pnpm tsc`
 Expected: errors should be limited to TypeScript noise from the still-existing `keyboard.svelte.ts` file (which imports `mode.svelte.ts` — both are removed in later tasks). No errors should originate in the new `+page.svelte` itself.
 
-- [ ] **Step 3: Smoke test in browser**
+- [x] **Step 3: Smoke test in browser**
 
 Run: `pnpm dev`. Open `http://localhost:5173`.
 
@@ -3400,7 +3400,7 @@ Expected:
 
 Stop the dev server.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/routes/+page.svelte
