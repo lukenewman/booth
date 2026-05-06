@@ -2430,11 +2430,11 @@ git commit -m "feat(itunes): sync adapter + registry registration"
 
 This task has no code changes — it's the end-to-end check that the whole architecture works against your real data.
 
-- [ ] **Step 1: Set `ITUNES_XML_PATH` in `.env`**
+- [x] **Step 1: Set `ITUNES_XML_PATH` in `.env`**
 
 If you haven't already, point `.env`'s `ITUNES_XML_PATH` at your real Music.app library export. Modern Music.app: open the app → Settings → Advanced → enable "Share Library XML with other applications". The XML lands at `~/Music/Music/Library.xml` (or wherever your library lives).
 
-- [ ] **Step 2: Run both syncs**
+- [x] **Step 2: Run both syncs**
 
 ```bash
 pnpm dev   # in one terminal
@@ -2447,7 +2447,7 @@ curl -X POST http://localhost:5173/api/sources/itunes/sync
 
 Expected: each returns a `CollateSummary` JSON. The iTunes one will probably take a few seconds.
 
-- [ ] **Step 3: Pick an album you have on both, check it has 2 source_links**
+- [x] **Step 3: Pick an album you have on both, check it has 2 source_links**
 
 ```bash
 sqlite3 ./.booth/booth.db <<'SQL'
@@ -2474,7 +2474,7 @@ sqlite3 ./.booth/booth.db "SELECT * FROM source_link WHERE entity_kind='release'
 
 If a known-overlap album is showing up as two separate `release` rows, that's a deterministic-matching miss — note it in the implementation report; fuzzy matching is Slice 2.
 
-- [ ] **Step 4: Inspection endpoints sanity**
+- [x] **Step 4: Inspection endpoints sanity**
 
 ```bash
 curl 'http://localhost:5173/api/library/tracks?source=itunes&limit=3' | head -c 500
@@ -2483,11 +2483,11 @@ curl 'http://localhost:5173/api/library/releases?source=itunes&limit=3' | head -
 
 Expected: real data, with `facets` populated for iTunes (rating, playCount, etc.).
 
-- [ ] **Step 5: Existing add-record flow still works**
+- [x] **Step 5: Existing add-record flow still works**
 
 Open the browser. Search for a release. Add it. Undo. Verify badges flip correctly and the iTunes-collated data is still intact (`sqlite3 ... "SELECT COUNT(*) FROM track;"`).
 
-- [ ] **Step 6: Commit (notes file)**
+- [x] **Step 6: Commit (notes file)**
 
 There's no code change but it's worth recording observations. Create `docs/superpowers/plans/2026-05-05-multi-source-architecture.notes.md` with a few lines about what you observed (overlap counts, any matching misses), then:
 
