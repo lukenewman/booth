@@ -2556,7 +2556,7 @@ git commit -m "feat(ui): TrackDetail with parent-release card + source panels"
 **Files:**
 - Create: `src/lib/components/Rail.svelte`
 
-- [ ] **Step 1: Implement the component**
+- [x] **Step 1: Implement the component**
 
 Create `src/lib/components/Rail.svelte`:
 
@@ -2724,12 +2724,12 @@ Create `src/lib/components/Rail.svelte`:
 </style>
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `pnpm tsc`
 Expected: no new errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/lib/components/Rail.svelte
