@@ -2,13 +2,16 @@
   import { onMount } from 'svelte';
   import Explorer from '$lib/components/Explorer.svelte';
   import ShortcutOverlay from '$lib/components/ShortcutOverlay.svelte';
+  import { installKeyboard } from '$lib/keyboard.svelte';
+  import { session } from '$lib/stores/session.svelte';
+  import { collection } from '$lib/stores/collection.svelte';
+  import { toast } from '$lib/stores/toast.svelte';
 
   let setupNeeded = $state<null | 'no_token' | 'invalid_token'>(null);
   let probed = $state(false);
   let shortcutOpen = $state(false);
 
   onMount(async () => {
-    // Probe the Discogs API to gate on setup. Same content as the Slice 1 flow.
     try {
       const res = await fetch('/api/discogs/search?q=test');
       const data = await res.json().catch(() => ({}));
@@ -20,6 +23,67 @@
     } finally {
       probed = true;
     }
+
+    // Listview row navigation (↑/↓ and ⏎-to-open) lives inside Explorer
+    // through DOM focus; deeper integration is in BACKLOG.md.
+    const teardown = installKeyboard(
+      {
+        focusSearch: () => {
+          document.querySelector<HTMLInputElement>('input.search')?.focus();
+        },
+        openScanner: () => {
+          document.querySelector<HTMLButtonElement>('button[title^="Scan barcode"]')?.click();
+        },
+        moveDown: () => { /* deferred — see BACKLOG.md */ },
+        moveUp:   () => { /* deferred — see BACKLOG.md */ },
+        commit: () => {
+          // Press the visible Add CTA, if any.
+          document.querySelector<HTMLButtonElement>('button.add-btn')?.click();
+        },
+        cancel: () => {
+          // 1. If scanner overlay open, close it.
+          const closeBtn = document.querySelector<HTMLButtonElement>('button.scanner-close');
+          if (closeBtn) { closeBtn.click(); return; }
+          // 2. If search input focused with a value, clear it.
+          const input = document.querySelector<HTMLInputElement>('input.search');
+          if (input && document.activeElement === input) {
+            if (input.value) {
+              const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+              setter?.call(input, '');
+              input.dispatchEvent(new Event('input', { bubbles: true }));
+              return;
+            }
+            input.blur();
+          }
+        },
+        undoLast: async () => {
+          const last = session.last;
+          if (!last) return;
+          try {
+            const res = await fetch('/api/discogs/collection/remove', {
+              method: 'DELETE',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ releaseId: last.releaseId, instanceId: last.instanceId }),
+            });
+            if (res.ok) {
+              session.removeById(last.releaseId, last.instanceId);
+              collection.markRemoved(last.releaseId);
+              toast.show('Undone');
+            } else {
+              toast.show('Could not undo. Try again.');
+            }
+          } catch {
+            toast.show('Could not undo. Network error.');
+          }
+        },
+        toggleShortcuts: () => { shortcutOpen = !shortcutOpen; },
+      },
+      {
+        isScannerOpen: () => !!document.querySelector('.scanner-overlay'),
+      },
+    );
+
+    return teardown;
   });
 </script>
 

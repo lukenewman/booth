@@ -3490,7 +3490,7 @@ git commit -m "refactor(ui): SessionLog as 32px footer strip"
 
 After this task, `mode.svelte.ts` is no longer referenced anywhere (Task 23 deletes it).
 
-- [ ] **Step 1: Replace `keyboard.svelte.ts`**
+- [x] **Step 1: Replace `keyboard.svelte.ts`**
 
 Open `src/lib/keyboard.svelte.ts`. Replace its entire contents with:
 
@@ -3567,7 +3567,7 @@ export function installKeyboard(actions: KeyboardActions, guards: KeyboardGuards
 }
 ```
 
-- [ ] **Step 2: Wire the handler from `+page.svelte`**
+- [x] **Step 2: Wire the handler from `+page.svelte`**
 
 Open `src/routes/+page.svelte`. Add `installKeyboard` import and an `onMount` invocation that wires the actions. Replace the entire `<script>` block with:
 
@@ -3664,12 +3664,12 @@ Open `src/routes/+page.svelte`. Add `installKeyboard` import and an `onMount` in
 
 (Leave the markup and `<style>` block from Task 20 unchanged.)
 
-- [ ] **Step 3: Type-check**
+- [x] **Step 3: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors. (`mode.svelte.ts` is now unreferenced — Task 23 deletes it.)
 
-- [ ] **Step 4: Manual smoke test**
+- [x] **Step 4: Manual smoke test**
 
 Run: `pnpm dev`.
 
@@ -3685,7 +3685,7 @@ Run: `pnpm dev`.
 
 Stop the dev server.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/keyboard.svelte.ts src/routes/+page.svelte
