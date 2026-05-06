@@ -1609,7 +1609,7 @@ git commit -m "feat(ui): generic Listview component (pagination + sentinel + sel
 - Create: `src/lib/components/ReleaseList.svelte`
 - Create: `src/lib/components/TrackList.svelte`
 
-- [ ] **Step 1: Implement `ReleaseList.svelte`**
+- [x] **Step 1: Implement `ReleaseList.svelte`**
 
 Create `src/lib/components/ReleaseList.svelte`:
 
@@ -1740,7 +1740,7 @@ Create `src/lib/components/ReleaseList.svelte`:
 </style>
 ```
 
-- [ ] **Step 2: Implement `TrackList.svelte`**
+- [x] **Step 2: Implement `TrackList.svelte`**
 
 Create `src/lib/components/TrackList.svelte`:
 
@@ -1876,12 +1876,12 @@ Create `src/lib/components/TrackList.svelte`:
 </style>
 ```
 
-- [ ] **Step 3: Type-check**
+- [x] **Step 3: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/lib/components/ReleaseList.svelte src/lib/components/TrackList.svelte
