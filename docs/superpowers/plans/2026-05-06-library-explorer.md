@@ -1895,7 +1895,7 @@ git commit -m "feat(ui): ReleaseList + TrackList wrappers around Listview"
 **Files:**
 - Modify: `src/lib/components/SearchBar.svelte` (gut it; debounce + focus + emit only)
 
-- [ ] **Step 1: Replace the file**
+- [x] **Step 1: Replace the file**
 
 Open `src/lib/components/SearchBar.svelte`. Replace its entire contents with:
 
@@ -1967,7 +1967,7 @@ Open `src/lib/components/SearchBar.svelte`. Replace its entire contents with:
 </style>
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `pnpm tsc`
 
@@ -1975,7 +1975,9 @@ The existing `+page.svelte` still imports `SearchBar` with the old prop shape; t
 
 Expected: errors are confined to `src/routes/+page.svelte` (consumer of the old SearchBar API). Do NOT fix them in this task.
 
-- [ ] **Step 3: Commit**
+(Implementation note: `pnpm tsc` actually passed cleanly — Svelte component prop usage is invisible to `pnpm tsc`. Any latent `+page.svelte` mismatch will surface in `pnpm check` / `svelte-check`, not `pnpm tsc`. Resolved fully when `+page.svelte` is rewritten.)
+
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/lib/components/SearchBar.svelte

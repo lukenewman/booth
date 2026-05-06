@@ -1,74 +1,65 @@
 <script lang="ts">
+  /**
+   * Debounced search input. Caller controls the value via two-way binding;
+   * `onChange` fires after `delayMs` of input idleness.
+   */
   let {
     value = $bindable(''),
-    onScan,
+    placeholder = 'Search…',
+    delayMs = 250,
+    onChange,
   }: {
     value?: string;
-    onScan: () => void;
+    placeholder?: string;
+    delayMs?: number;
+    onChange?: (v: string) => void;
   } = $props();
 
-  let inputEl: HTMLInputElement | undefined = $state();
+  let input: HTMLInputElement | undefined = $state();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  function onInput(e: Event) {
+    const v = (e.target as HTMLInputElement).value;
+    value = v;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => onChange?.(v), delayMs);
+  }
 
   export function focus() {
-    inputEl?.focus();
-    inputEl?.select();
+    input?.focus();
+  }
+
+  export function blur() {
+    input?.blur();
+  }
+
+  export function clear() {
+    value = '';
+    onChange?.('');
   }
 </script>
 
-<div class="bar">
-  <span class="icon">⌕</span>
-  <input
-    bind:this={inputEl}
-    bind:value
-    type="text"
-    placeholder="artist, album, catalog #..."
-    autocomplete="off"
-    spellcheck="false"
-  />
-  <button type="button" class="scan" onclick={onScan}>
-    <span>⊞ Scan</span>
-    <span class="kbd">s</span>
-  </button>
-</div>
+<input
+  bind:this={input}
+  class="search"
+  type="text"
+  {placeholder}
+  {value}
+  oninput={onInput}
+/>
 
 <style>
-  .bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  .search {
+    width: 100%;
     background: var(--bg-input);
     border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
-    padding: 10px 12px;
-    margin-bottom: 14px;
-  }
-  .bar:focus-within {
-    border-color: var(--accent);
-  }
-  .icon {
-    color: var(--accent);
-    font-size: 16px;
-  }
-  input {
-    flex: 1;
-    background: transparent;
-    border: none;
+    border-radius: 4px;
+    padding: 5px 9px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
     outline: none;
-    color: var(--text);
-    font-size: 14px;
   }
-  .scan {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
-    font-size: 12px;
-    color: var(--text-muted);
-    background: var(--bg-raised);
-  }
-  .scan:hover {
-    color: var(--text);
-  }
+  .search:focus { border-color: var(--accent-border); }
+  .search::placeholder { color: var(--text-subtle); }
 </style>
