@@ -19,23 +19,36 @@
 
 <style>
   .log {
-    margin-top: 14px;
-    padding-top: 12px;
-    border-top: 1px dashed var(--border);
-    font-size: 12px;
-    color: var(--text-muted);
+    height: 32px;
+    border-top: 1px solid var(--border);
+    padding: 0 14px;
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--text-muted);
+    font-size: 12px;
+    flex-shrink: 0;
   }
   .undo {
     background: transparent;
-    border: none;
+    border: 0;
     color: var(--accent);
-    font-size: 12px;
     padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
   }
-  .undo:hover {
-    text-decoration: underline;
+  .undo:hover { text-decoration: underline; }
+  .kbd {
+    display: inline-block;
+    background: #222;
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: 4px;
   }
 </style>

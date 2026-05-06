@@ -3418,7 +3418,7 @@ git commit -m "feat(ui): rewrite +page.svelte to mount the Explorer (with setup 
 
 The current SessionLog already accepts an `onUndo: () => void` callback, renders only when `session.count > 0`, and uses the `session` store. Only the styling changes — adapting from the original below-results card to a thin footer strip that fits the explorer's middle-pane footer slot.
 
-- [ ] **Step 1: Replace the `<style>` block**
+- [x] **Step 1: Replace the `<style>` block**
 
 Open `src/lib/components/SessionLog.svelte`. Replace its `<style>` block with:
 
@@ -3462,18 +3462,18 @@ Open `src/lib/components/SessionLog.svelte`. Replace its `<style>` block with:
 
 (Markup stays as-is — the existing component already uses class `log` on the wrapper, class `undo` on the button, class `kbd` on the keyboard hint, and only renders when `session.count > 0`.)
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `pnpm tsc`
 Expected: no new errors.
 
-- [ ] **Step 3: Manual smoke test**
+- [x] **Step 3: Manual smoke test**
 
 Run: `pnpm dev`. Navigate to `Add → Discogs`. Search → click result → click Add. The session log strip should appear below the listview as a 32px footer with "Added this session: 1" on the left and "undo last `u`" on the right. Clicking undo collapses it.
 
 Stop the dev server.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/lib/components/SessionLog.svelte
