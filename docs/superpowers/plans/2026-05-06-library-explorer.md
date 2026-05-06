@@ -1370,7 +1370,7 @@ git commit -m "feat(ui): EmptyState component (centered nothing-here pattern)"
 **Files:**
 - Create: `src/lib/stores/explorerState.svelte.ts`
 
-- [ ] **Step 1: Implement the store**
+- [x] **Step 1: Implement the store**
 
 Create `src/lib/stores/explorerState.svelte.ts`:
 
@@ -1453,12 +1453,12 @@ class ExplorerState {
 export const explorerState = new ExplorerState();
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/lib/stores/explorerState.svelte.ts
