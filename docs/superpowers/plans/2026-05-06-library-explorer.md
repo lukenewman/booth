@@ -961,7 +961,7 @@ git commit -m "feat(css): explorer tokens — source colors, row hover, darker r
 **Files:**
 - Create: `src/lib/components/SourceGrid.svelte`
 
-- [ ] **Step 1: Implement the component**
+- [x] **Step 1: Implement the component**
 
 Create `src/lib/components/SourceGrid.svelte`:
 
@@ -1010,12 +1010,12 @@ Create `src/lib/components/SourceGrid.svelte`:
 </style>
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/lib/components/SourceGrid.svelte
