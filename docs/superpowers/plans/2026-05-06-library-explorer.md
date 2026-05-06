@@ -649,7 +649,7 @@ git commit -m "feat(library): paginated lists + detail + sources-with-state help
 - Modify: `src/lib/server/sources/rekordbox/index.ts` (set `isStub: true`)
 - Modify: `src/lib/server/sources/plex/index.ts` (set `isStub: true`)
 
-- [ ] **Step 1: Extend the `MusicSource` interface**
+- [x] **Step 1: Extend the `MusicSource` interface**
 
 Open `src/lib/server/sources/types.ts`. Find the `MusicSource` interface and add an optional `isStub` property:
 
@@ -664,7 +664,7 @@ export interface MusicSource {
 }
 ```
 
-- [ ] **Step 2: Mark the Rekordbox stub**
+- [x] **Step 2: Mark the Rekordbox stub**
 
 Open `src/lib/server/sources/rekordbox/index.ts`. The exported source object already has `id`, `name`, `contributes`, `sync()`. Add `isStub: true`:
 
@@ -682,7 +682,7 @@ export const rekordboxSource: MusicSource = {
 
 (Keep the existing imports and any surrounding code; the change is the `isStub: true` line.)
 
-- [ ] **Step 3: Mark the Plex stub**
+- [x] **Step 3: Mark the Plex stub**
 
 Open `src/lib/server/sources/plex/index.ts`. Same change:
 
@@ -698,12 +698,12 @@ export const plexSource: MusicSource = {
 };
 ```
 
-- [ ] **Step 4: Type-check**
+- [x] **Step 4: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/server/sources/types.ts src/lib/server/sources/rekordbox/index.ts src/lib/server/sources/plex/index.ts

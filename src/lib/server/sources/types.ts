@@ -34,6 +34,8 @@ export interface MusicSource {
   readonly id: string;
   readonly name: string;
   readonly contributes: EntityKind[];
+  /** True for adapters whose `sync()` throws `NotImplementedError`. */
+  readonly isStub?: boolean;
   sync(): Promise<SyncResult>;
 }
 
