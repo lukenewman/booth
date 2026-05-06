@@ -48,3 +48,4 @@
 - LAN / phone access — currently localhost-only; scanner UX is the highest-value phone use case. _(deferred from 2026-04-29 collection-adder, 2026-05-05 multi-source)_
 - Move DB from `./.booth/booth.db` to `~/.booth/booth.db` when leaving dev-only. _(deferred from 2026-05-05 multi-source)_
 - Automated test framework — currently verification is `pnpm tsc`, `pnpm verify scripts/<name>.ts`, curl, sqlite3, manual browser. _(deferred from 2026-04-29 collection-adder)_
+- Migrate from pnpm to bun — package manager + runtime swap; affects `package.json` scripts, `pnpm-lock.yaml` → `bun.lockb`, `tsx` could be replaced by bun's native TS execution, `.claude/settings.json` allowlist updates, CONTEXT.md tooling references.
