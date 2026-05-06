@@ -820,7 +820,7 @@ git commit -m "feat(api): paginate + search on releases/tracks; new {items,total
 - Create: `src/routes/api/library/tracks/[id]/+server.ts`
 - Create: `src/routes/api/sources/+server.ts`
 
-- [ ] **Step 1: Release detail endpoint**
+- [x] **Step 1: Release detail endpoint**
 
 Create `src/routes/api/library/releases/[id]/+server.ts`:
 
@@ -837,7 +837,7 @@ export const GET: RequestHandler = async ({ params }) => {
 };
 ```
 
-- [ ] **Step 2: Track detail endpoint**
+- [x] **Step 2: Track detail endpoint**
 
 Create `src/routes/api/library/tracks/[id]/+server.ts`:
 
@@ -854,7 +854,7 @@ export const GET: RequestHandler = async ({ params }) => {
 };
 ```
 
-- [ ] **Step 3: Sources listing endpoint**
+- [x] **Step 3: Sources listing endpoint**
 
 Create `src/routes/api/sources/+server.ts`:
 
@@ -876,12 +876,12 @@ export const GET: RequestHandler = async () => {
 };
 ```
 
-- [ ] **Step 4: Type-check**
+- [x] **Step 4: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 5: Smoke test with curl**
+- [x] **Step 5: Smoke test with curl**
 
 Run: `pnpm dev`.
 
@@ -907,7 +907,7 @@ Expected: `{release: {…}, sources: [...], facets: [...], tracks: [...]}` — `
 
 Stop the dev server.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/routes/api/library/releases/[id]/+server.ts src/routes/api/library/tracks/[id]/+server.ts src/routes/api/sources/+server.ts
