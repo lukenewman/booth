@@ -1029,7 +1029,7 @@ git commit -m "feat(ui): SourceGrid component (4-slot D/i/R/P widget)"
 **Files:**
 - Create: `src/lib/components/SourcePanel.svelte`
 
-- [ ] **Step 1: Implement the component**
+- [x] **Step 1: Implement the component**
 
 Create `src/lib/components/SourcePanel.svelte`:
 
@@ -1144,12 +1144,12 @@ Create `src/lib/components/SourcePanel.svelte`:
 </style>
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/lib/components/SourcePanel.svelte
