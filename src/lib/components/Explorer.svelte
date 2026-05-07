@@ -77,7 +77,8 @@
         }
         // Map Discogs search results into the ReleaseItem shape, with an
         // empty-or-Discogs source-grid based on the in-collection set.
-        const mapped = (res ?? []).map((r: any) => ({
+        // /api/discogs/search wraps results as `{results: [...]}` (Slice 1 shape).
+        const mapped = (res?.results ?? []).map((r: any) => ({
           id: String(r.id),
           title: r.title,
           artist: r.artist,
