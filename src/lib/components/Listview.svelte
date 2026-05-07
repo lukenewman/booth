@@ -42,11 +42,13 @@
       return;
     }
     observer?.disconnect();
+    // The scrollable ancestor is `.body` (overflow-y: auto), not the viewport.
+    // Without an explicit root, the sentinel never intersects on inner scroll.
     observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) loadMore?.();
       },
-      { rootMargin: '400px' },
+      { root: sentinel.parentElement, rootMargin: '400px' },
     );
     observer.observe(sentinel);
     return () => observer?.disconnect();

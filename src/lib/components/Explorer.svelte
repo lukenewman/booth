@@ -49,7 +49,9 @@
   let listItems = $state<any[]>([]);
   let listTotal = $state(0);
   let listHasMore = $state(false);
-  let listLoading = $state(false);
+  // Non-reactive: read+written by loadList from inside the load-list $effect,
+  // which would trip Svelte's effect_update_depth_exceeded if it were $state.
+  let listLoading = false;
 
   // Add → Discogs uses the Discogs search API; everything else uses library endpoints.
   async function loadList(reset: boolean) {

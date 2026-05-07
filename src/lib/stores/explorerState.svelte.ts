@@ -57,6 +57,10 @@ class ExplorerState {
   setNav(nav: NavValue) {
     this.nav = nav;
     this.id = null;
+    // ?entity is only meaningful when the new rail item allows both kinds.
+    // Clearing it on every nav change lets currentEntity fall back to the
+    // rail item's default (e.g. Discogs → releases).
+    this.entity = null;
     // Don't clear q — user may want to refine across rails. Reconsider if it feels wrong.
   }
 
