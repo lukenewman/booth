@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import type { AddResponse } from '$lib/types';
 import { DiscogsError } from '$lib/server/sources/discogs/api';
 import { discogsSource, ensureDiscogsReleaseEntity } from '$lib/server/sources/discogs';
+import { getDb } from '$lib/server/db';
 
 interface AddRequestBody {
   releaseId: number;
@@ -43,6 +44,9 @@ export const POST: RequestHandler = async ({ request }) => {
 
   try {
     const { externalId, instanceId } = await discogsSource.addToCollection({ entityId });
+    // Persist the new instance_id alongside any existing ones, so removal still
+    // works after a reload (the session-only undo path doesn't survive page refresh).
+    appendInstanceIdFacet(entityId, Number(instanceId!));
     const response: AddResponse = {
       releaseId: Number(externalId),
       instanceId: Number(instanceId!),
@@ -55,3 +59,22 @@ export const POST: RequestHandler = async ({ request }) => {
     throw error(500, { message: 'Unexpected error' });
   }
 };
+
+function appendInstanceIdFacet(entityId: string, newInstanceId: number): void {
+  const db = getDb();
+  const existing = db
+    .prepare(
+      `SELECT value FROM source_facets
+        WHERE entity_kind='release' AND entity_id=? AND source='discogs' AND key='instanceIds'`,
+    )
+    .get(entityId) as { value: string } | undefined;
+  const ids: number[] = existing ? (JSON.parse(existing.value) as number[]) : [];
+  if (!ids.includes(newInstanceId)) ids.push(newInstanceId);
+  db.prepare(
+    `INSERT INTO source_facets (entity_kind, entity_id, source, key, value)
+     VALUES ('release', ?, 'discogs', 'instanceIds', ?)
+     ON CONFLICT(entity_kind, entity_id, source, key) DO UPDATE SET
+       value      = excluded.value,
+       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`,
+  ).run(entityId, JSON.stringify(ids));
+}

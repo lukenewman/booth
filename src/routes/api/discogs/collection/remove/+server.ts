@@ -11,9 +11,9 @@ export const DELETE: RequestHandler = async ({ request }) => {
   } catch {
     throw error(400, 'Invalid JSON body');
   }
-  const { releaseId, instanceId } = body;
-  if (typeof releaseId !== 'number' || typeof instanceId !== 'number') {
-    throw error(400, 'releaseId and instanceId (numbers) required');
+  const { releaseId } = body;
+  if (typeof releaseId !== 'number') {
+    throw error(400, 'releaseId (number) required');
   }
 
   const link = getDb()
@@ -23,6 +23,31 @@ export const DELETE: RequestHandler = async ({ request }) => {
     )
     .get(String(releaseId)) as { entity_id: string } | undefined;
   if (!link) throw error(404, 'release not in local DB');
+
+  // Prefer instanceId from the request body (session-undo path). Fall back to
+  // the instanceIds facet, which sync.ts populates for every release and
+  // /collection/add appends to on every add. If both are missing, the row was
+  // adopted from an older add before facet persistence; ask the user to sync.
+  let instanceId: number | undefined =
+    typeof body.instanceId === 'number' ? body.instanceId : undefined;
+  if (instanceId == null) {
+    const facet = getDb()
+      .prepare(
+        `SELECT value FROM source_facets
+          WHERE entity_kind='release' AND entity_id=? AND source='discogs' AND key='instanceIds'`,
+      )
+      .get(link.entity_id) as { value: string } | undefined;
+    if (facet) {
+      const ids = JSON.parse(facet.value) as number[];
+      if (ids.length > 0) instanceId = ids[0];
+    }
+  }
+  if (typeof instanceId !== 'number') {
+    throw error(
+      409,
+      'no Discogs instance_id known for this release; trigger a Discogs sync to refresh and try again',
+    );
+  }
 
   try {
     await discogsSource.removeFromCollection({ entityId: link.entity_id, instanceId: String(instanceId) });
