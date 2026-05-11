@@ -34,10 +34,51 @@
         openScanner: () => {
           document.querySelector<HTMLButtonElement>('button[title^="Scan barcode"]')?.click();
         },
-        moveDown: () => { /* deferred — see BACKLOG.md */ },
-        moveUp:   () => { /* deferred — see BACKLOG.md */ },
+        moveDown: () => {
+          const rows = Array.from(
+            document.querySelectorAll<HTMLButtonElement>('.body button.row-btn'),
+          );
+          if (rows.length === 0) return;
+          const active = document.activeElement;
+          const search = document.querySelector<HTMLInputElement>('input.search');
+          // From search input → focus the first row.
+          if (active === search) {
+            rows[0].focus({ preventScroll: false });
+            rows[0].scrollIntoView({ block: 'nearest' });
+            return;
+          }
+          // From a row → focus the next row.
+          const idx = active instanceof HTMLButtonElement ? rows.indexOf(active) : -1;
+          if (idx >= 0 && idx < rows.length - 1) {
+            rows[idx + 1].focus({ preventScroll: false });
+            rows[idx + 1].scrollIntoView({ block: 'nearest' });
+          }
+        },
+        moveUp: () => {
+          const rows = Array.from(
+            document.querySelectorAll<HTMLButtonElement>('.body button.row-btn'),
+          );
+          if (rows.length === 0) return;
+          const active = document.activeElement;
+          const idx = active instanceof HTMLButtonElement ? rows.indexOf(active) : -1;
+          if (idx === 0) {
+            // From the first row → focus the search input.
+            document.querySelector<HTMLInputElement>('input.search')?.focus();
+            return;
+          }
+          if (idx > 0) {
+            rows[idx - 1].focus({ preventScroll: false });
+            rows[idx - 1].scrollIntoView({ block: 'nearest' });
+          }
+        },
         commit: () => {
-          // Press the visible Add CTA, if any.
+          const active = document.activeElement;
+          // On a focused row → open its detail (same effect as clicking).
+          if (active instanceof HTMLButtonElement && active.classList.contains('row-btn')) {
+            active.click();
+            return;
+          }
+          // Otherwise → press the visible primary Add CTA, if any.
           document.querySelector<HTMLButtonElement>('button.add-btn')?.click();
         },
         cancel: () => {
