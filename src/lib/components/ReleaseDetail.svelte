@@ -33,7 +33,12 @@
     facets: Facet[];
     tracks: Track[];
     sourceMeta: SourceMeta[];
-    addCta?: { label: string; onClick: () => void; kbdHint?: string } | null;
+    addCta?: {
+      label: string;
+      onClick: () => void;
+      kbdHint?: string;
+      variant?: 'primary' | 'quiet';
+    } | null;
     onTrackSelect?: (trackId: string) => void;
   } = $props();
 
@@ -71,10 +76,17 @@
 
   {#if addCta}
     <div class="cta-row">
-      <button class="add-btn" onclick={addCta.onClick}>
-        {addCta.label}
-        {#if addCta.kbdHint}<span class="kbd-hint">{addCta.kbdHint}</span>{/if}
-      </button>
+      {#if addCta.variant === 'quiet'}
+        <button class="cta-btn remove-btn" onclick={addCta.onClick}>
+          {addCta.label}
+          {#if addCta.kbdHint}<span class="kbd-hint quiet">{addCta.kbdHint}</span>{/if}
+        </button>
+      {:else}
+        <button class="cta-btn add-btn" onclick={addCta.onClick}>
+          {addCta.label}
+          {#if addCta.kbdHint}<span class="kbd-hint">{addCta.kbdHint}</span>{/if}
+        </button>
+      {/if}
     </div>
   {/if}
 
@@ -135,11 +147,8 @@
   }
 
   .cta-row { margin-bottom: 16px; }
-  .add-btn {
+  .cta-btn {
     width: 100%;
-    background: var(--accent);
-    border: 1px solid var(--accent);
-    color: #fff;
     padding: 7px 12px;
     border-radius: 4px;
     font-size: 13px;
@@ -151,7 +160,22 @@
     justify-content: center;
     gap: 6px;
   }
+  .add-btn {
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    color: #fff;
+  }
   .add-btn:hover { background: var(--accent-strong); }
+  .remove-btn {
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+  .remove-btn:hover {
+    border-color: var(--text-muted);
+    color: var(--text);
+  }
   .kbd-hint {
     font-size: 11px;
     color: rgba(255, 255, 255, 0.7);
@@ -160,6 +184,10 @@
     border-radius: 2px;
     padding: 0 4px;
     margin-left: 4px;
+  }
+  .kbd-hint.quiet {
+    color: var(--text-subtle);
+    border-color: var(--border-strong);
   }
 
   .tracklist {

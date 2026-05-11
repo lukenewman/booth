@@ -57,6 +57,12 @@
           }
         },
         undoLast: async () => {
+          // Prefer the visible Remove button in the detail pane — it handles
+          // persistent removal via the server-side instance_id facet lookup,
+          // not just this-session items.
+          const removeBtn = document.querySelector<HTMLButtonElement>('button.remove-btn');
+          if (removeBtn) { removeBtn.click(); return; }
+          // Otherwise fall back to undoing the most-recent session add.
           const last = session.last;
           if (!last) return;
           try {

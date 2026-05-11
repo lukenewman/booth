@@ -326,32 +326,61 @@
   async function handleUndo() {
     const last = session.last;
     if (!last) return;
+    await removeFromDiscogs(last.releaseId, last.instanceId, 'Undone');
+  }
+
+  /**
+   * Remove a release from the user's Discogs collection. Works whether the
+   * release was added this session (we pass the known instance_id) or was
+   * loaded from a prior sync (server falls back to the stored instanceIds
+   * facet).
+   */
+  async function handleRemove(discogsReleaseId: number) {
+    const last = session.last;
+    const instanceId = last?.releaseId === discogsReleaseId ? last.instanceId : undefined;
+    await removeFromDiscogs(discogsReleaseId, instanceId, 'Removed from Discogs collection');
+  }
+
+  async function removeFromDiscogs(
+    discogsReleaseId: number,
+    instanceIdHint: number | undefined,
+    successToast: string,
+  ) {
     try {
+      const body: { releaseId: number; instanceId?: number } = { releaseId: discogsReleaseId };
+      if (instanceIdHint != null) body.instanceId = instanceIdHint;
       const res = await fetch('/api/discogs/collection/remove', {
         method: 'DELETE',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ releaseId: last.releaseId, instanceId: last.instanceId }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
-        session.removeById(last.releaseId, last.instanceId);
-        collection.markRemoved(last.releaseId);
-        listItems = listItems.map((it) =>
-          Number(it.id) === last.releaseId
-            ? { ...it, sources: (it.sources as string[]).filter((s) => s !== 'discogs') }
-            : it,
-        );
-        if (detailData?.release && Number(detailData.release.id) === last.releaseId) {
+        if (instanceIdHint != null) session.removeById(discogsReleaseId, instanceIdHint);
+        collection.markRemoved(discogsReleaseId);
+        // The affected row in listItems is whichever has the same id as the
+        // currently-selected detail (works for both search-hit rows, where id
+        // is the Discogs id, and library rows, where id is the local ULID).
+        const selectedId = detailData?.release?.id;
+        if (selectedId != null) {
+          listItems = listItems.map((it) =>
+            it.id === selectedId
+              ? { ...it, sources: (it.sources as string[]).filter((s) => s !== 'discogs') }
+              : it,
+          );
+        }
+        if (detailData) {
           detailData = {
             ...detailData,
-            sources: (detailData.sources as any[]).filter((s) => s.source !== 'discogs'),
+            sources: (detailData.sources as any[]).filter((s: any) => s.source !== 'discogs'),
           };
         }
-        toast.show('Undone');
+        toast.show(successToast);
       } else {
-        toast.show('Could not undo. Try again.');
+        const err = await res.json().catch(() => ({}));
+        toast.show((err && err.message) || 'Could not remove. Try again.');
       }
     } catch {
-      toast.show('Could not undo. Network error.');
+      toast.show('Could not remove. Network error.');
     }
   }
 
@@ -378,6 +407,40 @@
   const sourceMetaForDetail = $derived(
     sources.map((s) => ({ id: s.id, name: s.name, isStub: s.isStub })),
   );
+
+  // ----- Detail-pane CTA (Add / Remove) --------------------------------------
+
+  /**
+   * Unified CTA payload for ReleaseDetail. Three states:
+   *  - Already in Discogs collection → quiet "✓ In your Discogs collection — undo" row.
+   *  - Add → Discogs search hit not yet owned → primary "+ Add to Discogs collection".
+   *  - Otherwise → null.
+   */
+  const releaseDetailCta = $derived.by(() => {
+    if (!detailData?.release) return null;
+    const discogsLink = (detailData.sources ?? []).find((s: any) => s.source === 'discogs');
+    if (discogsLink) {
+      const discogsReleaseId = detailData._isDiscogsSearchHit
+        ? Number(detailData.release.id)
+        : Number(discogsLink.external_id);
+      if (!Number.isFinite(discogsReleaseId)) return null;
+      return {
+        variant: 'quiet' as const,
+        label: '✓ In your Discogs collection — undo',
+        kbdHint: 'u',
+        onClick: () => handleRemove(discogsReleaseId),
+      };
+    }
+    if (isAddView && detailData._isDiscogsSearchHit) {
+      return {
+        variant: 'primary' as const,
+        label: '+ Add to Discogs collection',
+        kbdHint: '⏎',
+        onClick: handleAdd,
+      };
+    }
+    return null;
+  });
 </script>
 
 <div class="explorer">
@@ -459,13 +522,7 @@
         facets={detailData.facets}
         tracks={detailData.tracks ?? []}
         sourceMeta={sourceMetaForDetail}
-        addCta={
-          isAddView && detailData._isDiscogsSearchHit
-            ? (collection.has(Number(detailData.release.id))
-                ? null
-                : { label: '+ Add to Discogs collection', kbdHint: '⏎', onClick: handleAdd })
-            : null
-        }
+        addCta={releaseDetailCta}
         onTrackSelect={(id) => explorerState.setEntity(id)}
       />
     {:else if detailKind === 'track' && detailData}
