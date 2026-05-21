@@ -44,110 +44,144 @@ src/
   hooks.server.ts                             auto-sync-on-boot: triggers Discogs sync once if DB has zero Discogs source_links
   lib/
     types.ts                                  DiscogsRelease, SessionEntry, ApiError, AddResponse
-    keyboard.svelte.ts                        installKeyboard(actions, state) — global keydown handler
+    keyboard.svelte.ts                        installKeyboard(actions, guards) — global keydown handler dispatching DOM-driven actions
     components/
-      SearchBar.svelte                        input + scan button; exports focus()
-      ResultsList.svelte                      renders ResultRow per result
-      ResultRow.svelte                        row UI; reads collection store for "in collection" badge
-      ConfirmModal.svelte                     add confirmation; supports submitting + error states
+      Explorer.svelte                         three-pane shell (rail / listview / detail); owns URL ↔ store sync, data fetching, add/remove handlers
+      Rail.svelte                             left rail: Library / Sources / Add → Discogs sections
+      Listview.svelte                         generic paginated row container; IntersectionObserver sentinel + selection state
+      ListviewToolbar.svelte                  list header: search input + scanner btn + entity toggle (releases/tracks) + sync chip + meta
+      ReleaseList.svelte                      Listview wrapper bound to release rows
+      TrackList.svelte                        Listview wrapper bound to track rows
+      ReleaseDetail.svelte                    right pane for a release; tracklist + per-source panels; optional add/remove CTA with variant
+      TrackDetail.svelte                      right pane for a track; parent-release card + per-source panels
+      SourceGrid.svelte                       4-dot "DiRP" indicator (Discogs / iTunes / Rekordbox / Plex)
+      SourcePanel.svelte                      per-source detail block (facets + external link or stub placeholder)
+      SyncChip.svelte                         last-synced timestamp + click-to-sync; disabled for stub sources
+      EmptyState.svelte                       centered "nothing here" placeholder
+      SearchBar.svelte                        debounced text input; exports focus() / blur() / clear()
       Scanner.svelte                          ZXing camera viewfinder; retries NotReadableError up to 3×
       Toast.svelte                            bottom-center toast container
-      SessionLog.svelte                       "Added this session: N — undo last"
-      ShortcutOverlay.svelte                  ? overlay listing shortcuts
+      SessionLog.svelte                       32px footer strip; only shown in Add → Discogs
+      ShortcutOverlay.svelte                  `?` overlay listing shortcuts
     server/
       db/
         index.ts                              singleton better-sqlite3 connection; reads path from env
         migrate.ts                            reads migrations/*.sql, applies in order, tracks in _migrations
         migrations/
           001_init.sql                        core tables: release, track, source_link, source_facets, match_key, _migrations
+          002_source_state.sql                source_state (source PRIMARY KEY, last_synced_at, last_summary)
       sources/
-        types.ts                              MusicSource, CollectionWritable, SourceTrack, SourceRelease, SyncResult
+        types.ts                              MusicSource (with isStub), CollectionWritable, SourceTrack, SourceRelease, SyncResult
         registry.ts                           statically-populated source list; getSource(id), listSources()
         discogs/
           api.ts                              discogsFetch + DiscogsError; reads token via $env/dynamic/private
           username.ts                         lazy /oauth/identity username cache
-          sync.ts                             full collection re-pull → SyncResult
+          sync.ts                             full collection re-pull → SyncResult; populates instanceIds facet
           index.ts                            discogsSource: MusicSource & CollectionWritable
         itunes/
           parse.ts                            plist/XML → typed iTunes records
           sync.ts                             parses Library.xml → SyncResult; emits emergent releases
           index.ts                            itunesSource: MusicSource (read-only)
         rekordbox/
-          index.ts                            stub: sync() throws NotImplementedError
+          index.ts                            stub: isStub=true; sync() throws NotImplementedError
         plex/
-          index.ts                            stub: sync() throws NotImplementedError
+          index.ts                            stub: isStub=true; sync() throws NotImplementedError
       library/
         normalize.ts                          normalization helpers for match keys (artist_album_year, file_path)
-        collate.ts                            post-sync: maps SyncResult → entity + source_link upserts
-        queries.ts                            generic reads: getTrack, getRelease, getMembership
+        collate.ts                            post-sync: maps SyncResult → entity + source_link upserts; writes source_state
+        queries.ts                            listReleases / listTracks (paginated), getReleaseDetail / getTrackDetail, listSourcesWithState, getMembershipExternalIds
     stores/
-      mode.svelte.ts                          'search' | 'scanner'
       session.svelte.ts                       in-memory session log (entries, count, last)
       toast.svelte.ts                         toast queue with auto-dismiss + retry actions
       collection.svelte.ts                    client mirror of Discogs membership (Set<releaseId>); fetches /api/library/membership?source=discogs
+      explorerState.svelte.ts                 singleton mirror of URL params ?nav / ?id / ?q / ?entity; hydrate() + serialize()
   routes/
     +layout.svelte                            imports app.css; mounts <Toast />
-    +page.svelte                              the entire app (search/scanner/setup screens)
+    +page.svelte                              mounts <Explorer> + <ShortcutOverlay>; setup gate; installKeyboard with DOM-driven actions
     api/
       sources/
+        +server.ts                            GET → [{ id, name, isStub, lastSyncedAt, lastSummary }] for the rail Sources section
         [id]/sync/+server.ts                  POST → registry.getSource(id).sync() → collate → return summary; 404 unknown, 501 stub
       library/
-        tracks/+server.ts                     GET ?source=&limit=  inspection: tracks from unified store
-        releases/+server.ts                   GET ?source=&limit=  inspection: releases from unified store
+        tracks/+server.ts                     GET ?source=&q=&multiSource=&limit=&offset=  paginated tracks
+        tracks/[id]/+server.ts                GET → { track, sources, facets, release, sourceMeta } for TrackDetail
+        releases/+server.ts                   GET ?source=&q=&multiSource=&limit=&offset=  paginated releases
+        releases/[id]/+server.ts              GET → { release, sources, facets, tracks, sourceMeta } for ReleaseDetail
         membership/+server.ts                 GET ?source=discogs  → set of external_ids (Discogs release-id strings)
       discogs/
-        search/+server.ts                     GET ?q= — live text search, returns trimmed releases sorted by year asc
+        search/+server.ts                     GET ?q= — live text search; returns { results: […] } sorted by year asc
         collection/
-          add/+server.ts                      POST {releaseId, …} — adds to Discogs; writes through to source_link table
-          remove/+server.ts                   DELETE {releaseId, instanceId} — removes from Discogs; deletes source_link row
+          add/+server.ts                      POST {releaseId,…} — adds to Discogs; writes source_link + appends instance_id to source_facets.instanceIds
+          remove/+server.ts                   DELETE {releaseId, instanceId?} — removes from Discogs; instanceId optional (falls back to source_facets.instanceIds[0])
 docs/
+  BACKLOG.md                                  deferred work; one bullet per item (being migrated to Linear)
   CONTEXT.md                                  ← this file
   superpowers/
     specs/2026-04-29-discogs-collection-adder-design.md   original product spec
     specs/2026-05-05-multi-source-architecture-design.md  multi-source architecture design (Slice 1)
+    specs/2026-05-06-library-explorer-design.md           library explorer design (Slice 2)
     plans/2026-04-29-discogs-collection-adder.md          original implementation plan (all checked off)
     plans/2026-05-05-multi-source-architecture.md         Slice 1 implementation plan
+    plans/2026-05-06-library-explorer.md                  Slice 2 implementation plan
 ```
 
 ## Feature inventory
 
+### Library explorer (Slice 2 shell)
+- **Three panes**: left rail (Library / Sources / Add → Discogs sections), middle listview (paginated rows + toolbar), right detail (release or track).
+- **Library rail items**: `all-releases`, `all-tracks`, `in-multiple-sources` (only entities with ≥2 source-grid dots filled).
+- **Sources rail items**: one per registered source (`discogs`, `itunes`, `rekordbox`, `plex`); stubs render `EmptyState` placeholder in the listview.
+- **Add rail item**: `add:discogs` — Discogs live search, results render with the same row shell as library rows.
+- **Listview**: lazy pagination via `IntersectionObserver` sentinel rooted on the scroll container (`?limit=200&offset=…`); row click selects + opens detail.
+- **Detail**: cover placeholder, title/artist/year, optional CTA, then per-source panels (`SourcePanel`) for all registered sources, then tracklist (releases only). Stub sources still render a "not implemented" panel.
+- **SourceGrid**: 4-dot indicator (D / i / R / P) shown on every row and in detail context to communicate which sources contribute to a given entity.
+- **SyncChip** (in toolbar when a Sources rail item is selected): "last synced Nm ago" → click triggers `POST /api/sources/:id/sync` and flips to "Syncing…"; updates timestamp on completion. Stubs render as a disabled "Not implemented" chip.
+
 ### Search
-- Live-debounced (250ms) text search via `/api/discogs/search?q=`.
-- Results sorted ascending by year, nulls last (sorted in the SvelteKit endpoint, not at Discogs).
-- Each row: 80×80 cover, artist — title, sub-line `format · year · country · label · catno`.
-- "✓ in collection" green badge + dimmed title + green outline on cover for releases the user already owns.
-- Single "Open this search in Discogs ↗" link below the list (opens `discogs.com/search/?q=…&type=all`).
-- Click row OR press Enter on highlighted row → opens confirm modal.
+- **Library / Sources searches** (Library, Sources rail items): the toolbar search input filters the current listview via `?q=` on `/api/library/releases` or `/api/library/tracks`. Server-side `LIKE` over title + artist; pagination resets.
+- **Add → Discogs search**: same toolbar input, but query goes to `/api/discogs/search?q=` (returns `{ results: [...] }` sorted ascending by year, nulls last).
+- Both modes are live-debounced (250ms) through the shared `SearchBar` component (`focus()` / `blur()` / `clear()` exposed).
+- Owned-by-Discogs releases show the D dot filled in the row's `SourceGrid` — same indicator everywhere in the UI.
 
 ### Scanner
-- `s` enters scanner mode; `s` or `Esc` exits.
-- Camera viewfinder with centered crosshair frame.
-- On decode: beep, dispatches the decoded code into the search bar, mode flips to `search`. Search runs against `/api/discogs/search?q=<code>` (Discogs's text search indexes barcodes).
+- Scanner button lives in the listview toolbar (the `s` shortcut still toggles it).
+- Camera viewfinder with centered crosshair frame in a popover/overlay.
+- On decode: beep, dispatches the decoded code into the toolbar search input, scanner closes. The search runs against whichever endpoint matches the current rail item (Library/Sources hits the local DB; Add → Discogs hits the Discogs API — barcode strings index well in Discogs text search).
 - On `NotReadableError` (camera still releasing from a previous mount), retries up to 3× with 250ms backoff.
 - Camera errors include the underlying error name in the on-page message and `console.warn` the full error.
 
 ### Add / undo
-- Confirm modal: cover, artist · year, format/country/label rows, Add (Enter) / Cancel (Esc).
-- On add: `POST /api/discogs/collection/add` → session log gets the new entry; collection store marks added; toast appears. The route also writes a `release` row + `source_link` row to SQLite if this release hasn't been seen before.
-- Session log shows count + "undo last (u)" button when count > 0.
-- `u` or Cmd/Ctrl+Z → `DELETE /api/discogs/collection/remove` for the most-recent entry; source_link row removed; toast appears.
-- Add/undo errors surface inline (modal) or via toast (with retry action for undo).
+- The old `ConfirmModal` is gone. Add is a detail-pane CTA on a Discogs search-hit that isn't already owned: blue `+ Add to Discogs collection ⏎` button.
+- On add: `POST /api/discogs/collection/add` → Discogs API call → on success, the route writes the `release` row, the `source_link` row (so the D dot fills in the grid), AND appends the returned `instance_id` to the release's `source_facets.instanceIds` JSON array. Session log gets the entry; toast confirms; collection store marks added.
+- On a release already in the user's Discogs collection (whether reached via the Library rail or as an owned hit in Add → Discogs search), the detail CTA flips to a quiet `✓ In your Discogs collection — undo u` row. Clicking or pressing `u` calls `DELETE /api/discogs/collection/remove`.
+- `DELETE` body accepts `{releaseId, instanceId?}`. If `instanceId` is omitted, the server falls back to `source_facets.instanceIds[0]` — so removal still works for adds made before the facet-persistence change, after a Discogs sync repopulates the facet.
+- Session log (32px footer strip, only visible in `Add → Discogs`) shows count + "undo last (u)" button.
+- Keyboard `u` / `Cmd|Ctrl+Z`: prefer the visible detail-pane Remove button; fall back to undoing the most-recent session-log entry if no Remove is on screen.
+- Add/undo errors surface via toast.
 
 ### URL state
-- `?q=<query>` is the single source of truth for the search bar. Typing updates URL (via `history.replaceState`); reload restores the same query (read at component init via `$app/state`'s `page.url.searchParams`).
-- Scanner-decoded codes flow through the same `?q=` path.
+- Four params, mirrored by `explorerState.svelte.ts` singleton:
+  - `?nav=<rail-item>` — e.g., `library:all-releases`, `sources:discogs`, `add:discogs`. Source of truth for which rail item is selected.
+  - `?id=<entity-id>` — currently-selected list row (release-ULID or track-ULID; for Add-Discogs search-hits, the bare Discogs release id). Null = nothing selected; detail pane shows EmptyState.
+  - `?q=<query>` — toolbar search text. Targets vary by rail item (library DB vs. Discogs API).
+  - `?entity=<releases|tracks>` — entity-kind toggle for rail items that allow both (currently Sources). Library has fixed entity per item.
+- `setNav()` clears both `id` and `entity` so changing rail items can't carry stale state across views.
+- Updates use `history.replaceState`; reload restores the full view.
 
 ### Setup screen
-- On mount, the page probes `/api/discogs/search?q=test`. If the response says `no_token` or `invalid_token`, shows a setup screen with instructions instead of the app shell.
+- On mount, `+page.svelte` probes `/api/discogs/search?q=test`. If the response says `no_token` or `invalid_token`, it renders a setup screen with instructions in place of the Explorer.
 
 ### Rate-limit handling
-- Discogs 429 → toast "Rate limited. Try again in Xs." (uses `Retry-After`). Surfaces for both search and add/remove paths.
+- Discogs 429 → toast "Rate limited. Try again in Xs." (uses `Retry-After`). Surfaces for search and add/remove paths.
 
 ### Keyboard shortcuts (`?` to view)
-- `/` focus search · `s` toggle scanner · `↑/↓` move highlight · `Enter` open confirm or confirm add
-- `Esc` close modal / exit scanner / blur search input
-- `u` or `Cmd/Ctrl+Z` undo last add · `?` toggle overlay
+- `/` focus search · `s` toggle scanner · `?` toggle overlay
+- `↑/↓` walk listview rows via DOM focus; `↑` from row 1 returns focus to the search input; `↓` from the search input jumps to row 1.
+- `Enter` — context-aware: on a focused row, opens its detail (same as clicking); otherwise clicks the visible primary Add CTA.
+- `Esc` closes scanner overlay; otherwise clears search-input value, then blurs it.
+- `u` or `Cmd/Ctrl+Z` — prefer visible detail-pane Remove (handles persistent removal via facet); else undoes most-recent session add.
 - Auto-focus on search bar on initial page load.
+- Keyboard wiring is DOM-driven: `installKeyboard(actions, guards)` in `+page.svelte` looks up elements by class (`input.search`, `.body button.row-btn`, `button.add-btn`, `button.remove-btn`, `.scanner-overlay`) at event time rather than holding component refs.
 
 ### Sources
 - **Manual sync:** `POST /api/sources/:id/sync` runs the named adapter's `sync()`, collates the result into SQLite, and returns a summary `{ rowsIn, releasesUpserted, tracksUpserted, releasesDeleted, tracksDeleted, conflicts }`. Returns 404 for an unknown id, 501 if the adapter's `sync()` throws `NotImplementedError`.
@@ -164,11 +198,20 @@ docs/
 ## Notable divergences from the original plan
 
 - **Multi-source architecture (Slice 1, 2026-05-05).** Replaced the hardcoded-Discogs data layer with a generic source-adapter contract + SQLite-backed unified store. See `docs/superpowers/specs/2026-05-05-multi-source-architecture-design.md` and `docs/superpowers/plans/2026-05-05-multi-source-architecture.md`.
+- **Library explorer (Slice 2, 2026-05-06).** Three-pane explorer (rail / list / detail) replaces the single-purpose add screen. Add flow folded into the explorer as `Add → Discogs`; `ConfirmModal` deleted in favor of a detail-pane CTA. New `source_state` table + `SyncChip`. URL state in `?nav`/`?id`/`?q`/`?entity`. Keyboard wiring rewritten to be DOM-driven (`installKeyboard(actions, guards)`). See `docs/superpowers/specs/2026-05-06-library-explorer-design.md` and `docs/superpowers/plans/2026-05-06-library-explorer.md`.
+- **Slice 2 post-spec fixes** (folded in at the end of the slice):
+  - **Sticky entity bug**: `explorerState.setNav()` now clears `entity` as well as `id` so switching from a tracks-mode rail item to a releases-mode item doesn't leave `currentEntity` stuck on tracks.
+  - **Pagination root**: `Listview`'s `IntersectionObserver` is rooted on the sentinel's parent (`.body` scroller), not the viewport — pages now load past the first 200 rows.
+  - **Effect cycle**: `listLoading` in `Explorer` demoted from `$state(false)` to plain `let` (read+write in the same effect was tripping `effect_update_depth_exceeded`).
+  - **Search response shape**: `/api/discogs/search` returns `{ results: [...] }`, not a bare array; Explorer unwraps `res.results`.
+  - **Persistent removal**: instance_id is now appended to `source_facets.instanceIds` on every successful add (in `/api/discogs/collection/add`); `/api/discogs/collection/remove` falls back to the facet when the body omits `instanceId`, so removal survives reloads.
+  - **Detail-pane owned CTA**: was originally Slice-2 deferred. Shipped at session end — `ReleaseDetail` got a `variant: 'primary' | 'quiet'` prop and `Explorer` derives `releaseDetailCta` (quiet/Remove when owned, primary/Add for unowned hits).
+  - **Arrow-key listview navigation**: was originally Slice-2 deferred. Shipped at session end — `moveDown`/`moveUp` focus row buttons via DOM, with search-input ↔ first-row transitions; `Enter` is context-aware (focused row → open, else → press Add CTA).
 - **Token loading.** Plan used `process.env.DISCOGS_TOKEN`; switched to `$env/dynamic/private` so `.env` actually loads in dev.
 - **Barcode lookup endpoint.** Plan added `/api/discogs/barcode/[code]` (Task 23). Built, tested, then **deleted** when scanner flow was unified onto `/api/discogs/search?q=`. The Discogs text search already indexes barcodes well enough.
-- **No "in collection" feature in the plan.** Built post-MVP: SQLite `source_link` table + `collection.svelte.ts` store + `/api/library/membership?source=discogs` endpoint + ResultRow badge.
-- **No URL persistence in the plan.** Added `?q=` round-trip post-MVP.
-- **No master/release deep-links in the plan.** Added a single "Open this search in Discogs" link below results (replaced an earlier per-row link).
+- **No "in collection" feature in the plan.** Built post-MVP: SQLite `source_link` table + `collection.svelte.ts` store + `/api/library/membership?source=discogs` endpoint + row indicator via `SourceGrid`.
+- **No URL persistence in the original plan.** Slice 2 expanded this into the full `?nav`/`?id`/`?q`/`?entity` URL-state contract.
+- **No master/release deep-links in the plan.** External links are surfaced via per-source `SourcePanel` "open in <source>" links.
 - **Cover thumbnails 80×80.** Plan said 40×40.
 - **Catalog number** added to row metadata (plan didn't include `catno`).
 - **Result sort by year ascending.** Plan returned Discogs's default ordering.
@@ -182,7 +225,9 @@ Limitations of code that's currently in production. For deferred features and no
 
 - **No automated tests.** Verification is via `pnpm verify scripts/<name>.ts`, curl, sqlite3, and manual browser testing.
 - **`Cmd+Z` is intercepted by the browser** when the search input is focused (it'll undo typed text first). The on-screen button and `u` key still work.
-- **Pre-existing svelte-check error at `src/routes/+page.svelte:134`** (async function passed to `$effect`). Invisible to `pnpm tsc`. Will dissolve when Slice 2 rewrites the page.
+- **svelte-check warns at `src/routes/+page.svelte:14:11`** — `onMount(async () => {…return teardown})` returns `Promise<() => void>` instead of `(() => void) | undefined`. Invisible to `pnpm tsc` (only svelte-check catches it). The previously-noted pre-Slice-2 instance of the same warning moved with the file rewrite rather than dissolving.
+- **`ShortcutOverlay.svelte` two a11y warnings** (svelte-check): `dialog`-role element missing `tabindex`; click handler without keyboard handler. Cosmetic; overlay still works via `Esc`/`?` keys.
+- **Source-grid on listview rows doesn't refresh after a Discogs-remove** for other rows of the same release still on screen. Only the currently-detail-open row updates. Likely benign until duplicate-release scenarios appear.
 
 ## Local development
 

@@ -3806,7 +3806,7 @@ Stop the dev server.
 - Modify: `docs/BACKLOG.md` (append Slice 2 deferrals)
 - Modify: `docs/CONTEXT.md` (update file map, feature inventory, divergences-from-plan)
 
-- [ ] **Step 1: Append to `BACKLOG.md`**
+- [x] **Step 1: Append to `BACKLOG.md`** _(applied with two changes: arrow-key nav + detail-pane owned-CTA shipped at session end so were not added; included a noted-during-impl bullet about source-grid not refreshing on listview-Remove for non-selected duplicate rows.)_
 
 Open `docs/BACKLOG.md`. Update each section as follows (only add lines; never remove existing items):
 
@@ -3825,7 +3825,7 @@ Open `docs/BACKLOG.md`. Update each section as follows (only add lines; never re
 
 (Move the existing "Auto-sync iTunes on boot" line if needed; it stays where it is.)
 
-- [ ] **Step 2: Update `CONTEXT.md` — file map**
+- [x] **Step 2: Update `CONTEXT.md` — file map**
 
 Open `docs/CONTEXT.md`. In the `## File map` section, replace the obsolete entries and add the new ones:
 
@@ -3847,17 +3847,17 @@ Open `docs/CONTEXT.md`. In the `## File map` section, replace the obsolete entri
   - `sources/+server.ts`
 - Add new store: `stores/explorerState.svelte.ts` — mirror of `?nav`/`?id`/`?q`/`?entity`
 
-- [ ] **Step 3: Update `CONTEXT.md` — feature inventory**
+- [x] **Step 3: Update `CONTEXT.md` — feature inventory** _(also documented end-of-session post-spec fixes: persistent removal via instance_id facet, detail-pane variant CTA, DOM-driven arrow-key listview navigation.)_
 
 In `## Feature inventory`, add a `### Library explorer` subsection summarizing what shipped (rail, list/detail, source-grid, sync chip, source_state, URL state, pagination). Update `### Search`, `### Scanner`, `### Add / undo`, `### URL state`, `### Setup screen`, `### Sources` to reflect the explorer-integrated reality (search input lives in toolbar; scanner is toolbar button popover; add CTA is detail-pane button; URL params are `nav` / `id` / `q` / `entity`; sync triggered via chip).
 
-- [ ] **Step 4: Update `CONTEXT.md` — divergences**
+- [x] **Step 4: Update `CONTEXT.md` — divergences**
 
 In `## Notable divergences from the original plan`, add a new bullet:
 
 - **Slice 2 (2026-05-06): Library explorer.** Three-pane explorer (rail / list / detail) replaces the single-purpose add screen. Add flow folded into the explorer as `Add → Discogs`; `ConfirmModal` replaced by detail-pane CTA. New `source_state` table + sync chip. URL state in `?nav`/`?id`/`?q`/`?entity`. See `docs/superpowers/specs/2026-05-06-library-explorer-design.md`.
 
-- [ ] **Step 5: Update `CONTEXT.md` — known gaps in shipped code**
+- [x] **Step 5: Update `CONTEXT.md` — known gaps in shipped code** _(warning didn't dissolve — moved to `+page.svelte:14:11`, same async-`onMount` shape; gap entry updated. Also added two new svelte-check a11y warnings on `ShortcutOverlay.svelte`.)_
 
 If the pre-existing `+page.svelte:134` svelte-check warning is no longer applicable after the rewrite, remove that line from the `## Known gaps in shipped code` section. Verify by running `pnpm exec svelte-check` and confirming output. If it's gone, drop the line; if not (different line, different reason), update the description.
 
@@ -3865,12 +3865,12 @@ If the pre-existing `+page.svelte:134` svelte-check warning is no longer applica
 pnpm exec svelte-kit sync && pnpm exec svelte-check
 ```
 
-- [ ] **Step 6: Type-check**
+- [x] **Step 6: Type-check**
 
 Run: `pnpm tsc`
 Expected: no errors.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add docs/BACKLOG.md docs/CONTEXT.md

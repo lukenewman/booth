@@ -14,13 +14,16 @@
 ## UI / Explorer
 
 - Filter by source-grid — click `D` in column header → filter to Discogs; click `i` → iTunes; click both → intersection.
-- Sortable column headers (year, artist, date added, etc.).
+- Sortable column headers (year, artist, date added, etc.). _(also re-noted 2026-05-06 library-explorer)_
 - Virtualized list rendering — Slice 2 ships pagination instead.
 - Sync-run history view.
 - Match-overrides UI for manual conflict resolution.
 - Settings / preferences UI — currently `.env` only.
 - Discogs folder picker — currently always "Uncategorized" / `DISCOGS_FOLDER_ID` env override. _(deferred from 2026-04-29 collection-adder)_
 - Light mode / theme toggle. _(deferred from 2026-04-29 collection-adder)_
+- `[`/`]` rail keyboard navigation. _(deferred from 2026-05-06 library-explorer)_
+- "Reveal in Finder" link on Apple Music source panels — needs an endpoint with limited shell-out (`open -R <path>` on macOS). _(deferred from 2026-05-06 library-explorer)_
+- Source-grid in listview rows doesn't refresh after a Discogs-remove for other rows of the same release still on screen — only the currently-detail-open row updates. Likely fine until duplicate-release scenarios surface. _(noted 2026-05-06 library-explorer post-impl)_
 
 ## Matching / Collation
 
