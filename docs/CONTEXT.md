@@ -114,8 +114,7 @@ src/
           add/+server.ts                      POST {releaseId,…} — adds to Discogs; writes source_link + appends instance_id to source_facets.instanceIds
           remove/+server.ts                   DELETE {releaseId, instanceId?} — removes from Discogs; instanceId optional (falls back to source_facets.instanceIds[0])
 docs/
-  BACKLOG.md                                  deferred work; one bullet per item (being migrated to Linear)
-  CONTEXT.md                                  ← this file
+  CONTEXT.md                                  ← this file (deferred work lives in Linear; see ## Backlog below)
   superpowers/
     specs/2026-04-29-discogs-collection-adder-design.md   original product spec
     specs/2026-05-05-multi-source-architecture-design.md  multi-source architecture design (Slice 1)
@@ -219,9 +218,13 @@ docs/
 - **Auto-focus search on load + Esc-to-blur** added (plan only had `/` to focus).
 - **`normalize.ts` in `library/`.** The spec put normalization inline in `collate.ts`; extracted to `src/lib/server/library/normalize.ts` in the actual implementation.
 
+## Backlog
+
+Deferred features and not-yet-implemented work lives in the **Booth** Linear workspace: <https://linear.app/boothapp/team/BOO/backlog>. Issues are tagged by area (`adapters`, `ui`, `sync`, `matching`, `data-model`, `infra`) and kind (`feature`, `improvement`, `bug`).
+
 ## Known gaps in shipped code
 
-Limitations of code that's currently in production. For deferred features and not-yet-implemented work, see `docs/BACKLOG.md`.
+Limitations of code that's currently in production. For deferred features and not-yet-implemented work, see the Linear backlog above.
 
 - **No automated tests.** Verification is via `pnpm verify scripts/<name>.ts`, curl, sqlite3, and manual browser testing.
 - **`Cmd+Z` is intercepted by the browser** when the search input is focused (it'll undo typed text first). The on-screen button and `u` key still work.
