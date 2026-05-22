@@ -3741,7 +3741,7 @@ git commit -m "chore(ui): remove ConfirmModal, ResultsList, ResultRow, mode stor
 
 This task is a structured walkthrough you run in the browser. Mark each checkpoint as you confirm it. If anything fails, stop and fix before proceeding. Do not commit at the end of this task.
 
-- [ ] **Step 1: Reset DB to a known state**
+- [~] **Step 1: Reset DB to a known state** _(skipped 2026-05-21 — user opted to verify against existing DB with 1,269 releases / 4,232 tracks / 92 Discogs + 5,419 iTunes source_links; counts cross-checked against the toolbar in Steps 4-5.)_
 
 ```bash
 rm -rf .booth/
@@ -3749,46 +3749,46 @@ rm -rf .booth/
 
 (This forces the boot hook to re-sync Discogs on first request.)
 
-- [ ] **Step 2: Start dev server**
+- [x] **Step 2: Start dev server**
 
 Run: `pnpm dev`. Open `http://localhost:5173`.
 
-- [ ] **Step 3: Setup gate**
+- [x] **Step 3: Setup gate** _(token present; Explorer rendered directly.)_
 
 If `.env` lacks `DISCOGS_TOKEN`, confirm the setup screen renders inside the new shell. Add the token, restart `pnpm dev`, reload.
 
-- [ ] **Step 4: Verify Library views**
+- [x] **Step 4: Verify Library views**
 
-- [ ] `library:all-releases` (default landing) renders the release listview with the right total count in the toolbar.
-- [ ] Scrolling near the bottom appends more rows (network call has `?offset=200`).
-- [ ] `library:all-tracks` switches to the track row variant.
-- [ ] `library:in-multiple-sources` renders only releases with ≥2 source-grid dots filled.
+- [x] `library:all-releases` (default landing) renders the release listview with the right total count in the toolbar.
+- [x] Scrolling near the bottom appends more rows (network call has `?offset=200`).
+- [x] `library:all-tracks` switches to the track row variant.
+- [x] `library:in-multiple-sources` renders only releases with ≥2 source-grid dots filled.
 
-- [ ] **Step 5: Verify Sources views**
+- [x] **Step 5: Verify Sources views**
 
-- [ ] `sources:discogs` shows only releases with the `D` slot filled.
-- [ ] `sources:itunes` shows tracks by default; the entity-type toggle appears on the toolbar; clicking `Releases` switches to its 1,187 emergent releases.
-- [ ] `sources:rekordbox` lands on an EmptyState (`Rekordbox not yet implemented`).
-- [ ] The sync chip appears for real sources; click it on Discogs → chip says `Syncing…`, then updates to a fresh timestamp. The rail count refreshes.
-- [ ] Stub sources show a `Not implemented` (disabled) chip.
+- [x] `sources:discogs` shows only releases with the `D` slot filled.
+- [x] `sources:itunes` shows tracks by default; the entity-type toggle appears on the toolbar; clicking `Releases` switches to its 1,187 emergent releases.
+- [x] `sources:rekordbox` lands on an EmptyState (`Rekordbox not yet implemented`).
+- [x] The sync chip appears for real sources; click it on Discogs → chip says `Syncing…`, then updates to a fresh timestamp. The rail count refreshes.
+- [x] Stub sources show a `Not implemented` (disabled) chip.
 
-- [ ] **Step 6: Verify Add → Discogs view**
+- [x] **Step 6: Verify Add → Discogs view** _(7 of 8; the undo path fails due to an upstream Discogs bug — tracked as BOO-37, mitigated by a clearer toast message.)_
 
-- [ ] `add:discogs` renders an empty list with the "Search Discogs to add records" hint.
-- [ ] Typing a query (e.g., `folamour`) populates the listview with Discogs API hits.
-- [ ] Releases you already own show their `D` slot filled in the source-grid.
-- [ ] Selecting a not-yet-owned hit shows the right-pane detail with the `+ Add to Discogs collection ⏎` CTA.
-- [ ] Clicking Add (or pressing `⏎` with focus outside the input) fires the add — toast appears, the source-grid in the row updates to `●◌◌◌`, the CTA disappears.
-- [ ] Pressing `u` undoes the add — the row's source-grid clears, the CTA returns.
-- [ ] Pressing `s` opens the scanner overlay; closing it dismisses cleanly.
-- [ ] The session-log footer strip appears below the listview only in `add:discogs`, hidden everywhere else.
+- [x] `add:discogs` renders an empty list with the "Search Discogs to add records" hint.
+- [x] Typing a query (e.g., `folamour`) populates the listview with Discogs API hits.
+- [x] Releases you already own show their `D` slot filled in the source-grid.
+- [x] Selecting a not-yet-owned hit shows the right-pane detail with the `+ Add to Discogs collection ⏎` CTA.
+- [x] Clicking Add (or pressing `⏎` with focus outside the input) fires the add — toast appears, the source-grid in the row updates to `●◌◌◌`, the CTA disappears.
+- [✗] Pressing `u` undoes the add — the row's source-grid clears, the CTA returns. _(BOO-37: Discogs's REST `DELETE /users/{u}/collection/folders/{f}/releases/{r}/instances/{i}` is upstream-broken — returns 500 for any method on the path. Booth surfaces a 503 with an actionable toast directing users to remove via discogs.com and sync.)_
+- [x] Pressing `s` opens the scanner overlay; closing it dismisses cleanly.
+- [x] The session-log footer strip appears below the listview only in `add:discogs`, hidden everywhere else.
 
-- [ ] **Step 7: Verify URL state restore**
+- [x] **Step 7: Verify URL state restore**
 
-- [ ] Navigate to `sources:itunes`, click into a track. Copy the URL.
-- [ ] Reload (`Cmd+R`). Confirm: same rail item active, same track in the right pane, same `?id=` and `?nav=` params in the URL.
+- [x] Navigate to `sources:itunes`, click into a track. Copy the URL.
+- [x] Reload (`Cmd+R`). Confirm: same rail item active, same track in the right pane, same `?id=` and `?nav=` params in the URL.
 
-- [ ] **Step 8: Verify type-check + final state**
+- [x] **Step 8: Verify type-check + final state**
 
 Run: `pnpm tsc`
 Expected: no errors.
@@ -3797,6 +3797,14 @@ Run: `git status`
 Expected: working tree clean.
 
 Stop the dev server.
+
+**Verification observations folded into Linear during this walkthrough:**
+- BOO-36 — app-wide tracks/releases toggle with `Tab` binding (UX idea raised during Step 5).
+- BOO-37 — Discogs REST collection-remove endpoint returns 500 (upstream broken; mitigated client-side).
+
+**Verification-driven commits during this walkthrough:**
+- `880f219` style(ui): bump `--text-subtle` from #555 to #787878 for WCAG AA contrast (rail headers, counts, column headers, year, duration).
+- `3fcaa47` fix(api): surface 503 + actionable message when Discogs remove 500s (BOO-37 mitigation).
 
 ---
 
