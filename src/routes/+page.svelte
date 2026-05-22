@@ -11,18 +11,23 @@
   let probed = $state(false);
   let shortcutOpen = $state(false);
 
-  onMount(async () => {
-    try {
-      const res = await fetch('/api/discogs/search?q=test');
-      const data = await res.json().catch(() => ({}));
-      if (data?.error === 'no_token' || data?.error === 'invalid_token') {
-        setupNeeded = data.error;
+  onMount(() => {
+    // Fire-and-forget setup probe — kept out of onMount's return path so the
+    // teardown below resolves synchronously (Svelte's onMount can't accept
+    // an async function that also returns a cleanup).
+    void (async () => {
+      try {
+        const res = await fetch('/api/discogs/search?q=test');
+        const data = await res.json().catch(() => ({}));
+        if (data?.error === 'no_token' || data?.error === 'invalid_token') {
+          setupNeeded = data.error;
+        }
+      } catch {
+        // Treat as no setup error — endpoint failures surface via toast on use.
+      } finally {
+        probed = true;
       }
-    } catch {
-      // Treat as no setup error — endpoint failures surface via toast on use.
-    } finally {
-      probed = true;
-    }
+    })();
 
     // Listview row navigation (↑/↓ and ⏎-to-open) lives inside Explorer
     // through DOM focus; deeper integration is in BACKLOG.md.

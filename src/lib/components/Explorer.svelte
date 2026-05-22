@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { replaceState } from '$app/navigation';
   import { onMount } from 'svelte';
   import Rail from './Rail.svelte';
   import ListviewToolbar from './ListviewToolbar.svelte';
@@ -245,7 +246,7 @@
     if (typeof window === 'undefined') return;
     const params = explorerState.serialize();
     const search = params.toString() ? `?${params.toString()}` : '';
-    history.replaceState(history.state, '', `${location.pathname}${search}`);
+    replaceState(`${location.pathname}${search}`, page.state);
   }
 
   $effect(() => {

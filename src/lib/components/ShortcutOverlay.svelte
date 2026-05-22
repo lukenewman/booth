@@ -20,7 +20,14 @@
 
 {#if open}
   <div class="backdrop" onclick={onClose} role="presentation">
-    <div class="panel" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+    <div
+      class="panel"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+      role="dialog"
+      aria-modal="true"
+      tabindex={-1}
+    >
       <div class="title">Keyboard shortcuts</div>
       <table>
         <tbody>
