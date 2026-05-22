@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import { ulid } from 'ulid';
 import type {
   EntityKind,
@@ -31,7 +31,7 @@ type MatchMethod =
  *   - delete entities that have zero remaining source_links
  */
 export function collate(
-  db: Database.Database,
+  db: Database,
   sourceId: string,
   result: SyncResult,
 ): CollateSummary {
@@ -83,7 +83,7 @@ export function collate(
 // ---- Releases ---------------------------------------------------
 
 function upsertRelease(
-  db: Database.Database,
+  db: Database,
   sourceId: string,
   r: SourceRelease,
   summary: CollateSummary,
@@ -149,7 +149,7 @@ function upsertRelease(
 // ---- Tracks -----------------------------------------------------
 
 function upsertTrack(
-  db: Database.Database,
+  db: Database,
   sourceId: string,
   t: SourceTrack,
   releaseLookup: Map<string, string>,
@@ -242,7 +242,7 @@ function upsertTrack(
 // ---- Shared helpers --------------------------------------------
 
 function upsertSourceLink(
-  db: Database.Database,
+  db: Database,
   kind: EntityKind,
   entityId: string,
   sourceId: string,
@@ -289,7 +289,7 @@ function upsertSourceLink(
 }
 
 function upsertMatchKey(
-  db: Database.Database,
+  db: Database,
   kind: EntityKind,
   entityId: string,
   keyType: string,
@@ -307,7 +307,7 @@ function upsertMatchKey(
 }
 
 function upsertFacets(
-  db: Database.Database,
+  db: Database,
   kind: EntityKind,
   entityId: string,
   sourceId: string,
@@ -328,7 +328,7 @@ function upsertFacets(
 }
 
 function pruneSource(
-  db: Database.Database,
+  db: Database,
   kind: EntityKind,
   sourceId: string,
   keepExternalIds: Set<string>,

@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 import { runMigrations } from '../src/lib/server/db/migrate';
 import { collate } from '../src/lib/server/library/collate';
 import {

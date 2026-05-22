@@ -1,7 +1,7 @@
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 
 export function getMembershipExternalIds(
-  db: Database.Database,
+  db: Database,
   source: string,
   entityKind: 'track' | 'release' = 'release',
 ): string[] {
@@ -66,11 +66,11 @@ interface ListReleasesArgs {
 }
 
 export function listReleases(
-  db: Database.Database,
+  db: Database,
   args: ListReleasesArgs,
 ): PagedResult<ReleaseRow & { sources: string[] }> {
   const where: string[] = [];
-  const params: unknown[] = [];
+  const params: string[] = [];
 
   if (args.source) {
     where.push(
@@ -142,11 +142,11 @@ interface ListTracksArgs {
 }
 
 export function listTracks(
-  db: Database.Database,
+  db: Database,
   args: ListTracksArgs,
 ): PagedResult<TrackRow & { sources: string[] }> {
   const where: string[] = [];
-  const params: unknown[] = [];
+  const params: string[] = [];
 
   if (args.source) {
     where.push(
@@ -200,7 +200,7 @@ export function listTracks(
 }
 
 export function getReleaseDetail(
-  db: Database.Database,
+  db: Database,
   id: string,
 ): {
   release: ReleaseRow;
@@ -261,7 +261,7 @@ export function getReleaseDetail(
 }
 
 export function getTrackDetail(
-  db: Database.Database,
+  db: Database,
   id: string,
 ): {
   track: TrackRow;
@@ -315,7 +315,7 @@ export interface SourceWithState {
 }
 
 export function listSourcesWithState(
-  db: Database.Database,
+  db: Database,
   registry: { id: string; name: string; contributes: ('track' | 'release')[]; isStub?: boolean }[],
 ): SourceWithState[] {
   const counts = db

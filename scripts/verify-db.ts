@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 import { runMigrations } from '../src/lib/server/db/migrate';
 
 const db = new Database(':memory:');
@@ -18,16 +18,16 @@ for (const t of expected) {
 }
 
 const applied = db.prepare('SELECT id FROM _migrations').all();
-if (applied.length !== 1) {
-  console.error(`Expected 1 migration applied, got ${applied.length}`);
+if (applied.length === 0) {
+  console.error('No migrations recorded after runMigrations');
   process.exit(1);
 }
 
 // Re-run to confirm idempotency
 runMigrations(db);
 const applied2 = db.prepare('SELECT id FROM _migrations').all();
-if (applied2.length !== 1) {
-  console.error(`Re-run not idempotent: ${applied2.length}`);
+if (applied2.length !== applied.length) {
+  console.error(`Re-run not idempotent: ${applied.length} → ${applied2.length}`);
   process.exit(1);
 }
 

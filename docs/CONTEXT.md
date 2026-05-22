@@ -8,12 +8,12 @@ Single-user, local-only SvelteKit app for adding records to a personal Discogs c
 
 ## Tech
 
-- **Runtime:** Node + pnpm. SvelteKit 2 + Svelte 5 (runes), TypeScript, Vite.
+- **Runtime:** Bun (package manager + TS runner) on top of Node-compatible APIs. SvelteKit 2 + Svelte 5 (runes), TypeScript, Vite.
 - **Camera:** `@zxing/browser` (`BrowserMultiFormatReader`).
-- **DB:** SQLite at `./.booth/booth.db`, hand-rolled migrations in `src/lib/server/db/migrations/`. Managed via `better-sqlite3`.
-- **New deps:** `better-sqlite3`, `plist` (Apple plist parser), `ulid` (entity ID generator). Dev: `tsx` (runs verification scripts under TS).
+- **DB:** SQLite at `./.booth/booth.db`, hand-rolled migrations in `src/lib/server/db/migrations/`. Managed via bun's built-in `bun:sqlite` (sync, prepared-statement API). Project is bun-only as a result — no Node fallback.
+- **New deps:** `better-sqlite3`, `plist` (Apple plist parser), `ulid` (entity ID generator). Verification scripts run on bun's native TS execution — no separate runner dep.
 - **No tests, no UI framework.** Session log is in-memory client-side.
-- **Dev:** `pnpm dev` (binds 5173, falls back upward).
+- **Dev:** `bun dev` (binds 5173, falls back upward).
 
 ## Environment
 
@@ -226,10 +226,8 @@ Deferred features and not-yet-implemented work lives in the **Booth** Linear wor
 
 Limitations of code that's currently in production. For deferred features and not-yet-implemented work, see the Linear backlog above.
 
-- **No automated tests.** Verification is via `pnpm verify scripts/<name>.ts`, curl, sqlite3, and manual browser testing.
+- **No automated tests.** Verification is via `bun verify scripts/<name>.ts`, curl, sqlite3, and manual browser testing.
 - **`Cmd+Z` is intercepted by the browser** when the search input is focused (it'll undo typed text first). The on-screen button and `u` key still work.
-- **svelte-check warns at `src/routes/+page.svelte:14:11`** — `onMount(async () => {…return teardown})` returns `Promise<() => void>` instead of `(() => void) | undefined`. Invisible to `pnpm tsc` (only svelte-check catches it). The previously-noted pre-Slice-2 instance of the same warning moved with the file rewrite rather than dissolving.
-- **`ShortcutOverlay.svelte` two a11y warnings** (svelte-check): `dialog`-role element missing `tabindex`; click handler without keyboard handler. Cosmetic; overlay still works via `Esc`/`?` keys.
 - **Source-grid on listview rows doesn't refresh after a Discogs-remove** for other rows of the same release still on screen. Only the currently-detail-open row updates. Likely benign until duplicate-release scenarios appear.
 
 ## Local development
@@ -237,13 +235,13 @@ Limitations of code that's currently in production. For deferred features and no
 ```bash
 cp .env.example .env
 # paste DISCOGS_TOKEN (and optionally ITUNES_XML_PATH)
-pnpm install
-pnpm dev
+bun install
+bun dev
 # open http://localhost:5173
 ```
 
 The DB is auto-initialized on first server boot — it creates `./.booth/booth.db` and runs migrations automatically. An empty DB triggers an initial Discogs sync via the boot hook in `src/hooks.server.ts` (fire-and-forget; happens in the background).
 
-Run a verification script: `pnpm verify scripts/<name>.ts` (uses `tsx` to run TypeScript directly).
+Run a verification script: `bun verify scripts/<name>.ts` (bun runs TypeScript natively — no separate transpile step).
 
-Type-check (no test runner): `pnpm exec svelte-kit sync && pnpm exec tsc --noEmit`.
+Type-check (no test runner): `bunx svelte-kit sync && bunx tsc --noEmit`.

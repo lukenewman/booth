@@ -145,7 +145,7 @@
       then add it to <code>.env</code>:
     </p>
     <pre><code>DISCOGS_TOKEN=your-token-here</code></pre>
-    <p>Restart <code>pnpm dev</code> after editing.</p>
+    <p>Restart <code>bun dev</code> after editing.</p>
     {#if setupNeeded === 'invalid_token'}
       <p class="error">The token in <code>.env</code> was rejected by Discogs (401). Double-check it's correct.</p>
     {/if}
