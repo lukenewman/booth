@@ -54,6 +54,20 @@ export const DELETE: RequestHandler = async ({ request }) => {
     return json({ ok: true });
   } catch (e) {
     if (e instanceof DiscogsError) {
+      // Discogs's REST collection-remove endpoint has been returning 500 since
+      // ~2026-05. Their GraphQL endpoint (used by the web UI) still works but is
+      // gated behind Cloudflare bot-mitigation, so we can't migrate to it from
+      // a PAT-authenticated server. See BOO-37. Surface an actionable message.
+      if (e.status === 500) {
+        return json(
+          {
+            error: 'discogs_remove_unavailable',
+            message:
+              "Discogs's remove API is currently unavailable. Remove from discogs.com, then sync.",
+          },
+          { status: 503 },
+        );
+      }
       return json(e.payload, { status: e.status });
     }
     throw error(500, { message: 'Unexpected error' });
