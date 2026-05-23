@@ -139,6 +139,7 @@ interface ListTracksArgs {
   q?: string;
   limit: number;
   offset: number;
+  multiSource?: boolean;
 }
 
 export function listTracks(
@@ -153,6 +154,16 @@ export function listTracks(
       `track.id IN (SELECT entity_id FROM source_link WHERE entity_kind='track' AND source=?)`,
     );
     params.push(args.source);
+  }
+  if (args.multiSource) {
+    where.push(
+      `track.id IN (
+         SELECT entity_id FROM source_link
+         WHERE entity_kind='track'
+         GROUP BY entity_id
+         HAVING COUNT(DISTINCT source) >= 2
+       )`,
+    );
   }
   if (args.q) {
     where.push(`(track.title LIKE ? OR track.artist LIKE ? OR track.album LIKE ?)`);

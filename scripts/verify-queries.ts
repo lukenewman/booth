@@ -110,6 +110,19 @@ assert(tracks.total === 2, `tracks total: expected 2, got ${tracks.total}`);
 const trackByQ = listTracks(db, { q: 'around', limit: 10, offset: 0 });
 assert(trackByQ.total === 1, `track search: expected 1, got ${trackByQ.total}`);
 
+// listTracks: multi_source — seed a 2nd-source link for one track, then expect 1.
+const aroundTheWorldId = tracks.items.find((t) => t.title === 'Around the World')!.id;
+db.prepare(
+  `INSERT INTO source_link (entity_kind, entity_id, source, external_id, external_url, match_method)
+     VALUES ('track', ?, 'plex', 'plex-1', NULL, 'first_seen')`,
+).run(aroundTheWorldId);
+const multiTracks = listTracks(db, { multiSource: true, limit: 10, offset: 0 });
+assert(multiTracks.total === 1, `multi-source tracks: expected 1, got ${multiTracks.total}`);
+assert(
+  multiTracks.items[0].title === 'Around the World',
+  `multi-source track wrong: ${multiTracks.items[0].title}`,
+);
+
 // getReleaseDetail
 const homeworkId = multi.items[0].id;
 const detail = getReleaseDetail(db, homeworkId);

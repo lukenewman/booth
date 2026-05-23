@@ -128,9 +128,10 @@ docs/
 
 ### Library explorer (Slice 2 shell)
 - **Three panes**: left rail (Library / Sources / Add → Discogs sections), middle listview (paginated rows + toolbar), right detail (release or track).
-- **Library rail items**: `all-releases`, `all-tracks`, `in-multiple-sources` (only entities with ≥2 source-grid dots filled).
-- **Sources rail items**: one per registered source (`discogs`, `itunes`, `rekordbox`, `plex`); stubs render `EmptyState` placeholder in the listview.
-- **Add rail item**: `add:discogs` — Discogs live search, results render with the same row shell as library rows.
+- **Library rail items**: `all` (label flips between "All tracks" / "All releases" based on the app-wide entity lens) and `in-multiple-sources` (entities contributed by ≥2 sources, supports both kinds).
+- **Sources rail items**: one per registered source (`discogs`, `itunes`, `rekordbox`, `plex`); stubs render `EmptyState`. Release-only sources (Discogs) render a dedicated "No tracks indexed" empty state when the entity lens is set to tracks.
+- **Add rail item**: `add:discogs` — Discogs live search, release-only by nature (the search API doesn't return tracks); toolbar omits the entity toggle here.
+- **Entity lens (tracks ↔ releases)**: app-wide viewing toggle, lives in the listview toolbar and is bound to `Tab`. Persists across rail switches (it's a lens, not a per-rail attribute). Detail pane keeps its open entity when the lens flips — the listview switches independently. URL: `?entity=tracks|releases`.
 - **Listview**: lazy pagination via `IntersectionObserver` sentinel rooted on the scroll container (`?limit=200&offset=…`); row click selects + opens detail.
 - **Detail**: cover placeholder, title/artist/year, optional CTA, then per-source panels (`SourcePanel`) for all registered sources, then tracklist (releases only). Stub sources still render a "not implemented" panel.
 - **SourceGrid**: 4-dot indicator (D / i / R / P) shown on every row and in detail context to communicate which sources contribute to a given entity.
@@ -160,11 +161,11 @@ docs/
 
 ### URL state
 - Four params, mirrored by `explorerState.svelte.ts` singleton:
-  - `?nav=<rail-item>` — e.g., `library:all-releases`, `sources:discogs`, `add:discogs`. Source of truth for which rail item is selected.
+  - `?nav=<rail-item>` — e.g., `library:all`, `sources:discogs`, `add:discogs`. Source of truth for which rail item is selected. Legacy `library:all-releases` / `library:all-tracks` URLs are redirected to `library:all` on hydrate, carrying their entity-kind through as `?entity=`.
   - `?id=<entity-id>` — currently-selected list row (release-ULID or track-ULID; for Add-Discogs search-hits, the bare Discogs release id). Null = nothing selected; detail pane shows EmptyState.
   - `?q=<query>` — toolbar search text. Targets vary by rail item (library DB vs. Discogs API).
-  - `?entity=<releases|tracks>` — entity-kind toggle for rail items that allow both (currently Sources). Library has fixed entity per item.
-- `setNav()` clears both `id` and `entity` so changing rail items can't carry stale state across views.
+  - `?entity=<releases|tracks>` — **app-wide** entity lens (defaults to `releases` and is omitted from the URL when it equals the default). Toggled by `Tab`; persists across rail switches.
+- `setNav()` clears `id` (different rail = different list) but deliberately does NOT clear `entity` — the lens is app-wide, so the user's preference carries across rails.
 - Updates use `history.replaceState`; reload restores the full view.
 
 ### Setup screen
@@ -175,12 +176,13 @@ docs/
 
 ### Keyboard shortcuts (`?` to view)
 - `/` focus search · `s` toggle scanner · `?` toggle overlay
+- `Tab` toggles the app-wide tracks/releases lens. Suppressed when focus is inside an input/textarea (preserves standard form-field tabbing) and when the current rail item has no tracks-side concept (the toolbar's `.toggle` element is the DOM-driven probe — its absence makes Tab a no-op).
 - `↑/↓` walk listview rows via DOM focus; `↑` from row 1 returns focus to the search input; `↓` from the search input jumps to row 1.
 - `Enter` — context-aware: on a focused row, opens its detail (same as clicking); otherwise clicks the visible primary Add CTA.
 - `Esc` closes scanner overlay; otherwise clears search-input value, then blurs it.
 - `u` or `Cmd/Ctrl+Z` — prefer visible detail-pane Remove (handles persistent removal via facet); else undoes most-recent session add.
 - Auto-focus on search bar on initial page load.
-- Keyboard wiring is DOM-driven: `installKeyboard(actions, guards)` in `+page.svelte` looks up elements by class (`input.search`, `.body button.row-btn`, `button.add-btn`, `button.remove-btn`, `.scanner-overlay`) at event time rather than holding component refs.
+- Keyboard wiring is DOM-driven: `installKeyboard(actions, guards)` in `+page.svelte` looks up elements by class (`input.search`, `.body button.row-btn`, `button.add-btn`, `button.remove-btn`, `.scanner-overlay`, `.bar .toggle`) at event time rather than holding component refs.
 
 ### Sources
 - **Manual sync:** `POST /api/sources/:id/sync` runs the named adapter's `sync()`, collates the result into SQLite, and returns a summary `{ rowsIn, releasesUpserted, tracksUpserted, releasesDeleted, tracksDeleted, conflicts }`. Returns 404 for an unknown id, 501 if the adapter's `sync()` throws `NotImplementedError`.

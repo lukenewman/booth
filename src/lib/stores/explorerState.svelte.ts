@@ -3,6 +3,9 @@
  * store sync; child components read from this store.
  *
  * URL params: ?nav=<section>:<item>, ?id=<entityId>, ?q=<query>, ?entity=<releases|tracks>
+ *
+ * `?entity` is an app-wide viewing lens, not a per-rail attribute — it persists
+ * across rail switches and is toggled by the Tab key.
  */
 
 export type NavSection = 'library' | 'sources' | 'add';
@@ -10,16 +13,27 @@ export interface NavValue { section: NavSection; item: string; }
 
 export type EntityKind = 'releases' | 'tracks';
 
-const DEFAULT_NAV: NavValue = { section: 'library', item: 'all-releases' };
+const DEFAULT_NAV: NavValue = { section: 'library', item: 'all' };
 
-export function parseNav(raw: string | null): NavValue {
-  if (!raw) return { ...DEFAULT_NAV };
+/**
+ * Parse a `?nav=section:item` value. Old `library:all-releases` /
+ * `library:all-tracks` URLs redirect to the consolidated `library:all` item
+ * and carry their entity-kind forward via the returned `entityHint`.
+ */
+export function parseNav(raw: string | null): { nav: NavValue; entityHint: EntityKind | null } {
+  if (!raw) return { nav: { ...DEFAULT_NAV }, entityHint: null };
   const [section, item] = raw.split(':');
   if (section !== 'library' && section !== 'sources' && section !== 'add') {
-    return { ...DEFAULT_NAV };
+    return { nav: { ...DEFAULT_NAV }, entityHint: null };
   }
-  if (!item) return { ...DEFAULT_NAV };
-  return { section, item };
+  if (!item) return { nav: { ...DEFAULT_NAV }, entityHint: null };
+  if (section === 'library' && item === 'all-releases') {
+    return { nav: { section: 'library', item: 'all' }, entityHint: 'releases' };
+  }
+  if (section === 'library' && item === 'all-tracks') {
+    return { nav: { section: 'library', item: 'all' }, entityHint: 'tracks' };
+  }
+  return { nav: { section, item }, entityHint: null };
 }
 
 export function navToString(nav: NavValue): string {
@@ -30,15 +44,19 @@ class ExplorerState {
   nav = $state<NavValue>({ ...DEFAULT_NAV });
   id = $state<string | null>(null);
   q = $state<string>('');
-  entity = $state<EntityKind | null>(null); // null = use rail item's default
+  entity = $state<EntityKind>('releases');
 
-  /** Set from URL params on mount, or whenever the URL changes externally. */
   hydrate(params: URLSearchParams) {
-    this.nav = parseNav(params.get('nav'));
+    const parsed = parseNav(params.get('nav'));
+    this.nav = parsed.nav;
     this.id = params.get('id');
     this.q = params.get('q') ?? '';
     const entity = params.get('entity');
-    this.entity = entity === 'releases' || entity === 'tracks' ? entity : null;
+    if (entity === 'releases' || entity === 'tracks') {
+      this.entity = entity;
+    } else if (parsed.entityHint) {
+      this.entity = parsed.entityHint;
+    }
   }
 
   /** Serialize current state to URLSearchParams. Omits empty/default values. */
@@ -49,19 +67,19 @@ class ExplorerState {
     }
     if (this.id) params.set('id', this.id);
     if (this.q) params.set('q', this.q);
-    if (this.entity) params.set('entity', this.entity);
+    if (this.entity !== 'releases') params.set('entity', this.entity);
     return params;
   }
 
-  /** Set rail item; clears entity selection (different rail = different list). */
+  /**
+   * Switch rail item. Clears the selected entity (different rail = different
+   * list, so the old id rarely makes sense). Crucially does NOT touch
+   * `entity` — the tracks/releases lens is app-wide, so it persists across
+   * rail switches.
+   */
   setNav(nav: NavValue) {
     this.nav = nav;
     this.id = null;
-    // ?entity is only meaningful when the new rail item allows both kinds.
-    // Clearing it on every nav change lets currentEntity fall back to the
-    // rail item's default (e.g. Discogs → releases).
-    this.entity = null;
-    // Don't clear q — user may want to refine across rails. Reconsider if it feels wrong.
   }
 
   setEntity(id: string | null) {
@@ -72,8 +90,12 @@ class ExplorerState {
     this.q = q;
   }
 
-  setEntityKind(entity: EntityKind | null) {
+  setEntityKind(entity: EntityKind) {
     this.entity = entity;
+  }
+
+  toggleEntityKind() {
+    this.entity = this.entity === 'releases' ? 'tracks' : 'releases';
   }
 }
 
