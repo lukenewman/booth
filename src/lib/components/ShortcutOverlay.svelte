@@ -10,6 +10,7 @@
   const shortcuts: { key: string; label: string }[] = [
     { key: '/', label: 'Focus search' },
     { key: 's', label: 'Toggle scanner mode' },
+    { key: 'tab', label: 'Toggle tracks / releases' },
     { key: '↑ ↓', label: 'Move selection in results' },
     { key: '↵', label: 'Open confirm / confirm add' },
     { key: 'esc', label: 'Close modal / exit scanner' },
