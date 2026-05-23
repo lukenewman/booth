@@ -3,7 +3,8 @@
  *
  *   /          focus search
  *   s          open scanner overlay (when in add:discogs)
- *   ↑/↓        move highlight in listview (deferred — see BACKLOG.md)
+ *   Tab        toggle tracks ↔ releases lens (app-wide)
+ *   ↑/↓        move highlight in listview
  *   ⏎          add CTA in detail (when present)
  *   Esc        clear search input / close scanner / blur input
  *   u, ⌘Z      undo last add
@@ -18,11 +19,14 @@ export interface KeyboardActions {
   commit: () => void;
   cancel: () => void;
   undoLast: () => void;
+  toggleEntity: () => void;
   toggleShortcuts: () => void;
 }
 
 export interface KeyboardGuards {
   isScannerOpen: () => boolean;
+  /** True when the toolbar toggle is hidden (e.g. Add → Discogs is release-only). */
+  isEntityToggleSuppressed: () => boolean;
 }
 
 export function installKeyboard(actions: KeyboardActions, guards: KeyboardGuards): () => void {
@@ -45,6 +49,22 @@ export function installKeyboard(actions: KeyboardActions, guards: KeyboardGuards
       // Browser intercepts when input is focused — known gap, see CONTEXT.md.
       e.preventDefault();
       actions.undoLast();
+      return;
+    }
+
+    // Tab toggles the tracks/releases lens app-wide. Skip when:
+    //   - any modifier is held (Shift+Tab = reverse focus traversal, etc.)
+    //   - focus is inside an input/textarea (preserve standard tabbing
+    //     between form fields, even though there's only one input today)
+    //   - the current rail item suppresses the toggle (Add → Discogs)
+    if (
+      e.key === 'Tab'
+      && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey
+      && !inEditable
+      && !guards.isEntityToggleSuppressed()
+    ) {
+      e.preventDefault();
+      actions.toggleEntity();
       return;
     }
 

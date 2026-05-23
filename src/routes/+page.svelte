@@ -6,6 +6,7 @@
   import { session } from '$lib/stores/session.svelte';
   import { collection } from '$lib/stores/collection.svelte';
   import { toast } from '$lib/stores/toast.svelte';
+  import { explorerState } from '$lib/stores/explorerState.svelte';
 
   let setupNeeded = $state<null | 'no_token' | 'invalid_token'>(null);
   let probed = $state(false);
@@ -128,10 +129,18 @@
             toast.show('Could not undo. Network error.');
           }
         },
+        toggleEntity: () => {
+          explorerState.toggleEntityKind();
+        },
         toggleShortcuts: () => { shortcutOpen = !shortcutOpen; },
       },
       {
         isScannerOpen: () => !!document.querySelector('.scanner-overlay'),
+        // The toolbar omits the toggle for rail items that have no
+        // tracks-side concept (Add → Discogs today). The toolbar's `.toggle`
+        // element going missing is the DOM-driven signal — Tab becomes a
+        // no-op so users don't get a confused-feeling URL toggle.
+        isEntityToggleSuppressed: () => !document.querySelector('.bar .toggle'),
       },
     );
 
