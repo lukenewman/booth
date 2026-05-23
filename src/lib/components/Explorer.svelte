@@ -27,21 +27,28 @@
   }
 
   let sources = $state<SourceWithState[]>([]);
-  let counts = $state({ allReleases: 0, allTracks: 0, inMultipleSources: 0 });
+  let counts = $state({
+    allReleases: 0,
+    allTracks: 0,
+    inMultipleSourcesReleases: 0,
+    inMultipleSourcesTracks: 0,
+  });
   let syncing = $state<string | null>(null); // source id being synced
 
   async function loadSourcesAndCounts() {
-    const [srcRes, allRel, allTrk, multi] = await Promise.all([
+    const [srcRes, allRel, allTrk, multiRel, multiTrk] = await Promise.all([
       fetch('/api/sources').then((r) => r.json()),
       fetch('/api/library/releases?limit=1').then((r) => r.json()),
       fetch('/api/library/tracks?limit=1').then((r) => r.json()),
       fetch('/api/library/releases?multi_source=true&limit=1').then((r) => r.json()),
+      fetch('/api/library/tracks?multi_source=true&limit=1').then((r) => r.json()),
     ]);
     sources = srcRes;
     counts = {
       allReleases: allRel.total ?? 0,
       allTracks: allTrk.total ?? 0,
-      inMultipleSources: multi.total ?? 0,
+      inMultipleSourcesReleases: multiRel.total ?? 0,
+      inMultipleSourcesTracks: multiTrk.total ?? 0,
     };
   }
 
@@ -110,6 +117,21 @@
       }
       if (explorerState.nav.section === 'library' && explorerState.nav.item === 'in-multiple-sources') {
         params.set('multi_source', 'true');
+      }
+
+      // Release-only sources (e.g. Discogs) in tracks-mode: short-circuit to an
+      // empty list — the explicit empty-state below explains "no tracks
+      // indexed for this source" rather than pretending we hit the server.
+      if (
+        isTracksView
+        && explorerState.nav.section === 'sources'
+        && selectedSource
+        && !selectedSource.contributes.includes('track')
+      ) {
+        listItems = [];
+        listTotal = 0;
+        listHasMore = false;
+        return;
       }
 
       const res = await fetch(`${endpoint}?${params.toString()}`).then((r) => r.json());
@@ -186,27 +208,33 @@
       : null,
   );
 
-  const currentEntity = $derived.by<'releases' | 'tracks'>(() => {
-    if (explorerState.entity) return explorerState.entity;
-    if (explorerState.nav.section === 'library' && explorerState.nav.item === 'all-tracks') return 'tracks';
-    if (selectedSource) {
-      // Default to the source's primary entity type.
-      if (selectedSource.contributes.includes('track') && !selectedSource.contributes.includes('release')) return 'tracks';
-      if (selectedSource.contributes.includes('release') && !selectedSource.contributes.includes('track')) return 'releases';
-      // Both: default to tracks (matches iTunes' primary unit).
-      return 'tracks';
-    }
-    return 'releases';
-  });
-
-  const showEntityToggle = $derived(
-    selectedSource !== null
-      && selectedSource.contributes.includes('track')
-      && selectedSource.contributes.includes('release'),
-  );
+  // The toggle is an app-wide lens, so the URL/store value is authoritative
+  // everywhere — the only divergence is in render fallback below, when a
+  // release-only source happens to be selected in tracks-mode (we still
+  // *show* tracks-mode in the toolbar; the listview reports empty).
+  const currentEntity = $derived<'releases' | 'tracks'>(explorerState.entity);
 
   const isAddView = $derived(explorerState.nav.section === 'add');
   const isSourcesView = $derived(explorerState.nav.section === 'sources');
+
+  // The toggle is suppressed only for rail items where tracks aren't a
+  // meaningful concept at all — currently just Add → Discogs (release-only
+  // search API). Stub sources still show the toggle (greys out the
+  // EmptyState below, not the chip).
+  const showEntityToggle = $derived(!isAddView);
+
+  /**
+   * When a tracks-mode listview lands on a release-only source (Discogs),
+   * we render an explicit "no tracks indexed" empty state instead of
+   * pretending the list is empty for ordinary reasons.
+   */
+  const showReleaseOnlySourceEmpty = $derived(
+    currentEntity === 'tracks'
+      && isSourcesView
+      && selectedSource !== null
+      && !selectedSource.isStub
+      && !selectedSource.contributes.includes('track'),
+  );
 
   const toolbarPlaceholder = $derived(
     isAddView ? 'Search Discogs…' : 'Search library…',
@@ -447,6 +475,7 @@
 <div class="explorer">
   <Rail
     nav={explorerState.nav}
+    entity={currentEntity}
     {sources}
     {counts}
     onSelect={(nav) => explorerState.setNav(nav)}
@@ -485,7 +514,12 @@
     {#if isSourcesView && selectedSource?.isStub}
       <EmptyState
         title="{selectedSource.name} not yet implemented"
-        detail="See docs/BACKLOG.md for status. The source registry knows about this adapter; sync support hasn't been built yet."
+        detail="See the Booth Linear backlog for status. The source registry knows about this adapter; sync support hasn't been built yet."
+      />
+    {:else if showReleaseOnlySourceEmpty}
+      <EmptyState
+        title="No tracks indexed for {selectedSource?.name ?? 'this source'}"
+        detail="This source only contributes releases. Switch the toolbar toggle back to Releases (or press Tab) to see them."
       />
     {:else if currentEntity === 'releases'}
       <ReleaseList

@@ -13,20 +13,28 @@
   interface Counts {
     allReleases: number;
     allTracks: number;
-    inMultipleSources: number;
+    inMultipleSourcesReleases: number;
+    inMultipleSourcesTracks: number;
   }
 
   let {
     nav,
+    entity,
     sources,
     counts,
     onSelect,
   }: {
     nav: NavValue;
+    entity: 'releases' | 'tracks';
     sources: SourceWithState[];
     counts: Counts;
     onSelect?: (nav: NavValue) => void;
   } = $props();
+
+  const allCount = $derived(entity === 'tracks' ? counts.allTracks : counts.allReleases);
+  const multiCount = $derived(
+    entity === 'tracks' ? counts.inMultipleSourcesTracks : counts.inMultipleSourcesReleases,
+  );
 
   function isActive(section: string, item: string): boolean {
     return nav.section === section && nav.item === item;
@@ -51,19 +59,11 @@
     <div class="label">Library</div>
     <button
       class="item"
-      class:active={isActive('library', 'all-releases')}
-      onclick={() => onSelect?.({ section: 'library', item: 'all-releases' })}
+      class:active={isActive('library', 'all')}
+      onclick={() => onSelect?.({ section: 'library', item: 'all' })}
     >
-      <span>All releases</span>
-      <span class="count">{counts.allReleases.toLocaleString()}</span>
-    </button>
-    <button
-      class="item"
-      class:active={isActive('library', 'all-tracks')}
-      onclick={() => onSelect?.({ section: 'library', item: 'all-tracks' })}
-    >
-      <span>All tracks</span>
-      <span class="count">{counts.allTracks.toLocaleString()}</span>
+      <span>All {entity}</span>
+      <span class="count">{allCount.toLocaleString()}</span>
     </button>
     <button
       class="item"
@@ -71,7 +71,7 @@
       onclick={() => onSelect?.({ section: 'library', item: 'in-multiple-sources' })}
     >
       <span>In multiple sources</span>
-      <span class="count">{counts.inMultipleSources.toLocaleString()}</span>
+      <span class="count">{multiCount.toLocaleString()}</span>
     </button>
   </div>
 

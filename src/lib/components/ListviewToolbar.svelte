@@ -4,8 +4,11 @@
 
   /**
    * Top bar of the middle pane. Search input is always present.
-   * Contextual right-side controls: scanner button (Add views), entity-type
-   * toggle (when source contributes both), sync chip (Sources views).
+   * Contextual right-side controls:
+   *   - scanner button (Add views)
+   *   - app-wide tracks/releases toggle (always visible unless the rail item
+   *     is release-only by nature, e.g. Add → Discogs; Tab cycles it)
+   *   - sync chip (Sources views)
    */
   let {
     query = $bindable(''),
@@ -13,7 +16,7 @@
     onQueryChange,
     showScanner = false,
     onScan,
-    showEntityToggle = false,
+    showEntityToggle = true,
     entity = 'releases',
     onEntityChange,
     showSyncChip = false,
@@ -64,7 +67,7 @@
     </button>
   {/if}
   {#if showEntityToggle}
-    <div class="toggle">
+    <div class="toggle" title="Toggle tracks / releases (Tab)">
       <button
         class:active={entity === 'tracks'}
         onclick={() => onEntityChange?.('tracks')}
