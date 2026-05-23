@@ -32,9 +32,6 @@
   } = $props();
 
   const allCount = $derived(entity === 'tracks' ? counts.allTracks : counts.allReleases);
-  const multiCount = $derived(
-    entity === 'tracks' ? counts.inMultipleSourcesTracks : counts.inMultipleSourcesReleases,
-  );
 
   function isActive(section: string, item: string): boolean {
     return nav.section === section && nav.item === item;
@@ -62,16 +59,8 @@
       class:active={isActive('library', 'all')}
       onclick={() => onSelect?.({ section: 'library', item: 'all' })}
     >
-      <span>All {entity}</span>
+      <span>All</span>
       <span class="count">{allCount.toLocaleString()}</span>
-    </button>
-    <button
-      class="item"
-      class:active={isActive('library', 'in-multiple-sources')}
-      onclick={() => onSelect?.({ section: 'library', item: 'in-multiple-sources' })}
-    >
-      <span>In multiple sources</span>
-      <span class="count">{multiCount.toLocaleString()}</span>
     </button>
   </div>
 

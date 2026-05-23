@@ -51,6 +51,18 @@
 </script>
 
 <div class="bar">
+  {#if showEntityToggle}
+    <div class="toggle" title="Toggle tracks / releases (Tab)">
+      <button
+        class:active={entity === 'tracks'}
+        onclick={() => onEntityChange?.('tracks')}
+      >Tracks</button>
+      <button
+        class:active={entity === 'releases'}
+        onclick={() => onEntityChange?.('releases')}
+      >Releases</button>
+    </div>
+  {/if}
   <div class="search-wrap">
     <SearchBar
       bind:this={searchBar}
@@ -65,18 +77,6 @@
         <path d="M2 2v10M4 2v10M6 2v6M8 2v10M10 2v6M12 2v10" stroke="currentColor" stroke-width="1"/>
       </svg>
     </button>
-  {/if}
-  {#if showEntityToggle}
-    <div class="toggle" title="Toggle tracks / releases (Tab)">
-      <button
-        class:active={entity === 'tracks'}
-        onclick={() => onEntityChange?.('tracks')}
-      >Tracks</button>
-      <button
-        class:active={entity === 'releases'}
-        onclick={() => onEntityChange?.('releases')}
-      >Releases</button>
-    </div>
   {/if}
   {#if showSyncChip}
     <SyncChip isStub={syncIsStub} lastSyncedAt={syncLastAt} {syncing} {onSync} />

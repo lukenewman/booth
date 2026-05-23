@@ -30,25 +30,19 @@
   let counts = $state({
     allReleases: 0,
     allTracks: 0,
-    inMultipleSourcesReleases: 0,
-    inMultipleSourcesTracks: 0,
   });
   let syncing = $state<string | null>(null); // source id being synced
 
   async function loadSourcesAndCounts() {
-    const [srcRes, allRel, allTrk, multiRel, multiTrk] = await Promise.all([
+    const [srcRes, allRel, allTrk] = await Promise.all([
       fetch('/api/sources').then((r) => r.json()),
       fetch('/api/library/releases?limit=1').then((r) => r.json()),
       fetch('/api/library/tracks?limit=1').then((r) => r.json()),
-      fetch('/api/library/releases?multi_source=true&limit=1').then((r) => r.json()),
-      fetch('/api/library/tracks?multi_source=true&limit=1').then((r) => r.json()),
     ]);
     sources = srcRes;
     counts = {
       allReleases: allRel.total ?? 0,
       allTracks: allTrk.total ?? 0,
-      inMultipleSourcesReleases: multiRel.total ?? 0,
-      inMultipleSourcesTracks: multiTrk.total ?? 0,
     };
   }
 
@@ -114,9 +108,6 @@
 
       if (explorerState.nav.section === 'sources') {
         params.set('source', explorerState.nav.item);
-      }
-      if (explorerState.nav.section === 'library' && explorerState.nav.item === 'in-multiple-sources') {
-        params.set('multi_source', 'true');
       }
 
       // Release-only sources (e.g. Discogs) in tracks-mode: short-circuit to an

@@ -3,7 +3,7 @@ import { syncITunesLibrary } from './sync';
 
 export const itunesSource: MusicSource = {
   id: 'itunes',
-  name: 'Apple Music.app',
+  name: 'iTunes',
   contributes: ['track', 'release'],
   sync: syncITunesLibrary,
 };
