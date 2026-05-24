@@ -41,7 +41,7 @@ Server reads via `$env/dynamic/private` (NOT `process.env` — Vite doesn't auto
 src/
   app.css                                     dark-theme tokens + globals
   app.html                                    <title>booth</title>
-  hooks.server.ts                             auto-sync-on-boot: for each of Discogs + iTunes (when ITUNES_XML_PATH set), fires runSync() once if the DB has zero source_links for that source
+  hooks.server.ts                             auto-sync-on-boot: iterates registry on the first request after server start and fires runSync() once per non-stub source (iTunes is also gated on ITUNES_XML_PATH being set)
   lib/
     types.ts                                  DiscogsRelease, SessionEntry, ApiError, AddResponse
     keyboard.svelte.ts                        installKeyboard(actions, guards) — global keydown handler dispatching DOM-driven actions
@@ -195,7 +195,7 @@ docs/
 
 ### Sources
 - **Manual sync:** `POST /api/sources/:id/sync` invokes `runSync()` — the named adapter's `sync()`, collated into SQLite, with a row written to `sync_run` (start row up front, summary or error captured on completion). Returns the summary `{ rowsIn, releasesUpserted, tracksUpserted, releasesDeleted, tracksDeleted, conflicts }`. Returns 404 for an unknown id, 501 if the adapter's `sync()` throws `NotImplementedError`.
-- **Auto-sync on boot:** `src/hooks.server.ts` fires once per source on the first request after server start. For each of Discogs and iTunes (the latter only if `ITUNES_XML_PATH` is set), it checks `SELECT 1 FROM source_link WHERE source=? LIMIT 1`; if the DB has no rows for that source, it fires `runSync()` in the background (fire-and-forget). Both backfills also write to `sync_run`. This preserves the "it just works" feel without blocking page load.
+- **Auto-sync on boot:** `src/hooks.server.ts` fires `runSync()` once per non-stub source on the first request after server start (fire-and-forget; iTunes additionally requires `ITUNES_XML_PATH` to be set). Runs are written to `sync_run` like any other invocation. This means every server restart refreshes the library — so data stays current without the user touching the chip, at the cost of one Discogs API pull + iTunes XML parse per restart.
 - **Sync history:** `GET /api/sources/:id/runs?limit=` returns recent `sync_run` rows for a source. The `SyncRunHistory` component renders this in the right pane whenever a Sources rail item is selected without an entity highlighted; an in-flight sync from the toolbar chip shows a "Running…" row on top and the history refetches on completion.
 - **Inspection endpoints:**
   - `GET /api/library/tracks?source=&limit=` — tracks from the unified store, optionally filtered by source.
@@ -259,7 +259,7 @@ bun dev
 # open http://localhost:5173
 ```
 
-The DB is auto-initialized on first server boot — it creates `~/.booth/booth.db` (or `$BOOTH_DB_PATH`) and runs migrations automatically. An empty DB triggers initial Discogs and iTunes syncs via the boot hook in `src/hooks.server.ts` (fire-and-forget; happens in the background; iTunes only if `ITUNES_XML_PATH` is set).
+The DB is auto-initialized on first server boot — it creates `~/.booth/booth.db` (or `$BOOTH_DB_PATH`) and runs migrations automatically. Every server boot triggers a fresh sync for every non-stub source via the boot hook in `src/hooks.server.ts` (fire-and-forget; iTunes only if `ITUNES_XML_PATH` is set).
 
 Run a verification script: `bun verify scripts/<name>.ts` (bun runs TypeScript natively — no separate transpile step).
 
