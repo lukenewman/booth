@@ -1,10 +1,11 @@
 import { Database } from 'bun:sqlite';
 import { env } from '$env/dynamic/private';
 import { mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { runMigrations } from './migrate';
 
-const DEFAULT_PATH = './.booth/booth.db';
+const DEFAULT_PATH = join(homedir(), '.booth', 'booth.db');
 
 let _db: Database | null = null;
 

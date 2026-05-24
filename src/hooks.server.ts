@@ -1,30 +1,54 @@
 import type { Handle } from '@sveltejs/kit';
+import { env } from '$env/dynamic/private';
 import { getDb } from '$lib/server/db';
-import { discogsSource } from '$lib/server/sources/discogs';
-import { collate } from '$lib/server/library/collate';
+import { runSync } from '$lib/server/library/sync_run';
 
-let triggered = false;
+const triggered = new Set<string>();
 
-async function maybeBackfillDiscogs() {
-  if (triggered) return;
-  triggered = true;
+function maybeBackfill(
+  sourceId: string,
+  shouldRun: (db: ReturnType<typeof getDb>) => boolean,
+) {
+  if (triggered.has(sourceId)) return;
+  triggered.add(sourceId);
   const db = getDb();
-  const has = db
-    .prepare(`SELECT 1 FROM source_link WHERE source='discogs' LIMIT 1`)
-    .get();
-  if (has) return;
+  if (!shouldRun(db)) return;
   // Fire and forget — errors logged but don't fail requests.
-  discogsSource
-    .sync()
-    .then((result) => collate(db, 'discogs', result))
-    .then((s) => console.log('[boot] discogs initial sync', s))
+  runSync(db, sourceId)
+    .then((run) => {
+      if (run.error) {
+        console.warn(`[boot] ${sourceId} initial sync failed:`, run.error);
+      } else {
+        console.log(`[boot] ${sourceId} initial sync`, run.summary);
+      }
+    })
     .catch((e) => {
-      console.warn('[boot] discogs initial sync failed:', e);
-      triggered = false; // allow retry on next request
+      console.warn(`[boot] ${sourceId} initial sync failed:`, e);
+      triggered.delete(sourceId); // allow retry on next request
     });
 }
 
+function maybeBackfillDiscogs() {
+  maybeBackfill('discogs', (db) => {
+    const has = db
+      .prepare(`SELECT 1 FROM source_link WHERE source='discogs' LIMIT 1`)
+      .get();
+    return !has;
+  });
+}
+
+function maybeBackfillITunes() {
+  if (!env.ITUNES_XML_PATH) return;
+  maybeBackfill('itunes', (db) => {
+    const has = db
+      .prepare(`SELECT 1 FROM source_link WHERE source='itunes' LIMIT 1`)
+      .get();
+    return !has;
+  });
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
-  void maybeBackfillDiscogs();
+  maybeBackfillDiscogs();
+  maybeBackfillITunes();
   return resolve(event);
 };

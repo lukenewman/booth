@@ -13,6 +13,7 @@
   import EmptyState from './EmptyState.svelte';
   import Scanner from './Scanner.svelte';
   import SessionLog from './SessionLog.svelte';
+  import SyncRunHistory from './SyncRunHistory.svelte';
   import { explorerState } from '$lib/stores/explorerState.svelte';
   import { collection } from '$lib/stores/collection.svelte';
 
@@ -432,6 +433,9 @@
 
   // ----- Sync chip -----------------------------------------------------------
 
+  // Bumped after each manual sync so SyncRunHistory refetches.
+  let syncRunsReloadKey = $state(0);
+
   async function handleSync() {
     if (!selectedSource || selectedSource.isStub || syncing) return;
     syncing = selectedSource.id;
@@ -439,6 +443,7 @@
       await fetch(`/api/sources/${selectedSource.id}/sync`, { method: 'POST' });
       await loadSourcesAndCounts();
       await loadList(true);
+      syncRunsReloadKey++;
     } finally {
       syncing = null;
     }
@@ -574,7 +579,15 @@
   </section>
 
   <section class="right">
-    {#if !explorerState.id}
+    {#if !explorerState.id && isSourcesView && selectedSource}
+      <SyncRunHistory
+        sourceId={selectedSource.id}
+        sourceName={selectedSource.name}
+        isStub={selectedSource.isStub}
+        syncing={syncing === selectedSource.id}
+        reloadKey={syncRunsReloadKey}
+      />
+    {:else if !explorerState.id}
       <EmptyState title={
         currentEntity === 'tracks'  ? 'Select a track to see details'
         : currentEntity === 'artists' ? 'Select an artist to see details'

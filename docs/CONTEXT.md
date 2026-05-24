@@ -10,7 +10,7 @@ Single-user, local-only SvelteKit app for adding records to a personal Discogs c
 
 - **Runtime:** Bun (package manager + TS runner) on top of Node-compatible APIs. SvelteKit 2 + Svelte 5 (runes), TypeScript, Vite.
 - **Camera:** `@zxing/browser` (`BrowserMultiFormatReader`).
-- **DB:** SQLite at `./.booth/booth.db`, hand-rolled migrations in `src/lib/server/db/migrations/`. Managed via bun's built-in `bun:sqlite` (sync, prepared-statement API). Project is bun-only as a result — no Node fallback.
+- **DB:** SQLite at `~/.booth/booth.db` (user-scoped, not repo-relative), hand-rolled migrations in `src/lib/server/db/migrations/`. Managed via bun's built-in `bun:sqlite` (sync, prepared-statement API). Project is bun-only as a result — no Node fallback.
 - **New deps:** `better-sqlite3`, `plist` (Apple plist parser), `ulid` (entity ID generator). Verification scripts run on bun's native TS execution — no separate runner dep.
 - **No tests, no UI framework.** Session log is in-memory client-side.
 - **Dev:** `bun dev` (binds 5173, falls back upward).
@@ -29,7 +29,7 @@ DISCOGS_FOLDER_ID=1   # optional; defaults to "Uncategorized"
 # Legacy iTunes: ~/Music/iTunes/iTunes Music Library.xml
 ITUNES_XML_PATH=
 
-# Optional: override default DB location (defaults to ./.booth/booth.db)
+# Optional: override default DB location (defaults to ~/.booth/booth.db)
 # BOOTH_DB_PATH=
 ```
 
@@ -41,7 +41,7 @@ Server reads via `$env/dynamic/private` (NOT `process.env` — Vite doesn't auto
 src/
   app.css                                     dark-theme tokens + globals
   app.html                                    <title>booth</title>
-  hooks.server.ts                             auto-sync-on-boot: triggers Discogs sync once if DB has zero Discogs source_links
+  hooks.server.ts                             auto-sync-on-boot: for each of Discogs + iTunes (when ITUNES_XML_PATH set), fires runSync() once if the DB has zero source_links for that source
   lib/
     types.ts                                  DiscogsRelease, SessionEntry, ApiError, AddResponse
     keyboard.svelte.ts                        installKeyboard(actions, guards) — global keydown handler dispatching DOM-driven actions
@@ -59,6 +59,7 @@ src/
       SourceGrid.svelte                       4-dot "DiRP" indicator (Discogs / iTunes / Rekordbox / Plex)
       SourcePanel.svelte                      per-source detail block (facets + external link or stub placeholder)
       SyncChip.svelte                         last-synced timestamp + click-to-sync; disabled for stub sources
+      SyncRunHistory.svelte                   right-pane sync_run list shown when a Sources rail item is selected with no entity; one row per run (relative time, duration, summary or error)
       EmptyState.svelte                       centered "nothing here" placeholder
       SearchBar.svelte                        debounced text input; exports focus() / blur() / clear()
       Scanner.svelte                          ZXing camera viewfinder; retries NotReadableError up to 3×
@@ -67,12 +68,13 @@ src/
       ShortcutOverlay.svelte                  `?` overlay listing shortcuts
     server/
       db/
-        index.ts                              singleton better-sqlite3 connection; reads path from env
+        index.ts                              singleton bun:sqlite connection; reads BOOTH_DB_PATH or falls back to ~/.booth/booth.db
         migrate.ts                            reads migrations/*.sql, applies in order, tracks in _migrations
         migrations/
           001_init.sql                        core tables: release, track, source_link, source_facets, match_key, _migrations
           002_source_state.sql                source_state (source PRIMARY KEY, last_synced_at, last_summary)
           003_artist_entity.sql               artist table; release/track gain artist_id FK (denormalized artist text dropped); source_link/source_facets/match_key CHECK widened to include 'artist'
+          004_sync_run.sql                    sync_run table (id, source, started_at, finished_at, summary JSON, error); indexed by (source, started_at DESC) for history queries
       sources/
         types.ts                              MusicSource (with isStub), CollectionWritable, SourceTrack, SourceRelease, SyncResult
         registry.ts                           statically-populated source list; getSource(id), listSources()
@@ -93,6 +95,7 @@ src/
         normalize.ts                          normalization helpers for match keys (artist_album_year, file_path, artist_name)
         collate.ts                            post-sync: maps SyncResult → entity + source_link upserts; writes source_state. Exports upsertArtist(db, name) for callers outside collate (e.g. Discogs add path) that need to resolve an artist string to an artist row id.
         queries.ts                            listReleases / listTracks (paginated), getReleaseDetail / getTrackDetail, listSourcesWithState, getMembershipExternalIds. All release/track selects JOIN the artist table and alias artist.name AS artist so the wire shape is unchanged.
+        sync_run.ts                           runSync(db, sourceId) wraps adapter.sync + collate, writes a sync_run row (start row up front, summary or error on completion); listSyncRuns(db, source, limit) reads recent runs. Used by /api/sources/[id]/sync, the boot hook, and the runs endpoint.
     stores/
       session.svelte.ts                       in-memory session log (entries, count, last)
       toast.svelte.ts                         toast queue with auto-dismiss + retry actions
@@ -104,7 +107,8 @@ src/
     api/
       sources/
         +server.ts                            GET → [{ id, name, isStub, lastSyncedAt, lastSummary }] for the rail Sources section
-        [id]/sync/+server.ts                  POST → registry.getSource(id).sync() → collate → return summary; 404 unknown, 501 stub
+        [id]/sync/+server.ts                  POST → runSync(getDb(), id) → return summary; 404 unknown, 501 stub
+        [id]/runs/+server.ts                  GET ?limit= → { items: SyncRunRow[] } recent sync_run rows for the given source (default 20, max 200)
       library/
         tracks/+server.ts                     GET ?source=&q=&multiSource=&limit=&offset=  paginated tracks
         tracks/[id]/+server.ts                GET → { track, sources, facets, release, sourceMeta } for TrackDetail
@@ -190,8 +194,9 @@ docs/
 - Keyboard wiring is DOM-driven: `installKeyboard(actions, guards)` in `+page.svelte` looks up elements by class (`input.search`, `.body button.row-btn`, `button.add-btn`, `button.remove-btn`, `.scanner-overlay`, `.bar .toggle`) at event time rather than holding component refs.
 
 ### Sources
-- **Manual sync:** `POST /api/sources/:id/sync` runs the named adapter's `sync()`, collates the result into SQLite, and returns a summary `{ rowsIn, releasesUpserted, tracksUpserted, releasesDeleted, tracksDeleted, conflicts }`. Returns 404 for an unknown id, 501 if the adapter's `sync()` throws `NotImplementedError`.
-- **Auto-sync on boot:** `src/hooks.server.ts` fires once on the first request after server start. It checks `SELECT 1 FROM source_link WHERE source='discogs' LIMIT 1`; if the DB is empty, it fires a Discogs sync in the background (fire-and-forget). This preserves the "it just works" feel without blocking page load.
+- **Manual sync:** `POST /api/sources/:id/sync` invokes `runSync()` — the named adapter's `sync()`, collated into SQLite, with a row written to `sync_run` (start row up front, summary or error captured on completion). Returns the summary `{ rowsIn, releasesUpserted, tracksUpserted, releasesDeleted, tracksDeleted, conflicts }`. Returns 404 for an unknown id, 501 if the adapter's `sync()` throws `NotImplementedError`.
+- **Auto-sync on boot:** `src/hooks.server.ts` fires once per source on the first request after server start. For each of Discogs and iTunes (the latter only if `ITUNES_XML_PATH` is set), it checks `SELECT 1 FROM source_link WHERE source=? LIMIT 1`; if the DB has no rows for that source, it fires `runSync()` in the background (fire-and-forget). Both backfills also write to `sync_run`. This preserves the "it just works" feel without blocking page load.
+- **Sync history:** `GET /api/sources/:id/runs?limit=` returns recent `sync_run` rows for a source. The `SyncRunHistory` component renders this in the right pane whenever a Sources rail item is selected without an entity highlighted; an in-flight sync from the toolbar chip shows a "Running…" row on top and the history refetches on completion.
 - **Inspection endpoints:**
   - `GET /api/library/tracks?source=&limit=` — tracks from the unified store, optionally filtered by source.
   - `GET /api/library/releases?source=&limit=` — releases from the unified store.
@@ -254,7 +259,7 @@ bun dev
 # open http://localhost:5173
 ```
 
-The DB is auto-initialized on first server boot — it creates `./.booth/booth.db` and runs migrations automatically. An empty DB triggers an initial Discogs sync via the boot hook in `src/hooks.server.ts` (fire-and-forget; happens in the background).
+The DB is auto-initialized on first server boot — it creates `~/.booth/booth.db` (or `$BOOTH_DB_PATH`) and runs migrations automatically. An empty DB triggers initial Discogs and iTunes syncs via the boot hook in `src/hooks.server.ts` (fire-and-forget; happens in the background; iTunes only if `ITUNES_XML_PATH` is set).
 
 Run a verification script: `bun verify scripts/<name>.ts` (bun runs TypeScript natively — no separate transpile step).
 
