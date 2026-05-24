@@ -6,7 +6,9 @@ import type {
   SourceTrack,
   SyncResult,
 } from '../sources/types';
-import { normalizeArtistAlbumYear, normalizeFilePath } from './normalize';
+import { normalizeArtistAlbumYear, normalizeArtistName, normalizeFilePath } from './normalize';
+
+const UNKNOWN_ARTIST_NAME = '(unknown)';
 
 export interface CollateSummary {
   rowsIn: number;
@@ -21,6 +23,7 @@ type MatchMethod =
   | 'file_path'
   | 'artist_album_year'
   | 'external_id_carryover'
+  | 'name_normalized'
   | 'first_seen';
 
 /**
@@ -48,14 +51,16 @@ export function collate(
     // Cache of external_id → entity_id created/found during this run, so tracks
     // can resolve their releaseExternalId before the release row's source_link is committed.
     const releaseLookup = new Map<string, string>();
+    // Cache normalized artist name → artist_id for the duration of this sync.
+    const artistCache = new Map<string, string>();
 
     for (const r of result.releases) {
-      const entityId = upsertRelease(db, sourceId, r, summary);
+      const entityId = upsertRelease(db, sourceId, r, summary, artistCache);
       releaseLookup.set(r.externalId, entityId);
     }
 
     for (const t of result.tracks) {
-      upsertTrack(db, sourceId, t, releaseLookup, summary);
+      upsertTrack(db, sourceId, t, releaseLookup, summary, artistCache);
     }
 
     // Diff: drop source_links from this source whose external_id is not in the
@@ -80,6 +85,75 @@ export function collate(
   return summary;
 }
 
+// ---- Artists ----------------------------------------------------
+
+/**
+ * Resolve a free-form artist name to an artist row id, creating one if needed.
+ * Dedup strategy (in order):
+ *   1. match_key lookup via squashAlphanumLower(name)
+ *   2. fallback case-insensitive lookup against artist.name — covers artists
+ *      backfilled by migration 003 before any match_key row exists
+ *   3. insert a new artist row + its match_key
+ *
+ * Empty / whitespace names fall back to the "(unknown)" sentinel artist
+ * (guaranteed to exist by migration 003).
+ */
+export function upsertArtist(
+  db: Database,
+  rawName: string,
+  cache?: Map<string, string>,
+): string {
+  const name = rawName?.trim() ?? '';
+  const normalized = normalizeArtistName(name);
+
+  if (!normalized) {
+    if (cache?.has('__unknown__')) return cache.get('__unknown__')!;
+    const sentinel = db
+      .prepare(`SELECT id FROM artist WHERE name = ? LIMIT 1`)
+      .get(UNKNOWN_ARTIST_NAME) as { id: string } | undefined;
+    if (sentinel) {
+      cache?.set('__unknown__', sentinel.id);
+      return sentinel.id;
+    }
+    // No sentinel (e.g. running against a freshly-migrated empty DB) — create one.
+    const id = ulid();
+    db.prepare(`INSERT INTO artist (id, name) VALUES (?, ?)`).run(id, UNKNOWN_ARTIST_NAME);
+    cache?.set('__unknown__', id);
+    return id;
+  }
+
+  if (cache?.has(normalized)) return cache.get(normalized)!;
+
+  // 1. match_key lookup
+  const byKey = db
+    .prepare(
+      `SELECT entity_id FROM match_key
+        WHERE entity_kind='artist' AND key_type='name_normalized' AND key_value=?`,
+    )
+    .get(normalized) as { entity_id: string } | undefined;
+  if (byKey) {
+    cache?.set(normalized, byKey.entity_id);
+    return byKey.entity_id;
+  }
+
+  // 2. fallback: case-insensitive name lookup (catches migration-backfilled rows)
+  const byName = db
+    .prepare(`SELECT id FROM artist WHERE LOWER(name) = LOWER(?) LIMIT 1`)
+    .get(name) as { id: string } | undefined;
+  if (byName) {
+    upsertMatchKey(db, 'artist', byName.id, 'name_normalized', normalized);
+    cache?.set(normalized, byName.id);
+    return byName.id;
+  }
+
+  // 3. new artist row
+  const id = ulid();
+  db.prepare(`INSERT INTO artist (id, name) VALUES (?, ?)`).run(id, name);
+  upsertMatchKey(db, 'artist', id, 'name_normalized', normalized);
+  cache?.set(normalized, id);
+  return id;
+}
+
 // ---- Releases ---------------------------------------------------
 
 function upsertRelease(
@@ -87,6 +161,7 @@ function upsertRelease(
   sourceId: string,
   r: SourceRelease,
   summary: CollateSummary,
+  artistCache: Map<string, string>,
 ): string {
   const matchKey = normalizeArtistAlbumYear({
     artist: r.artist,
@@ -123,19 +198,21 @@ function upsertRelease(
     }
   }
 
+  const artistId = upsertArtist(db, r.artist, artistCache);
+
   if (!entityId) {
     entityId = ulid();
     db.prepare(
-      `INSERT INTO release (id, title, artist, year, country, label, catno)
+      `INSERT INTO release (id, title, artist_id, year, country, label, catno)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).run(entityId, r.title, r.artist, r.year ?? null, r.country ?? null, r.label ?? null, r.catno ?? null);
+    ).run(entityId, r.title, artistId, r.year ?? null, r.country ?? null, r.label ?? null, r.catno ?? null);
   } else {
     db.prepare(
       `UPDATE release
-         SET title=?, artist=?, year=?, country=?, label=?, catno=?,
+         SET title=?, artist_id=?, year=?, country=?, label=?, catno=?,
              updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
        WHERE id=?`,
-    ).run(r.title, r.artist, r.year ?? null, r.country ?? null, r.label ?? null, r.catno ?? null, entityId);
+    ).run(r.title, artistId, r.year ?? null, r.country ?? null, r.label ?? null, r.catno ?? null, entityId);
   }
 
   upsertSourceLink(db, 'release', entityId, sourceId, r.externalId, r.externalUrl, method, summary);
@@ -154,6 +231,7 @@ function upsertTrack(
   t: SourceTrack,
   releaseLookup: Map<string, string>,
   summary: CollateSummary,
+  artistCache: Map<string, string>,
 ): string {
   const fp = t.filePath ? normalizeFilePath(t.filePath) : null;
   let entityId: string | undefined;
@@ -200,15 +278,17 @@ function upsertTrack(
     }
   }
 
+  const artistId = upsertArtist(db, t.artist, artistCache);
+
   if (!entityId) {
     entityId = ulid();
     db.prepare(
-      `INSERT INTO track (id, title, artist, album, duration_ms, release_id, position)
+      `INSERT INTO track (id, title, artist_id, album, duration_ms, release_id, position)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       entityId,
       t.title,
-      t.artist,
+      artistId,
       t.album ?? null,
       t.durationMs ?? null,
       releaseId,
@@ -217,12 +297,12 @@ function upsertTrack(
   } else {
     db.prepare(
       `UPDATE track
-         SET title=?, artist=?, album=?, duration_ms=?, release_id=?, position=?,
+         SET title=?, artist_id=?, album=?, duration_ms=?, release_id=?, position=?,
              updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
        WHERE id=?`,
     ).run(
       t.title,
-      t.artist,
+      artistId,
       t.album ?? null,
       t.durationMs ?? null,
       releaseId,

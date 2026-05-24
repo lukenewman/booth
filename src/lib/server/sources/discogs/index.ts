@@ -6,6 +6,7 @@ import { getUsername } from './username';
 import { env } from '$env/dynamic/private';
 import { getDb } from '../../db';
 import { normalizeArtistAlbumYear } from '../../library/normalize';
+import { upsertArtist } from '../../library/collate';
 
 const FOLDER_ID = env.DISCOGS_FOLDER_ID ?? '1';
 
@@ -111,13 +112,14 @@ export function ensureDiscogsReleaseEntity(args: {
 
   const entityId = ulid();
   const tx = db.transaction(() => {
+    const artistId = upsertArtist(db, args.artist);
     db.prepare(
-      `INSERT INTO release (id, title, artist, year, country, label, catno)
+      `INSERT INTO release (id, title, artist_id, year, country, label, catno)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       entityId,
       args.title,
-      args.artist,
+      artistId,
       args.year,
       args.country,
       args.label,

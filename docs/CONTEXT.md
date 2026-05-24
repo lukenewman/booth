@@ -49,11 +49,13 @@ src/
       Explorer.svelte                         three-pane shell (rail / listview / detail); owns URL ↔ store sync, data fetching, add/remove handlers
       Rail.svelte                             left rail: Library / Sources / Add → Discogs sections
       Listview.svelte                         generic paginated row container; IntersectionObserver sentinel + selection state
-      ListviewToolbar.svelte                  list header: search input + scanner btn + entity toggle (releases/tracks) + sync chip + meta
+      ListviewToolbar.svelte                  list header: search input + scanner btn + entity toggle (releases/tracks/artists) + sync chip + meta
       ReleaseList.svelte                      Listview wrapper bound to release rows
       TrackList.svelte                        Listview wrapper bound to track rows
+      ArtistList.svelte                       Listview wrapper bound to artist rows (name + release/track counts + SourceGrid)
       ReleaseDetail.svelte                    right pane for a release; tracklist + per-source panels; optional add/remove CTA with variant
       TrackDetail.svelte                      right pane for a track; parent-release card + per-source panels
+      ArtistDetail.svelte                     right pane for an artist; per-source panels + list of releases (click-through to release detail)
       SourceGrid.svelte                       4-dot "DiRP" indicator (Discogs / iTunes / Rekordbox / Plex)
       SourcePanel.svelte                      per-source detail block (facets + external link or stub placeholder)
       SyncChip.svelte                         last-synced timestamp + click-to-sync; disabled for stub sources
@@ -70,6 +72,7 @@ src/
         migrations/
           001_init.sql                        core tables: release, track, source_link, source_facets, match_key, _migrations
           002_source_state.sql                source_state (source PRIMARY KEY, last_synced_at, last_summary)
+          003_artist_entity.sql               artist table; release/track gain artist_id FK (denormalized artist text dropped); source_link/source_facets/match_key CHECK widened to include 'artist'
       sources/
         types.ts                              MusicSource (with isStub), CollectionWritable, SourceTrack, SourceRelease, SyncResult
         registry.ts                           statically-populated source list; getSource(id), listSources()
@@ -87,9 +90,9 @@ src/
         plex/
           index.ts                            stub: isStub=true; sync() throws NotImplementedError
       library/
-        normalize.ts                          normalization helpers for match keys (artist_album_year, file_path)
-        collate.ts                            post-sync: maps SyncResult → entity + source_link upserts; writes source_state
-        queries.ts                            listReleases / listTracks (paginated), getReleaseDetail / getTrackDetail, listSourcesWithState, getMembershipExternalIds
+        normalize.ts                          normalization helpers for match keys (artist_album_year, file_path, artist_name)
+        collate.ts                            post-sync: maps SyncResult → entity + source_link upserts; writes source_state. Exports upsertArtist(db, name) for callers outside collate (e.g. Discogs add path) that need to resolve an artist string to an artist row id.
+        queries.ts                            listReleases / listTracks (paginated), getReleaseDetail / getTrackDetail, listSourcesWithState, getMembershipExternalIds. All release/track selects JOIN the artist table and alias artist.name AS artist so the wire shape is unchanged.
     stores/
       session.svelte.ts                       in-memory session log (entries, count, last)
       toast.svelte.ts                         toast queue with auto-dismiss + retry actions
@@ -107,6 +110,8 @@ src/
         tracks/[id]/+server.ts                GET → { track, sources, facets, release, sourceMeta } for TrackDetail
         releases/+server.ts                   GET ?source=&q=&multiSource=&limit=&offset=  paginated releases
         releases/[id]/+server.ts              GET → { release, sources, facets, tracks, sourceMeta } for ReleaseDetail
+        artists/+server.ts                    GET ?source=&q=&multi_source=&limit=&offset=  paginated artists (each row: name + releaseCount + trackCount + sources[])
+        artists/[id]/+server.ts               GET → { artist, sources, facets, releases, trackCount } for ArtistDetail
         membership/+server.ts                 GET ?source=discogs  → set of external_ids (Discogs release-id strings)
       discogs/
         search/+server.ts                     GET ?q= — live text search; returns { results: […] } sorted by year asc
@@ -131,7 +136,7 @@ docs/
 - **Library rail items**: `all` (label flips between "All tracks" / "All releases" based on the app-wide entity lens) and `in-multiple-sources` (entities contributed by ≥2 sources, supports both kinds).
 - **Sources rail items**: one per registered source (`discogs`, `itunes`, `rekordbox`, `plex`); stubs render `EmptyState`. Release-only sources (Discogs) render a dedicated "No tracks indexed" empty state when the entity lens is set to tracks.
 - **Add rail item**: `add:discogs` — Discogs live search, release-only by nature (the search API doesn't return tracks); toolbar omits the entity toggle here.
-- **Entity lens (tracks ↔ releases)**: app-wide viewing toggle, lives in the listview toolbar and is bound to `Tab`. Persists across rail switches (it's a lens, not a per-rail attribute). Detail pane keeps its open entity when the lens flips — the listview switches independently. URL: `?entity=tracks|releases`.
+- **Entity lens (releases ↔ tracks ↔ artists)**: app-wide viewing toggle, lives in the listview toolbar and is bound to `Tab` (cycles forward 3-way). Persists across rail switches (it's a lens, not a per-rail attribute). Detail pane keeps its open entity when the lens flips — the listview switches independently. URL: `?entity=releases|tracks|artists` (omitted when equal to the default `releases`).
 - **Listview**: lazy pagination via `IntersectionObserver` sentinel rooted on the scroll container (`?limit=200&offset=…`); row click selects + opens detail.
 - **Detail**: cover placeholder, title/artist/year, optional CTA, then per-source panels (`SourcePanel`) for all registered sources, then tracklist (releases only). Stub sources still render a "not implemented" panel.
 - **SourceGrid**: 4-dot indicator (D / i / R / P) shown on every row and in detail context to communicate which sources contribute to a given entity.
@@ -195,6 +200,13 @@ docs/
   - **Discogs** (`id: 'discogs'`) — real, full read+write via `CollectionWritable`. Syncs the entire collection folder via paginated Discogs API. Writes (add/remove) go through to both Discogs and the SQLite `source_link` table.
   - **Apple Music.app** (`id: 'itunes'`) — real, read-only. Parses `ITUNES_XML_PATH` Library.xml via the `plist` package. Contributes tracks with file-path match keys and emergent releases grouped by `(Album Artist || Artist, Album, Year)`. Synthetic release `external_id`s are deterministic hashes of the normalized group key. Track facets include `rating`, `playCount`, `dateAdded`, `kind`, `bitRate`, `sampleRate`, `genre`.
   - **Rekordbox** (`id: 'rekordbox'`) and **Plex** (`id: 'plex'`) — stubs. Registered in the source registry with correct `id`/`name`/`contributes` but `sync()` throws `NotImplementedError`, which the route translates to HTTP 501.
+
+## Data model
+
+- **Entities**: `artist` (id, name), `release` (id, title, artist_id FK NOT NULL, year, country, label, catno), `track` (id, title, artist_id FK NOT NULL, album, duration_ms, release_id FK nullable, position). All FKs are real SQLite foreign keys with `PRAGMA foreign_keys = ON`.
+- **Per-source plumbing**: `source_link`, `source_facets`, and `match_key` all carry an `entity_kind` discriminator that supports `'track' | 'release' | 'artist'`. Today, the adapters emit `release` + `track` rows; the `'artist'` entity kind is schema-level only — no adapter currently emits per-source artist records, but the constraints allow it.
+- **Artist dedup**: at sync time, `upsertArtist(name)` normalizes via `squashAlphanumLower` and stores a `match_key` (entity_kind='artist', key_type='name_normalized'). On a freshly-migrated DB, artists have no match_keys yet — `upsertArtist` falls back to a case-insensitive `artist.name` lookup and backfills the match_key on first touch.
+- **"(unknown)" sentinel artist**: guaranteed by migration 003. Any release/track without an artist string (e.g. iTunes track with no Artist tag) FKs to this row, so `artist_id NOT NULL` holds without nullable columns.
 
 ## Notable divergences from the original plan
 

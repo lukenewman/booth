@@ -4,8 +4,10 @@ import { collate } from '../src/lib/server/library/collate';
 import {
   listReleases,
   listTracks,
+  listArtists,
   getReleaseDetail,
   getTrackDetail,
+  getArtistDetail,
   listSourcesWithState,
 } from '../src/lib/server/library/queries';
 
@@ -152,4 +154,54 @@ const rb = sources.find((s) => s.id === 'rekordbox');
 assert(rb?.isStub === true, 'rekordbox should be marked stub');
 assert(rb?.count === 0, 'rekordbox count should be 0');
 
-console.log('PASS: queries — listReleases, listTracks, details, sources-with-state');
+// ---- Artists ------------------------------------------------------------
+
+// Two distinct artists in the seed: Daft Punk (multi-source: discogs + itunes
+// for Homework, itunes only for Discovery) and the implicit (unknown) sentinel
+// (since the seeded data all has artists, no rows use it — it should still
+// appear in listArtists with zero counts).
+const allArtists = listArtists(db, { limit: 10, offset: 0 });
+const daft = allArtists.items.find((a) => a.name.toLowerCase() === 'daft punk');
+assert(daft, 'listArtists must surface Daft Punk');
+assert(daft!.releaseCount === 2, `daft releaseCount: expected 2, got ${daft!.releaseCount}`);
+assert(daft!.trackCount === 2, `daft trackCount: expected 2, got ${daft!.trackCount}`);
+// Daft Punk picks up sources from any of its releases (discogs, itunes) or
+// its tracks (the multi-source test above seeded a plex link on one track).
+assert(
+  daft!.sources.includes('discogs')
+  && daft!.sources.includes('itunes')
+  && daft!.sources.includes('plex'),
+  `daft sources: ${JSON.stringify(daft!.sources)}`,
+);
+
+// Source filter — listing the 'discogs' source should return only artists who
+// have at least one discogs-linked release (or track).
+const discogsArtists = listArtists(db, { source: 'discogs', limit: 10, offset: 0 });
+assert(discogsArtists.total === 1, `discogs-filtered artists: expected 1, got ${discogsArtists.total}`);
+assert(discogsArtists.items[0].name.toLowerCase() === 'daft punk', 'discogs artist must be Daft Punk');
+
+// Multi-source filter — Daft Punk has releases in both sources.
+const multiArtists = listArtists(db, { multiSource: true, limit: 10, offset: 0 });
+assert(multiArtists.total === 1, `multi-source artists: expected 1, got ${multiArtists.total}`);
+assert(multiArtists.items[0].name.toLowerCase() === 'daft punk');
+
+// Search.
+const qArtists = listArtists(db, { q: 'daft', limit: 10, offset: 0 });
+assert(qArtists.total === 1, `q=daft: expected 1, got ${qArtists.total}`);
+
+// Detail.
+const artistDetail = getArtistDetail(db, daft!.id);
+assert(artistDetail !== null, 'getArtistDetail returned null');
+assert(artistDetail!.artist.id === daft!.id, 'detail.artist.id mismatch');
+assert(artistDetail!.releases.length === 2, `detail releases: expected 2, got ${artistDetail!.releases.length}`);
+assert(artistDetail!.trackCount === 2, `detail trackCount: expected 2, got ${artistDetail!.trackCount}`);
+// Each release in detail should carry its sources via JOIN.
+const homeworkInDetail = artistDetail!.releases.find((r) => r.title === 'Homework');
+assert(
+  homeworkInDetail && homeworkInDetail.sources.length === 2,
+  'detail.releases[homework].sources should include both sources',
+);
+
+assert(getArtistDetail(db, 'no-such-id') === null, 'missing artist detail should be null');
+
+console.log('PASS: queries — listReleases, listTracks, listArtists, details, sources-with-state');

@@ -1,4 +1,5 @@
 import type { Database } from 'bun:sqlite';
+import type { EntityKind } from '../sources/types';
 
 export function getMembershipExternalIds(
   db: Database,
@@ -89,22 +90,28 @@ export function listReleases(
     );
   }
   if (args.q) {
-    where.push(`(release.title LIKE ? OR release.artist LIKE ?)`);
+    where.push(`(release.title LIKE ? OR artist.name LIKE ?)`);
     params.push(`%${args.q}%`, `%${args.q}%`);
   }
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
   const totalRow = db
-    .prepare(`SELECT COUNT(*) as n FROM release ${whereSql}`)
+    .prepare(
+      `SELECT COUNT(*) as n FROM release
+         JOIN artist ON artist.id = release.artist_id
+         ${whereSql}`,
+    )
     .get(...params) as { n: number };
 
   const rows = db
     .prepare(
-      `SELECT id, title, artist, year, country, label, catno
+      `SELECT release.id, release.title, artist.name AS artist,
+              release.year, release.country, release.label, release.catno
          FROM release
+         JOIN artist ON artist.id = release.artist_id
          ${whereSql}
-         ORDER BY artist COLLATE NOCASE, year, title COLLATE NOCASE
+         ORDER BY artist.name COLLATE NOCASE, release.year, release.title COLLATE NOCASE
          LIMIT ? OFFSET ?`,
     )
     .all(...params, args.limit, args.offset) as ReleaseRow[];
@@ -166,22 +173,28 @@ export function listTracks(
     );
   }
   if (args.q) {
-    where.push(`(track.title LIKE ? OR track.artist LIKE ? OR track.album LIKE ?)`);
+    where.push(`(track.title LIKE ? OR artist.name LIKE ? OR track.album LIKE ?)`);
     params.push(`%${args.q}%`, `%${args.q}%`, `%${args.q}%`);
   }
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
   const totalRow = db
-    .prepare(`SELECT COUNT(*) as n FROM track ${whereSql}`)
+    .prepare(
+      `SELECT COUNT(*) as n FROM track
+         JOIN artist ON artist.id = track.artist_id
+         ${whereSql}`,
+    )
     .get(...params) as { n: number };
 
   const rows = db
     .prepare(
-      `SELECT id, title, artist, album, duration_ms, release_id, position
+      `SELECT track.id, track.title, artist.name AS artist,
+              track.album, track.duration_ms, track.release_id, track.position
          FROM track
+         JOIN artist ON artist.id = track.artist_id
          ${whereSql}
-         ORDER BY artist COLLATE NOCASE, album COLLATE NOCASE, title COLLATE NOCASE
+         ORDER BY artist.name COLLATE NOCASE, track.album COLLATE NOCASE, track.title COLLATE NOCASE
          LIMIT ? OFFSET ?`,
     )
     .all(...params, args.limit, args.offset) as TrackRow[];
@@ -220,7 +233,13 @@ export function getReleaseDetail(
   tracks: Array<TrackRow & { sources: string[] }>;
 } | null {
   const release = db
-    .prepare(`SELECT id, title, artist, year, country, label, catno FROM release WHERE id = ?`)
+    .prepare(
+      `SELECT release.id, release.title, artist.name AS artist,
+              release.year, release.country, release.label, release.catno
+         FROM release
+         JOIN artist ON artist.id = release.artist_id
+         WHERE release.id = ?`,
+    )
     .get(id) as ReleaseRow | undefined;
   if (!release) return null;
 
@@ -240,9 +259,12 @@ export function getReleaseDetail(
 
   const tracks = db
     .prepare(
-      `SELECT id, title, artist, album, duration_ms, release_id, position
-         FROM track WHERE release_id = ?
-         ORDER BY position COLLATE NOCASE, title COLLATE NOCASE`,
+      `SELECT track.id, track.title, artist.name AS artist,
+              track.album, track.duration_ms, track.release_id, track.position
+         FROM track
+         JOIN artist ON artist.id = track.artist_id
+         WHERE track.release_id = ?
+         ORDER BY track.position COLLATE NOCASE, track.title COLLATE NOCASE`,
     )
     .all(id) as TrackRow[];
 
@@ -282,8 +304,11 @@ export function getTrackDetail(
 } | null {
   const track = db
     .prepare(
-      `SELECT id, title, artist, album, duration_ms, release_id, position
-         FROM track WHERE id = ?`,
+      `SELECT track.id, track.title, artist.name AS artist,
+              track.album, track.duration_ms, track.release_id, track.position
+         FROM track
+         JOIN artist ON artist.id = track.artist_id
+         WHERE track.id = ?`,
     )
     .get(id) as TrackRow | undefined;
   if (!track) return null;
@@ -307,7 +332,11 @@ export function getTrackDetail(
     release =
       (db
         .prepare(
-          `SELECT id, title, artist, year, country, label, catno FROM release WHERE id = ?`,
+          `SELECT release.id, release.title, artist.name AS artist,
+                  release.year, release.country, release.label, release.catno
+             FROM release
+             JOIN artist ON artist.id = release.artist_id
+             WHERE release.id = ?`,
         )
         .get(track.release_id) as ReleaseRow | undefined) ?? null;
   }
@@ -315,10 +344,201 @@ export function getTrackDetail(
   return { track, sources, facets, release };
 }
 
+// ---- Artists -----------------------------------------------------
+
+export interface ArtistRow {
+  id: string;
+  name: string;
+}
+
+interface ListArtistsArgs {
+  source?: string;
+  q?: string;
+  limit: number;
+  offset: number;
+  multiSource?: boolean;
+}
+
+export interface ArtistListItem extends ArtistRow {
+  releaseCount: number;
+  trackCount: number;
+  sources: string[];
+}
+
+export function listArtists(
+  db: Database,
+  args: ListArtistsArgs,
+): PagedResult<ArtistListItem> {
+  // An artist's "sources" are the union of sources contributing to that
+  // artist's releases and tracks. The Sources rail filter therefore checks
+  // whether any release- or track-side source_link with this source exists
+  // for the artist's child entities.
+  const where: string[] = [];
+  const params: string[] = [];
+
+  if (args.source) {
+    where.push(
+      `(EXISTS (
+         SELECT 1 FROM release r
+           JOIN source_link sl
+             ON sl.entity_kind='release' AND sl.entity_id=r.id
+          WHERE r.artist_id = artist.id AND sl.source = ?
+       )
+       OR EXISTS (
+         SELECT 1 FROM track t
+           JOIN source_link sl
+             ON sl.entity_kind='track' AND sl.entity_id=t.id
+          WHERE t.artist_id = artist.id AND sl.source = ?
+       ))`,
+    );
+    params.push(args.source, args.source);
+  }
+  if (args.multiSource) {
+    where.push(
+      `(
+        SELECT COUNT(DISTINCT sl.source) FROM source_link sl
+          WHERE (sl.entity_kind='release'
+                  AND sl.entity_id IN (SELECT id FROM release WHERE artist_id = artist.id))
+             OR (sl.entity_kind='track'
+                  AND sl.entity_id IN (SELECT id FROM track   WHERE artist_id = artist.id))
+       ) >= 2`,
+    );
+  }
+  if (args.q) {
+    where.push(`artist.name LIKE ?`);
+    params.push(`%${args.q}%`);
+  }
+
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const totalRow = db
+    .prepare(`SELECT COUNT(*) as n FROM artist ${whereSql}`)
+    .get(...params) as { n: number };
+
+  const rows = db
+    .prepare(
+      `SELECT
+         artist.id,
+         artist.name,
+         (SELECT COUNT(*) FROM release r WHERE r.artist_id = artist.id) AS releaseCount,
+         (SELECT COUNT(*) FROM track   t WHERE t.artist_id = artist.id) AS trackCount
+       FROM artist
+       ${whereSql}
+       ORDER BY artist.name COLLATE NOCASE
+       LIMIT ? OFFSET ?`,
+    )
+    .all(...params, args.limit, args.offset) as Array<ArtistRow & { releaseCount: number; trackCount: number }>;
+
+  const ids = rows.map((r) => r.id);
+  const sourceMap = new Map<string, Set<string>>();
+  if (ids.length) {
+    const placeholders = ids.map(() => '?').join(',');
+    const linkRows = db
+      .prepare(
+        `SELECT a.id AS artist_id, sl.source AS source
+           FROM artist a
+           LEFT JOIN release r ON r.artist_id = a.id
+           LEFT JOIN track   t ON t.artist_id = a.id
+           JOIN source_link sl
+             ON (sl.entity_kind='release' AND sl.entity_id = r.id)
+             OR (sl.entity_kind='track'   AND sl.entity_id = t.id)
+          WHERE a.id IN (${placeholders})`,
+      )
+      .all(...ids) as Array<{ artist_id: string; source: string }>;
+    for (const { artist_id, source } of linkRows) {
+      const set = sourceMap.get(artist_id) ?? new Set<string>();
+      set.add(source);
+      sourceMap.set(artist_id, set);
+    }
+  }
+
+  return {
+    items: rows.map((r) => ({
+      ...r,
+      sources: Array.from(sourceMap.get(r.id) ?? []),
+    })),
+    total: totalRow.n,
+    hasMore: args.offset + rows.length < totalRow.n,
+  };
+}
+
+export interface ArtistDetail {
+  artist: ArtistRow;
+  sources: SourceLinkRow[];
+  facets: SourceFacetRow[];
+  releases: Array<ReleaseRow & { sources: string[] }>;
+  trackCount: number;
+}
+
+export function getArtistDetail(db: Database, id: string): ArtistDetail | null {
+  const artist = db
+    .prepare(`SELECT id, name FROM artist WHERE id = ?`)
+    .get(id) as ArtistRow | undefined;
+  if (!artist) return null;
+
+  // Artist-level source_link / source_facets are entity_kind='artist'.
+  // Adapters don't emit these yet (BOO-28 plumbing only), but the schema
+  // supports it — pre-wire the detail pane so future adapters drop in
+  // without further changes.
+  const sources = db
+    .prepare(
+      `SELECT source, external_id, external_url, match_method
+         FROM source_link WHERE entity_kind='artist' AND entity_id = ?`,
+    )
+    .all(id) as SourceLinkRow[];
+
+  const facets = db
+    .prepare(
+      `SELECT source, key, value
+         FROM source_facets WHERE entity_kind='artist' AND entity_id = ?`,
+    )
+    .all(id) as SourceFacetRow[];
+
+  const releases = db
+    .prepare(
+      `SELECT release.id, release.title, artist.name AS artist,
+              release.year, release.country, release.label, release.catno
+         FROM release
+         JOIN artist ON artist.id = release.artist_id
+         WHERE release.artist_id = ?
+         ORDER BY release.year, release.title COLLATE NOCASE`,
+    )
+    .all(id) as ReleaseRow[];
+
+  const releaseIds = releases.map((r) => r.id);
+  const sourceMap = new Map<string, string[]>();
+  if (releaseIds.length) {
+    const placeholders = releaseIds.map(() => '?').join(',');
+    const linkRows = db
+      .prepare(
+        `SELECT entity_id, source FROM source_link
+           WHERE entity_kind='release' AND entity_id IN (${placeholders})`,
+      )
+      .all(...releaseIds) as Array<{ entity_id: string; source: string }>;
+    for (const { entity_id, source } of linkRows) {
+      const list = sourceMap.get(entity_id) ?? [];
+      list.push(source);
+      sourceMap.set(entity_id, list);
+    }
+  }
+
+  const trackCountRow = db
+    .prepare(`SELECT COUNT(*) AS n FROM track WHERE artist_id = ?`)
+    .get(id) as { n: number };
+
+  return {
+    artist,
+    sources,
+    facets,
+    releases: releases.map((r) => ({ ...r, sources: sourceMap.get(r.id) ?? [] })),
+    trackCount: trackCountRow.n,
+  };
+}
+
 export interface SourceWithState {
   id: string;
   name: string;
-  contributes: ('track' | 'release')[];
+  contributes: EntityKind[];
   isStub: boolean;
   count: number;
   lastSyncedAt: string | null;
@@ -327,7 +547,7 @@ export interface SourceWithState {
 
 export function listSourcesWithState(
   db: Database,
-  registry: { id: string; name: string; contributes: ('track' | 'release')[]; isStub?: boolean }[],
+  registry: { id: string; name: string; contributes: EntityKind[]; isStub?: boolean }[],
 ): SourceWithState[] {
   const counts = db
     .prepare(`SELECT source, COUNT(*) as n FROM source_link GROUP BY source`)

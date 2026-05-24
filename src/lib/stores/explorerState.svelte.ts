@@ -11,7 +11,9 @@
 export type NavSection = 'library' | 'sources' | 'add';
 export interface NavValue { section: NavSection; item: string; }
 
-export type EntityKind = 'releases' | 'tracks';
+export type EntityKind = 'releases' | 'tracks' | 'artists';
+
+const ENTITY_CYCLE: EntityKind[] = ['releases', 'tracks', 'artists'];
 
 const DEFAULT_NAV: NavValue = { section: 'library', item: 'all' };
 
@@ -52,7 +54,7 @@ class ExplorerState {
     this.id = params.get('id');
     this.q = params.get('q') ?? '';
     const entity = params.get('entity');
-    if (entity === 'releases' || entity === 'tracks') {
+    if (entity === 'releases' || entity === 'tracks' || entity === 'artists') {
       this.entity = entity;
     } else if (parsed.entityHint) {
       this.entity = parsed.entityHint;
@@ -95,7 +97,8 @@ class ExplorerState {
   }
 
   toggleEntityKind() {
-    this.entity = this.entity === 'releases' ? 'tracks' : 'releases';
+    const i = ENTITY_CYCLE.indexOf(this.entity);
+    this.entity = ENTITY_CYCLE[(i + 1) % ENTITY_CYCLE.length];
   }
 }
 

@@ -19,6 +19,7 @@
     showEntityToggle = true,
     entity = 'releases',
     onEntityChange,
+    entityChoices = ['releases', 'tracks', 'artists'] as const,
     showSyncChip = false,
     syncIsStub = false,
     syncLastAt = null,
@@ -32,8 +33,9 @@
     showScanner?: boolean;
     onScan?: () => void;
     showEntityToggle?: boolean;
-    entity?: 'releases' | 'tracks';
-    onEntityChange?: (e: 'releases' | 'tracks') => void;
+    entity?: 'releases' | 'tracks' | 'artists';
+    onEntityChange?: (e: 'releases' | 'tracks' | 'artists') => void;
+    entityChoices?: readonly ('releases' | 'tracks' | 'artists')[];
     showSyncChip?: boolean;
     syncIsStub?: boolean;
     syncLastAt?: string | null;
@@ -52,15 +54,13 @@
 
 <div class="bar">
   {#if showEntityToggle}
-    <div class="toggle" title="Toggle tracks / releases (Tab)">
-      <button
-        class:active={entity === 'tracks'}
-        onclick={() => onEntityChange?.('tracks')}
-      >Tracks</button>
-      <button
-        class:active={entity === 'releases'}
-        onclick={() => onEntityChange?.('releases')}
-      >Releases</button>
+    <div class="toggle" title="Cycle releases / tracks / artists (Tab)">
+      {#each entityChoices as choice}
+        <button
+          class:active={entity === choice}
+          onclick={() => onEntityChange?.(choice)}
+        >{choice === 'releases' ? 'Releases' : choice === 'tracks' ? 'Tracks' : 'Artists'}</button>
+      {/each}
     </div>
   {/if}
   <div class="search-wrap">

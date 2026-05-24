@@ -23,6 +23,16 @@ export function normalizeArtistAlbumYear(args: {
 }
 
 /**
+ * Match-key for cross-source artist matching.
+ * Returns null for empty / whitespace-only names (caller falls back to the
+ * "(unknown)" sentinel artist).
+ */
+export function normalizeArtistName(name: string): string | null {
+  const n = squashAlphanumLower(name);
+  return n || null;
+}
+
+/**
  * Match-key for cross-source track matching via filesystem path.
  * Decodes file:// URLs (Apple Music.app's Library.xml uses them).
  */

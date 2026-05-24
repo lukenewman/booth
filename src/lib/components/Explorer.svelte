@@ -6,8 +6,10 @@
   import ListviewToolbar from './ListviewToolbar.svelte';
   import ReleaseList from './ReleaseList.svelte';
   import TrackList from './TrackList.svelte';
+  import ArtistList from './ArtistList.svelte';
   import ReleaseDetail from './ReleaseDetail.svelte';
   import TrackDetail from './TrackDetail.svelte';
+  import ArtistDetail from './ArtistDetail.svelte';
   import EmptyState from './EmptyState.svelte';
   import Scanner from './Scanner.svelte';
   import SessionLog from './SessionLog.svelte';
@@ -19,7 +21,7 @@
   interface SourceWithState {
     id: string;
     name: string;
-    contributes: ('track' | 'release')[];
+    contributes: ('track' | 'release' | 'artist')[];
     isStub: boolean;
     count: number;
     lastSyncedAt: string | null;
@@ -30,19 +32,22 @@
   let counts = $state({
     allReleases: 0,
     allTracks: 0,
+    allArtists: 0,
   });
   let syncing = $state<string | null>(null); // source id being synced
 
   async function loadSourcesAndCounts() {
-    const [srcRes, allRel, allTrk] = await Promise.all([
+    const [srcRes, allRel, allTrk, allArt] = await Promise.all([
       fetch('/api/sources').then((r) => r.json()),
       fetch('/api/library/releases?limit=1').then((r) => r.json()),
       fetch('/api/library/tracks?limit=1').then((r) => r.json()),
+      fetch('/api/library/artists?limit=1').then((r) => r.json()),
     ]);
     sources = srcRes;
     counts = {
       allReleases: allRel.total ?? 0,
       allTracks: allTrk.total ?? 0,
+      allArtists: allArt.total ?? 0,
     };
   }
 
@@ -103,8 +108,10 @@
       params.set('offset', String(offset));
       if (explorerState.q) params.set('q', explorerState.q);
 
-      const isTracksView = currentEntity === 'tracks';
-      let endpoint = isTracksView ? '/api/library/tracks' : '/api/library/releases';
+      const endpoint =
+        currentEntity === 'tracks' ? '/api/library/tracks'
+        : currentEntity === 'artists' ? '/api/library/artists'
+        : '/api/library/releases';
 
       if (explorerState.nav.section === 'sources') {
         params.set('source', explorerState.nav.item);
@@ -114,7 +121,7 @@
       // empty list — the explicit empty-state below explains "no tracks
       // indexed for this source" rather than pretending we hit the server.
       if (
-        isTracksView
+        currentEntity === 'tracks'
         && explorerState.nav.section === 'sources'
         && selectedSource
         && !selectedSource.contributes.includes('track')
@@ -137,7 +144,7 @@
 
   // ----- Detail data ---------------------------------------------------------
 
-  let detailKind = $state<'release' | 'track' | null>(null);
+  let detailKind = $state<'release' | 'track' | 'artist' | null>(null);
   let detailData = $state<any>(null);
 
   async function loadDetail() {
@@ -174,21 +181,37 @@
       return;
     }
 
-    // Try release first; fall back to track if 404.
-    const relRes = await fetch(`/api/library/releases/${encodeURIComponent(explorerState.id)}`);
-    if (relRes.ok) {
-      detailKind = 'release';
-      detailData = await relRes.json();
-      return;
-    }
-    const trkRes = await fetch(`/api/library/tracks/${encodeURIComponent(explorerState.id)}`);
-    if (trkRes.ok) {
-      detailKind = 'track';
-      detailData = await trkRes.json();
-      return;
+    // Probe the endpoint matching the active lens first so we don't pay an
+    // extra round-trip in the common case; on 404 fall back to the others
+    // (handles cases where detail kind doesn't match the lens, e.g. when an
+    // ?id= URL is loaded against a later lens flip).
+    const endpoints = orderedDetailEndpoints(currentEntity, explorerState.id);
+    for (const { kind, url } of endpoints) {
+      const res = await fetch(url);
+      if (res.ok) {
+        detailKind = kind;
+        detailData = await res.json();
+        return;
+      }
     }
     detailKind = null;
     detailData = null;
+  }
+
+  function orderedDetailEndpoints(
+    lens: 'releases' | 'tracks' | 'artists',
+    id: string,
+  ): Array<{ kind: 'release' | 'track' | 'artist'; url: string }> {
+    const enc = encodeURIComponent(id);
+    const all = [
+      { kind: 'release' as const, url: `/api/library/releases/${enc}` },
+      { kind: 'track'   as const, url: `/api/library/tracks/${enc}` },
+      { kind: 'artist'  as const, url: `/api/library/artists/${enc}` },
+    ];
+    const preferred =
+      lens === 'tracks'  ? 'track'   :
+      lens === 'artists' ? 'artist'  : 'release';
+    return [...all.filter((e) => e.kind === preferred), ...all.filter((e) => e.kind !== preferred)];
   }
 
   // ----- Computed ------------------------------------------------------------
@@ -203,7 +226,7 @@
   // everywhere — the only divergence is in render fallback below, when a
   // release-only source happens to be selected in tracks-mode (we still
   // *show* tracks-mode in the toolbar; the listview reports empty).
-  const currentEntity = $derived<'releases' | 'tracks'>(explorerState.entity);
+  const currentEntity = $derived<'releases' | 'tracks' | 'artists'>(explorerState.entity);
 
   const isAddView = $derived(explorerState.nav.section === 'add');
   const isSourcesView = $derived(explorerState.nav.section === 'sources');
@@ -237,7 +260,10 @@
       if (!q) return '';
       return `${listTotal} result${listTotal === 1 ? '' : 's'}`;
     }
-    const noun = currentEntity === 'tracks' ? 'tracks' : 'releases';
+    const noun =
+      currentEntity === 'tracks'  ? 'tracks'
+      : currentEntity === 'artists' ? 'artists'
+      : 'releases';
     return `${listTotal.toLocaleString()} ${noun}`;
   });
 
@@ -522,8 +548,17 @@
         loadMore={() => loadList(false)}
         emptyTitle={isAddView && !explorerState.q ? 'Search Discogs to add records' : 'No releases'}
       />
-    {:else}
+    {:else if currentEntity === 'tracks'}
       <TrackList
+        items={listItems}
+        total={listTotal}
+        hasMore={listHasMore}
+        selectedId={explorerState.id}
+        onSelect={(id) => explorerState.setEntity(id)}
+        loadMore={() => loadList(false)}
+      />
+    {:else}
+      <ArtistList
         items={listItems}
         total={listTotal}
         hasMore={listHasMore}
@@ -540,7 +575,11 @@
 
   <section class="right">
     {#if !explorerState.id}
-      <EmptyState title="Select a release to see details" />
+      <EmptyState title={
+        currentEntity === 'tracks'  ? 'Select a track to see details'
+        : currentEntity === 'artists' ? 'Select an artist to see details'
+        : 'Select a release to see details'
+      } />
     {:else if detailKind === 'release' && detailData}
       <ReleaseDetail
         release={detailData.release}
@@ -557,6 +596,16 @@
         sources={detailData.sources}
         facets={detailData.facets}
         release={detailData.release}
+        sourceMeta={sourceMetaForDetail}
+        onReleaseSelect={(id) => explorerState.setEntity(id)}
+      />
+    {:else if detailKind === 'artist' && detailData}
+      <ArtistDetail
+        artist={detailData.artist}
+        sources={detailData.sources}
+        facets={detailData.facets}
+        releases={detailData.releases}
+        trackCount={detailData.trackCount}
         sourceMeta={sourceMetaForDetail}
         onReleaseSelect={(id) => explorerState.setEntity(id)}
       />

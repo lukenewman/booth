@@ -4,7 +4,7 @@
   interface SourceWithState {
     id: string;
     name: string;
-    contributes: ('track' | 'release')[];
+    contributes: ('track' | 'release' | 'artist')[];
     isStub: boolean;
     count: number;
     lastSyncedAt: string | null;
@@ -13,8 +13,7 @@
   interface Counts {
     allReleases: number;
     allTracks: number;
-    inMultipleSourcesReleases: number;
-    inMultipleSourcesTracks: number;
+    allArtists: number;
   }
 
   let {
@@ -25,13 +24,17 @@
     onSelect,
   }: {
     nav: NavValue;
-    entity: 'releases' | 'tracks';
+    entity: 'releases' | 'tracks' | 'artists';
     sources: SourceWithState[];
     counts: Counts;
     onSelect?: (nav: NavValue) => void;
   } = $props();
 
-  const allCount = $derived(entity === 'tracks' ? counts.allTracks : counts.allReleases);
+  const allCount = $derived(
+    entity === 'tracks' ? counts.allTracks
+    : entity === 'artists' ? counts.allArtists
+    : counts.allReleases,
+  );
 
   function isActive(section: string, item: string): boolean {
     return nav.section === section && nav.item === item;

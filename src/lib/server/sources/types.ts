@@ -1,4 +1,4 @@
-export type EntityKind = 'track' | 'release';
+export type EntityKind = 'track' | 'release' | 'artist';
 
 export interface SourceTrack {
   externalId: string;

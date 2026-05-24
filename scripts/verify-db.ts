@@ -9,7 +9,7 @@ const tables = db
   .all()
   .map((r: any) => r.name);
 
-const expected = ['_migrations', 'match_key', 'release', 'source_facets', 'source_link', 'track'];
+const expected = ['_migrations', 'artist', 'match_key', 'release', 'source_facets', 'source_link', 'source_state', 'track'];
 for (const t of expected) {
   if (!tables.includes(t)) {
     console.error(`MISSING TABLE: ${t}`);
