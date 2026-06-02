@@ -17,7 +17,7 @@ interface DiscogsAddResponse {
 export const discogsSource: MusicSource & CollectionWritable = {
   id: 'discogs',
   name: 'Discogs',
-  contributes: ['release'],
+  contributes: ['release', 'track'],
   sync: syncDiscogsCollection,
 
   async addToCollection({ entityId }) {

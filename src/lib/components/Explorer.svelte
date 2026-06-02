@@ -233,15 +233,15 @@
   const isSourcesView = $derived(explorerState.nav.section === 'sources');
 
   // The toggle is suppressed only for rail items where tracks aren't a
-  // meaningful concept at all — currently just Add → Discogs (release-only
-  // search API). Stub sources still show the toggle (greys out the
-  // EmptyState below, not the chip).
+  // meaningful concept at all — currently just Add → Discogs (the Discogs
+  // search API returns releases only). Stub sources still show the toggle
+  // (greys out the EmptyState below, not the chip).
   const showEntityToggle = $derived(!isAddView);
 
   /**
-   * When a tracks-mode listview lands on a release-only source (Discogs),
-   * we render an explicit "no tracks indexed" empty state instead of
-   * pretending the list is empty for ordinary reasons.
+   * When a tracks-mode listview lands on a source that doesn't contribute
+   * tracks (e.g. a future release-only adapter), render an explicit empty
+   * state instead of pretending the list is empty for ordinary reasons.
    */
   const showReleaseOnlySourceEmpty = $derived(
     currentEntity === 'tracks'
