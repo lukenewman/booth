@@ -3,6 +3,7 @@ import { ulid } from 'ulid';
 import { collate, type CollateSummary } from './collate';
 import { getSource } from '../sources/registry';
 import { NotImplementedError } from '../sources/types';
+import { hydrateDiscogsTracks } from '../sources/discogs/hydrateDiscogsTracks';
 
 export interface SyncRunRow {
   id: string;
@@ -28,6 +29,16 @@ export async function runSync(db: Database, sourceId: string): Promise<SyncRunRo
   try {
     const result = await source.sync();
     const summary = collate(db, sourceId, result);
+
+    // After collating Discogs releases, fetch tracklists for any that don't
+    // have track rows yet.  Results are folded into the summary so the
+    // sync_run row reflects the full work done this run.
+    if (sourceId === 'discogs') {
+      const hydration = await hydrateDiscogsTracks(db);
+      summary.tracksUpserted += hydration.tracksAdded;
+      summary.rowsIn += hydration.tracksAdded;
+    }
+
     db.prepare(
       `UPDATE sync_run
           SET finished_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),

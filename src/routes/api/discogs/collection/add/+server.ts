@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import type { AddResponse } from '$lib/types';
 import { DiscogsError } from '$lib/server/sources/discogs/api';
 import { discogsSource, ensureDiscogsReleaseEntity } from '$lib/server/sources/discogs';
+import { hydrateDiscogsTracks } from '$lib/server/sources/discogs/hydrateDiscogsTracks';
 import { getDb } from '$lib/server/db';
 
 interface AddRequestBody {
@@ -47,6 +48,13 @@ export const POST: RequestHandler = async ({ request }) => {
     // Persist the new instance_id alongside any existing ones, so removal still
     // works after a reload (the session-only undo path doesn't survive page refresh).
     appendInstanceIdFacet(entityId, Number(instanceId!));
+
+    // Fire-and-forget: fetch the tracklist for this release so track rows are
+    // available immediately without waiting for the next full Discogs sync.
+    hydrateDiscogsTracks(getDb(), [
+      { discogsReleaseId: externalId, releaseEntityId: entityId },
+    ]).catch(() => {});
+
     const response: AddResponse = {
       releaseId: Number(externalId),
       instanceId: Number(instanceId!),

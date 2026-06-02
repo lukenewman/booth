@@ -19,9 +19,10 @@ export interface CollateSummary {
   conflicts: number;
 }
 
-type MatchMethod =
+export type MatchMethod =
   | 'file_path'
   | 'artist_album_year'
+  | 'release_position'
   | 'external_id_carryover'
   | 'name_normalized'
   | 'first_seen';
@@ -65,12 +66,21 @@ export function collate(
 
     // Diff: drop source_links from this source whose external_id is not in the
     // current sync, then drop orphan entities.
+    // Guard: only prune a given entity kind when the sync actually provided
+    // entities of that kind.  An empty result means "didn't fetch this kind"
+    // (e.g. Discogs returns no tracks during the main collection sync), not
+    // "delete everything" — so we skip the prune to avoid wiping rows that
+    // were written by a separate hydration step.
     const externalIds = new Set<string>([
       ...result.releases.map((r) => r.externalId),
       ...result.tracks.map((t) => t.externalId),
     ]);
-    summary.releasesDeleted = pruneSource(db, 'release', sourceId, externalIds);
-    summary.tracksDeleted = pruneSource(db, 'track', sourceId, externalIds);
+    if (result.releases.length > 0) {
+      summary.releasesDeleted = pruneSource(db, 'release', sourceId, externalIds);
+    }
+    if (result.tracks.length > 0) {
+      summary.tracksDeleted = pruneSource(db, 'track', sourceId, externalIds);
+    }
 
     db.prepare(
       `INSERT INTO source_state (source, last_synced_at, last_summary)
@@ -237,6 +247,22 @@ function upsertTrack(
   let entityId: string | undefined;
   let method: MatchMethod = 'first_seen';
 
+  // Resolve releaseId early — needed for the release_position match key lookup.
+  let releaseId: string | null = null;
+  if (t.releaseExternalId) {
+    releaseId = releaseLookup.get(t.releaseExternalId) ?? null;
+    if (!releaseId) {
+      const found = db
+        .prepare(
+          `SELECT entity_id FROM source_link
+            WHERE entity_kind='release' AND source=? AND external_id=?`,
+        )
+        .get(sourceId, t.releaseExternalId) as { entity_id: string } | undefined;
+      releaseId = found?.entity_id ?? null;
+    }
+  }
+
+  // 1. File-path match (iTunes-specific, most authoritative for local tracks).
   if (fp) {
     const found = db
       .prepare(
@@ -250,6 +276,25 @@ function upsertTrack(
     }
   }
 
+  // 2. Release-position match — cross-source dedup when both Discogs and iTunes
+  //    contribute tracks for the same canonical release. Key: "{releaseId}:{pos}".
+  if (!entityId && releaseId && t.position) {
+    const posNum = parseInt(t.position, 10);
+    if (!isNaN(posNum) && posNum > 0) {
+      const found = db
+        .prepare(
+          `SELECT entity_id FROM match_key
+            WHERE entity_kind='track' AND key_type='release_position' AND key_value=?`,
+        )
+        .get(`${releaseId}:${posNum}`) as { entity_id: string } | undefined;
+      if (found) {
+        entityId = found.entity_id;
+        method = 'release_position';
+      }
+    }
+  }
+
+  // 3. External-ID carryover — same source, same external_id from a previous sync.
   if (!entityId) {
     const carry = db
       .prepare(
@@ -260,21 +305,6 @@ function upsertTrack(
     if (carry) {
       entityId = carry.entity_id;
       method = 'external_id_carryover';
-    }
-  }
-
-  let releaseId: string | null = null;
-  if (t.releaseExternalId) {
-    releaseId = releaseLookup.get(t.releaseExternalId) ?? null;
-    if (!releaseId) {
-      // Look it up via source_link in case a previous run created it.
-      const found = db
-        .prepare(
-          `SELECT entity_id FROM source_link
-            WHERE entity_kind='release' AND source=? AND external_id=?`,
-        )
-        .get(sourceId, t.releaseExternalId) as { entity_id: string } | undefined;
-      releaseId = found?.entity_id ?? null;
     }
   }
 
@@ -313,6 +343,13 @@ function upsertTrack(
 
   upsertSourceLink(db, 'track', entityId, sourceId, t.externalId, t.externalUrl, method, summary);
   if (fp) upsertMatchKey(db, 'track', entityId, 'file_path', fp);
+  // Write release_position key so future cross-source syncs can find this entity.
+  if (releaseId && t.position) {
+    const posNum = parseInt(t.position, 10);
+    if (!isNaN(posNum) && posNum > 0) {
+      upsertMatchKey(db, 'track', entityId, 'release_position', `${releaseId}:${posNum}`);
+    }
+  }
   upsertFacets(db, 'track', entityId, sourceId, t.facets);
 
   summary.tracksUpserted++;
@@ -321,7 +358,7 @@ function upsertTrack(
 
 // ---- Shared helpers --------------------------------------------
 
-function upsertSourceLink(
+export function upsertSourceLink(
   db: Database,
   kind: EntityKind,
   entityId: string,
@@ -368,7 +405,7 @@ function upsertSourceLink(
   ).run(kind, entityId, sourceId, externalId, externalUrl ?? null, method);
 }
 
-function upsertMatchKey(
+export function upsertMatchKey(
   db: Database,
   kind: EntityKind,
   entityId: string,
@@ -386,7 +423,7 @@ function upsertMatchKey(
   ).run(kind, entityId, keyType, keyValue);
 }
 
-function upsertFacets(
+export function upsertFacets(
   db: Database,
   kind: EntityKind,
   entityId: string,
