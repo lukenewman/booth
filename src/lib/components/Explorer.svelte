@@ -1,6 +1,5 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { replaceState } from '$app/navigation';
   import { onMount } from 'svelte';
   import Rail from './Rail.svelte';
   import ListviewToolbar from './ListviewToolbar.svelte';
@@ -310,10 +309,11 @@
     if (typeof window === 'undefined') return;
     const params = explorerState.serialize();
     const search = params.toString() ? `?${params.toString()}` : '';
-    // Pass {} as state — the app never reads page.state, and reading page.state
-    // here would register it as a reactive dependency, creating a feedback loop
-    // where replaceState → page updates → effect re-runs → replaceState → …
-    replaceState(`${location.pathname}${search}`, {});
+    // Use the native browser API rather than SvelteKit's replaceState —
+    // the SvelteKit version notifies the navigation system and updates page.url
+    // reactively, which re-triggers this effect and races with explorerState
+    // updates.  The native call just silently rewrites the URL bar.
+    history.replaceState(history.state, '', `${location.pathname}${search}`);
   });
 
   // ----- Mount ---------------------------------------------------------------
