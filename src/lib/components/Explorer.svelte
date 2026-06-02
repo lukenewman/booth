@@ -297,20 +297,23 @@
 
   // ----- URL sync ------------------------------------------------------------
 
-  function syncToUrl() {
-    if (typeof window === 'undefined') return;
-    const params = explorerState.serialize();
-    const search = params.toString() ? `?${params.toString()}` : '';
-    replaceState(`${location.pathname}${search}`, page.state);
-  }
-
   $effect(() => {
+    // Read the reactive values we care about explicitly so Svelte tracks them.
+    // Use currentEntity (the $derived value) rather than explorerState.entity
+    // directly — both refer to the same thing but $derived is more reliably
+    // tracked across effect batches in Svelte 5 class-state scenarios.
     explorerState.nav.section;
     explorerState.nav.item;
     explorerState.id;
     explorerState.q;
-    explorerState.entity;
-    syncToUrl();
+    currentEntity;
+    if (typeof window === 'undefined') return;
+    const params = explorerState.serialize();
+    const search = params.toString() ? `?${params.toString()}` : '';
+    // Pass {} as state — the app never reads page.state, and reading page.state
+    // here would register it as a reactive dependency, creating a feedback loop
+    // where replaceState → page updates → effect re-runs → replaceState → …
+    replaceState(`${location.pathname}${search}`, {});
   });
 
   // ----- Mount ---------------------------------------------------------------
