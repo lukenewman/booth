@@ -21,6 +21,8 @@ export interface KeyboardActions {
   undoLast: () => void;
   toggleEntity: () => void;
   toggleShortcuts: () => void;
+  navRailNext: () => void;
+  navRailPrev: () => void;
 }
 
 export interface KeyboardGuards {
@@ -75,6 +77,8 @@ export function installKeyboard(actions: KeyboardActions, guards: KeyboardGuards
       return;
     }
 
+    if (e.key === '[')                                      { e.preventDefault(); actions.navRailPrev();    return; }
+    if (e.key === ']')                                      { e.preventDefault(); actions.navRailNext();    return; }
     if (e.key === '/')                                     { e.preventDefault(); actions.focusSearch();    return; }
     if ((e.key === 's' || e.key === 'S') && !guards.isScannerOpen())
                                                             { e.preventDefault(); actions.openScanner();    return; }

@@ -8,6 +8,7 @@
   } = $props();
 
   const shortcuts: { key: string; label: string }[] = [
+    { key: '[  ]', label: 'Previous / next rail item' },
     { key: '/', label: 'Focus search' },
     { key: 's', label: 'Toggle scanner mode' },
     { key: 'tab', label: 'Toggle tracks / releases' },

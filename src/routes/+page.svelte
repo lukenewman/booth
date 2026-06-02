@@ -133,6 +133,20 @@
           explorerState.toggleEntityKind();
         },
         toggleShortcuts: () => { shortcutOpen = !shortcutOpen; },
+        navRailNext: () => {
+          const items = Array.from(document.querySelectorAll<HTMLButtonElement>('.rail button.item'));
+          if (items.length === 0) return;
+          const idx = items.findIndex((el) => el.classList.contains('active'));
+          const next = idx < items.length - 1 ? items[idx + 1] : null;
+          next?.click();
+        },
+        navRailPrev: () => {
+          const items = Array.from(document.querySelectorAll<HTMLButtonElement>('.rail button.item'));
+          if (items.length === 0) return;
+          const idx = items.findIndex((el) => el.classList.contains('active'));
+          const prev = idx > 0 ? items[idx - 1] : null;
+          prev?.click();
+        },
       },
       {
         isScannerOpen: () => !!document.querySelector('.scanner-overlay'),
