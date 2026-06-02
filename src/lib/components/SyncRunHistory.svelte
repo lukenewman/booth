@@ -33,6 +33,42 @@
     reloadKey?: number;
   } = $props();
 
+  let matching = $state(false);
+  let matchResult = $state<{
+    releasesProcessed: number;
+    tracksMatched: number;
+    tracksSkipped: number;
+    tracksUnmatched: number;
+  } | null>(null);
+  let matchError = $state<string | null>(null);
+
+  async function runMatchTracks() {
+    matching = true;
+    matchResult = null;
+    matchError = null;
+    try {
+      const res = await fetch('/api/sources/discogs/match-tracks', { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        matchError = body?.message ?? `Error ${res.status}`;
+      } else {
+        matchResult = await res.json();
+      }
+    } catch (e) {
+      matchError = e instanceof Error ? e.message : 'Unknown error';
+    } finally {
+      matching = false;
+    }
+  }
+
+  function matchResultLabel(r: NonNullable<typeof matchResult>): string {
+    const parts: string[] = [];
+    if (r.tracksMatched) parts.push(`${r.tracksMatched} matched`);
+    if (r.tracksSkipped) parts.push(`${r.tracksSkipped} already linked`);
+    if (r.tracksUnmatched) parts.push(`${r.tracksUnmatched} unmatched`);
+    return parts.length ? parts.join(' · ') : 'nothing to match';
+  }
+
   let runs = $state<SyncRun[]>([]);
   let loading = $state(false);
 
@@ -110,6 +146,23 @@
       <span class="summary" class:err={!!run.error}>{summaryLabel(run)}</span>
     </div>
   {/snippet}
+
+  {#if sourceId === 'discogs' && !isStub}
+    <div class="match-row">
+      <button class="match-btn" disabled={matching} onclick={runMatchTracks}>
+        {matching ? 'Matching…' : 'Match tracks'}
+      </button>
+      {#if matching}
+        <span class="match-status muted">Fetching Discogs tracklists…</span>
+      {:else if matchError}
+        <span class="match-status err">{matchError}</span>
+      {:else if matchResult}
+        <span class="match-status">{matchResultLabel(matchResult)}</span>
+      {:else}
+        <span class="match-status muted">Links iTunes tracks to Discogs tracklists</span>
+      {/if}
+    </div>
+  {/if}
 
   {#if isStub}
     <div class="empty">Source not yet implemented.</div>
@@ -216,4 +269,29 @@
     animation: spin 0.75s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  .match-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+  .match-btn {
+    padding: 3px 9px;
+    font-size: 11px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    cursor: pointer;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .match-btn:disabled { opacity: 0.5; cursor: default; }
+  .match-btn:not(:disabled):hover { border-color: var(--text-muted); }
+  .match-status { font-size: 11px; color: var(--text-muted); }
+  .match-status.muted { color: var(--text-subtle); }
+  .match-status.err { color: var(--accent, #c44); }
 </style>
