@@ -297,22 +297,23 @@
   // ----- URL sync ------------------------------------------------------------
 
   $effect(() => {
-    // Read the reactive values we care about explicitly so Svelte tracks them.
-    // Use currentEntity (the $derived value) rather than explorerState.entity
-    // directly — both refer to the same thing but $derived is more reliably
-    // tracked across effect batches in Svelte 5 class-state scenarios.
-    explorerState.nav.section;
-    explorerState.nav.item;
-    explorerState.id;
-    explorerState.q;
-    currentEntity;
+    // Read every reactive field into locals so Svelte's tracker captures each
+    // signal directly. Calling explorerState.serialize() inside a method call
+    // and using an intermediate $derived both have subtle tracking gaps in
+    // Svelte 5 with class-state singletons — reading primitives into locals is
+    // the most reliable pattern.
+    const navSection = explorerState.nav.section;
+    const navItem = explorerState.nav.item;
+    const id = explorerState.id;
+    const q = explorerState.q;
+    const entity = explorerState.entity;
     if (typeof window === 'undefined') return;
-    const params = explorerState.serialize();
+    const params = new URLSearchParams();
+    if (`${navSection}:${navItem}` !== 'library:all') params.set('nav', `${navSection}:${navItem}`);
+    if (id) params.set('id', id);
+    if (q) params.set('q', q);
+    if (entity !== 'releases') params.set('entity', entity);
     const search = params.toString() ? `?${params.toString()}` : '';
-    // Use the native browser API rather than SvelteKit's replaceState —
-    // the SvelteKit version notifies the navigation system and updates page.url
-    // reactively, which re-triggers this effect and races with explorerState
-    // updates.  The native call just silently rewrites the URL bar.
     history.replaceState(history.state, '', `${location.pathname}${search}`);
   });
 
