@@ -60,10 +60,17 @@
   // Non-reactive: read+written by loadList from inside the load-list $effect,
   // which would trip Svelte's effect_update_depth_exceeded if it were $state.
   let listLoading = false;
+  // Incremented on every reset load. Lets an in-flight request detect that a
+  // newer one has started and discard its stale result instead of overwriting.
+  let loadGen = 0;
 
   // Add → Discogs uses the Discogs search API; everything else uses library endpoints.
   async function loadList(reset: boolean) {
-    if (listLoading) return;
+    // Pagination loads (reset=false) still guard against concurrency.
+    // Reset loads always proceed — they capture the current generation so any
+    // in-flight load from a previous entity/nav state is silently discarded.
+    if (!reset && listLoading) return;
+    const gen = reset ? ++loadGen : loadGen;
     listLoading = true;
     const offset = reset ? 0 : listItems.length;
 
@@ -134,12 +141,14 @@
       }
 
       const res = await fetch(`${endpoint}?${params.toString()}`).then((r) => r.json());
+      // Discard result if a newer reset load has started since we began fetching.
+      if (gen !== loadGen) return;
       const items = res.items ?? [];
       listItems = reset ? items : [...listItems, ...items];
       listTotal = res.total ?? listItems.length;
       listHasMore = !!res.hasMore;
     } finally {
-      listLoading = false;
+      if (gen === loadGen) listLoading = false;
     }
   }
 
