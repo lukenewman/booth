@@ -75,6 +75,7 @@ src/
           002_source_state.sql                source_state (source PRIMARY KEY, last_synced_at, last_summary)
           003_artist_entity.sql               artist table; release/track gain artist_id FK (denormalized artist text dropped); source_link/source_facets/match_key CHECK widened to include 'artist'
           004_sync_run.sql                    sync_run table (id, source, started_at, finished_at, summary JSON, error); indexed by (source, started_at DESC) for history queries
+          005_cover_art.sql                   adds thumb_url TEXT and cover_url TEXT to release (nullable; NULL for iTunes-only releases)
       sources/
         types.ts                              MusicSource (with isStub), CollectionWritable, SourceTrack, SourceRelease, SyncResult
         registry.ts                           statically-populated source list; getSource(id), listSources()
@@ -142,7 +143,7 @@ docs/
 - **Add rail item**: `add:discogs` — Discogs live search, release-only by nature (the search API doesn't return tracks); toolbar omits the entity toggle here.
 - **Entity lens (releases ↔ tracks ↔ artists)**: app-wide viewing toggle, lives in the listview toolbar and is bound to `Tab` (cycles forward 3-way). Persists across rail switches (it's a lens, not a per-rail attribute). Detail pane keeps its open entity when the lens flips — the listview switches independently. URL: `?entity=releases|tracks|artists` (omitted when equal to the default `releases`).
 - **Listview**: lazy pagination via `IntersectionObserver` sentinel rooted on the scroll container (`?limit=200&offset=…`); row click selects + opens detail.
-- **Detail**: cover placeholder, title/artist/year, optional CTA, then per-source panels (`SourcePanel`) for all registered sources, then tracklist (releases only). Stub sources still render a "not implemented" panel.
+- **Detail**: cover image (or grey placeholder for releases with no URL), title/artist/year, optional CTA, then per-source panels (`SourcePanel`) for all registered sources, then tracklist (releases only). Stub sources still render a "not implemented" panel.
 - **SourceGrid**: 4-dot indicator (D / i / R / P) shown on every row and in detail context to communicate which sources contribute to a given entity.
 - **SyncChip** (in toolbar when a Sources rail item is selected): "last synced Nm ago" → click triggers `POST /api/sources/:id/sync` and flips to "Syncing…"; updates timestamp on completion. Stubs render as a disabled "Not implemented" chip.
 
@@ -208,7 +209,7 @@ docs/
 
 ## Data model
 
-- **Entities**: `artist` (id, name), `release` (id, title, artist_id FK NOT NULL, year, country, label, catno), `track` (id, title, artist_id FK NOT NULL, album, duration_ms, release_id FK nullable, position). All FKs are real SQLite foreign keys with `PRAGMA foreign_keys = ON`.
+- **Entities**: `artist` (id, name), `release` (id, title, artist_id FK NOT NULL, year, country, label, catno, thumb_url, cover_url), `track` (id, title, artist_id FK NOT NULL, album, duration_ms, release_id FK nullable, position). All FKs are real SQLite foreign keys with `PRAGMA foreign_keys = ON`.
 - **Per-source plumbing**: `source_link`, `source_facets`, and `match_key` all carry an `entity_kind` discriminator that supports `'track' | 'release' | 'artist'`. Today, the adapters emit `release` + `track` rows; the `'artist'` entity kind is schema-level only — no adapter currently emits per-source artist records, but the constraints allow it.
 - **Artist dedup**: at sync time, `upsertArtist(name)` normalizes via `squashAlphanumLower` and stores a `match_key` (entity_kind='artist', key_type='name_normalized'). On a freshly-migrated DB, artists have no match_keys yet — `upsertArtist` falls back to a case-insensitive `artist.name` lookup and backfills the match_key on first touch.
 - **"(unknown)" sentinel artist**: guaranteed by migration 003. Any release/track without an artist string (e.g. iTunes track with no Artist tag) FKs to this row, so `artist_id NOT NULL` holds without nullable columns.
@@ -231,6 +232,7 @@ docs/
 - **No URL persistence in the original plan.** Slice 2 expanded this into the full `?nav`/`?id`/`?q`/`?entity` URL-state contract.
 - **No master/release deep-links in the plan.** External links are surfaced via per-source `SourcePanel` "open in <source>" links.
 - **Cover thumbnails 80×80.** Plan said 40×40.
+- **Cover art (2026-06-02).** `thumb_url` and `cover_url` columns added to `release`; Discogs sync populates both; `upsertRelease` UPDATE uses `COALESCE(?, col)` so iTunes syncs don't wipe Discogs-sourced URLs. `ReleaseList` renders 40×40 thumbnails; `ReleaseDetail` renders full-width cover. iTunes-only releases show grey placeholder. Explorer.svelte maps snake_case API fields (`thumb_url`) to camelCase (`thumbUrl`) for search hits; library items are mapped at load time.
 - **Catalog number** added to row metadata (plan didn't include `catno`).
 - **Result sort by year ascending.** Plan returned Discogs's default ordering.
 - **Scanner robustness.** Plan didn't anticipate `NotReadableError` from rapid camera re-acquire; retry-with-backoff was added.
