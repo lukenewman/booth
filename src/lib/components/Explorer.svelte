@@ -100,7 +100,8 @@
           country: r.country ?? null,
           label: r.label ?? null,
           catno: r.catno ?? null,
-          coverImage: r.thumb ?? null,
+          thumbUrl: r.thumb ?? null,
+          coverUrl: r.cover_image ?? null,
           sources: collection.has(Number(r.id)) ? ['discogs'] : [],
           _isDiscogsSearchHit: true,
         }));
@@ -169,7 +170,7 @@
       if (hit) {
         detailKind = 'release';
         detailData = {
-          release: { id: hit.id, title: hit.title, artist: hit.artist, year: hit.year },
+          release: { id: hit.id, title: hit.title, artist: hit.artist, year: hit.year, cover_url: hit.coverUrl ?? null },
           sources: hit.sources.includes('discogs')
             ? [{
                 source: 'discogs',
@@ -347,7 +348,8 @@
           country: hit.country,
           label: hit.label,
           catno: hit.catno,
-          coverImage: hit.coverImage,
+          thumbUrl: hit.thumbUrl,
+          coverUrl: hit.coverUrl,
         }),
       });
       if (res.ok) {
