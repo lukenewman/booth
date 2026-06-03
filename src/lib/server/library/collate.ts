@@ -213,16 +213,18 @@ function upsertRelease(
   if (!entityId) {
     entityId = ulid();
     db.prepare(
-      `INSERT INTO release (id, title, artist_id, year, country, label, catno)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).run(entityId, r.title, artistId, r.year ?? null, r.country ?? null, r.label ?? null, r.catno ?? null);
+      `INSERT INTO release (id, title, artist_id, year, country, label, catno, thumb_url, cover_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(entityId, r.title, artistId, r.year ?? null, r.country ?? null, r.label ?? null, r.catno ?? null, r.thumbUrl ?? null, r.coverUrl ?? null);
   } else {
     db.prepare(
       `UPDATE release
          SET title=?, artist_id=?, year=?, country=?, label=?, catno=?,
+             thumb_url=COALESCE(?, thumb_url),
+             cover_url=COALESCE(?, cover_url),
              updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
        WHERE id=?`,
-    ).run(r.title, artistId, r.year ?? null, r.country ?? null, r.label ?? null, r.catno ?? null, entityId);
+    ).run(r.title, artistId, r.year ?? null, r.country ?? null, r.label ?? null, r.catno ?? null, r.thumbUrl ?? null, r.coverUrl ?? null, entityId);
   }
 
   upsertSourceLink(db, 'release', entityId, sourceId, r.externalId, r.externalUrl, method, summary);
