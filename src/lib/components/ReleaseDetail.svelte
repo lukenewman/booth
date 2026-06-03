@@ -16,6 +16,7 @@
     title: string;
     artist: string;
     year: number | null;
+    cover_url?: string | null;
   }
   interface SourceMeta { id: string; name: string; isStub: boolean; }
 
@@ -70,7 +71,11 @@
 </script>
 
 <div class="detail">
-  <div class="cover">600 × 600 cover</div>
+  {#if release.cover_url}
+    <img class="cover" src={release.cover_url} alt="{release.title} cover" loading="lazy">
+  {:else}
+    <div class="cover"></div>
+  {/if}
   <div class="title">{release.title}</div>
   <div class="artist">{release.artist}{release.year ? ` · ${release.year}` : ''}</div>
 
@@ -126,12 +131,21 @@
   .cover {
     width: 100%;
     aspect-ratio: 1;
-    background: var(--bg-raised);
     border-radius: 4px;
     margin-bottom: 14px;
-    display: flex; align-items: center; justify-content: center;
-    color: var(--text-subtle); font-size: 11px;
+    background: var(--bg-raised);
     border: 1px solid var(--border);
+  }
+  img.cover {
+    object-fit: cover;
+    display: block;
+  }
+  div.cover {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-subtle);
+    font-size: 11px;
   }
   .title {
     font-size: 15px;
