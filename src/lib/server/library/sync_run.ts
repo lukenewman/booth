@@ -39,6 +39,13 @@ export async function runSync(db: Database, sourceId: string): Promise<SyncRunRo
       summary.rowsIn += hydration.tracksAdded;
     }
 
+    // Refresh query-planner statistics now that this run has changed the data.
+    // Without stats SQLite mis-plans the correlated EXISTS subqueries behind the
+    // source-filtered artist list (driving from source_link instead of the
+    // artist's releases/tracks), turning a ~1ms query into ~500ms. ANALYZE is
+    // <10ms on this DB and sync is exactly when the row counts shift.
+    db.exec('ANALYZE');
+
     db.prepare(
       `UPDATE sync_run
           SET finished_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),

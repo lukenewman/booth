@@ -55,8 +55,8 @@
       <div class="meta">
         <div class="name">{item.name}</div>
       </div>
-      <span class="count">{item.releaseCount.toLocaleString()}</span>
-      <span class="count">{item.trackCount.toLocaleString()}</span>
+      <span class="count">{(item.releaseCount ?? 0).toLocaleString()}</span>
+      <span class="count">{(item.trackCount ?? 0).toLocaleString()}</span>
       <SourceGrid present={item.sources} />
     </div>
   {/snippet}
