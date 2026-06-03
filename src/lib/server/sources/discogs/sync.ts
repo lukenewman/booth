@@ -78,6 +78,8 @@ export async function syncDiscogsCollection(): Promise<SyncResult> {
       label: label ?? undefined,
       catno: catno ?? undefined,
       externalUrl: `https://www.discogs.com/release/${releaseId}`,
+      thumbUrl: bi.thumb ?? undefined,
+      coverUrl: bi.cover_image ?? undefined,
       facets: {
         thumb: bi.thumb ?? null,
         coverImage: bi.cover_image ?? null,
