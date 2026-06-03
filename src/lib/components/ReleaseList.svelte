@@ -9,6 +9,7 @@
     artist: string;
     year: number | null;
     sources: string[];
+    thumbUrl?: string | null;
   }
 
   let {
@@ -52,7 +53,11 @@
   {/snippet}
   {#snippet row(item)}
     <div class="row">
-      <div class="cover">cov</div>
+      {#if item.thumbUrl}
+        <img class="cover" src={item.thumbUrl} alt="" loading="lazy">
+      {:else}
+        <div class="cover"></div>
+      {/if}
       <div class="meta">
         <div class="title">{item.title}</div>
         <div class="artist">{item.artist}</div>
@@ -96,12 +101,20 @@
   }
 
   .cover {
-    width: 40px; height: 40px;
+    width: 40px;
+    height: 40px;
     border-radius: 3px;
     background: var(--bg-raised);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 9px; color: var(--text-subtle);
     flex-shrink: 0;
+  }
+  img.cover {
+    object-fit: cover;
+    display: block;
+  }
+  div.cover {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .meta { min-width: 0; }
   .title {
