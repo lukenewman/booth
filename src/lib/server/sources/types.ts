@@ -21,6 +21,8 @@ export interface SourceRelease {
   country?: string;
   label?: string;
   catno?: string;
+  thumbUrl?: string;
+  coverUrl?: string;
   facets?: Record<string, unknown>;
   externalUrl?: string;
 }
