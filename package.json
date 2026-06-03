@@ -27,6 +27,7 @@
 	},
 	"dependencies": {
 		"@zxing/browser": "^0.2.0",
+		"music-metadata": "^11.12.3",
 		"plist": "^5.0.0",
 		"ulid": "^3.0.2"
 	}
