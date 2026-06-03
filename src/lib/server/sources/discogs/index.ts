@@ -97,8 +97,8 @@ export function ensureDiscogsReleaseEntity(args: {
   country: string | null;
   label: string | null;
   catno: string | null;
-  thumb: string | null;
-  coverImage: string | null;
+  thumbUrl: string | null;
+  coverUrl: string | null;
 }): string {
   const db = getDb();
   const externalId = String(args.releaseId);
@@ -114,8 +114,8 @@ export function ensureDiscogsReleaseEntity(args: {
   const tx = db.transaction(() => {
     const artistId = upsertArtist(db, args.artist);
     db.prepare(
-      `INSERT INTO release (id, title, artist_id, year, country, label, catno)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO release (id, title, artist_id, year, country, label, catno, thumb_url, cover_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       entityId,
       args.title,
@@ -124,6 +124,8 @@ export function ensureDiscogsReleaseEntity(args: {
       args.country,
       args.label,
       args.catno,
+      args.thumbUrl,
+      args.coverUrl,
     );
     db.prepare(
       `INSERT INTO source_link (entity_kind, entity_id, source, external_id, external_url, match_method)
@@ -142,8 +144,8 @@ export function ensureDiscogsReleaseEntity(args: {
       ).run(entityId, matchKey);
     }
     const facets: Record<string, unknown> = {};
-    if (args.thumb) facets.thumb = args.thumb;
-    if (args.coverImage) facets.coverImage = args.coverImage;
+    if (args.thumbUrl) facets.thumb = args.thumbUrl;
+    if (args.coverUrl) facets.coverImage = args.coverUrl;
     for (const [k, v] of Object.entries(facets)) {
       db.prepare(
         `INSERT INTO source_facets (entity_kind, entity_id, source, key, value)

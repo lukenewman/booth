@@ -14,8 +14,8 @@ interface AddRequestBody {
   country: string | null;
   label: string | null;
   catno: string | null;
-  thumb: string | null;
-  coverImage: string | null;
+  thumbUrl: string | null;
+  coverUrl: string | null;
 }
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -39,8 +39,8 @@ export const POST: RequestHandler = async ({ request }) => {
     country: body.country ?? null,
     label: body.label ?? null,
     catno: body.catno ?? null,
-    thumb: body.thumb ?? null,
-    coverImage: body.coverImage ?? null,
+    thumbUrl: body.thumbUrl ?? null,
+    coverUrl: body.coverUrl ?? null,
   });
 
   try {
