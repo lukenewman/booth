@@ -25,6 +25,8 @@ export interface ReleaseRow {
   country: string | null;
   label: string | null;
   catno: string | null;
+  thumb_url: string | null;
+  cover_url: string | null;
 }
 
 export interface TrackRow {
@@ -107,7 +109,8 @@ export function listReleases(
   const rows = db
     .prepare(
       `SELECT release.id, release.title, artist.name AS artist,
-              release.year, release.country, release.label, release.catno
+              release.year, release.country, release.label, release.catno,
+              release.thumb_url, release.cover_url
          FROM release
          JOIN artist ON artist.id = release.artist_id
          ${whereSql}
@@ -235,7 +238,8 @@ export function getReleaseDetail(
   const release = db
     .prepare(
       `SELECT release.id, release.title, artist.name AS artist,
-              release.year, release.country, release.label, release.catno
+              release.year, release.country, release.label, release.catno,
+              release.thumb_url, release.cover_url
          FROM release
          JOIN artist ON artist.id = release.artist_id
          WHERE release.id = ?`,
@@ -333,7 +337,8 @@ export function getTrackDetail(
       (db
         .prepare(
           `SELECT release.id, release.title, artist.name AS artist,
-                  release.year, release.country, release.label, release.catno
+                  release.year, release.country, release.label, release.catno,
+                  release.thumb_url, release.cover_url
              FROM release
              JOIN artist ON artist.id = release.artist_id
              WHERE release.id = ?`,
@@ -497,7 +502,8 @@ export function getArtistDetail(db: Database, id: string): ArtistDetail | null {
   const releases = db
     .prepare(
       `SELECT release.id, release.title, artist.name AS artist,
-              release.year, release.country, release.label, release.catno
+              release.year, release.country, release.label, release.catno,
+              release.thumb_url, release.cover_url
          FROM release
          JOIN artist ON artist.id = release.artist_id
          WHERE release.artist_id = ?
