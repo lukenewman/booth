@@ -143,7 +143,14 @@
       const res = await fetch(`${endpoint}?${params.toString()}`).then((r) => r.json());
       // Discard result if a newer reset load has started since we began fetching.
       if (gen !== loadGen) return;
-      const items = res.items ?? [];
+      let items = res.items ?? [];
+      if (currentEntity === 'releases') {
+        items = items.map((it: any) => ({
+          ...it,
+          thumbUrl: it.thumb_url ?? null,
+          coverUrl: it.cover_url ?? null,
+        }));
+      }
       listItems = reset ? items : [...listItems, ...items];
       listTotal = res.total ?? listItems.length;
       listHasMore = !!res.hasMore;
