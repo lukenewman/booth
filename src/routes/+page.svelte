@@ -130,7 +130,12 @@
           }
         },
         toggleEntity: () => {
-          explorerState.toggleEntityKind();
+          const buttons = Array.from(
+            document.querySelectorAll<HTMLButtonElement>('.bar .toggle button'),
+          );
+          if (buttons.length === 0) return;
+          const activeIdx = buttons.findIndex((b) => b.classList.contains('active'));
+          buttons[(activeIdx + 1) % buttons.length]?.click();
         },
         toggleShortcuts: () => { shortcutOpen = !shortcutOpen; },
         navRailNext: () => {
