@@ -79,6 +79,20 @@
   <div class="title">{release.title}</div>
   <div class="artist">{release.artist}{release.year ? ` · ${release.year}` : ''}</div>
 
+  {#if tracks.length > 0}
+    <div class="tracklist">
+      <div class="tracklist-header">Tracks ({tracks.length})</div>
+      {#each tracks as t}
+        <button class="track-row" type="button" onclick={() => onTrackSelect?.(t.id)}>
+          <span class="position">{t.position ?? ''}</span>
+          <span class="track-title">{t.title}</span>
+          <span class="track-dur">{durationLabel(t.duration_ms)}</span>
+          <SourceGrid present={t.sources} />
+        </button>
+      {/each}
+    </div>
+  {/if}
+
   {#if addCta}
     <div class="cta-row">
       {#if addCta.variant === 'quiet'}
@@ -110,20 +124,6 @@
       {/if}
     {/if}
   {/each}
-
-  {#if tracks.length > 0}
-    <div class="tracklist">
-      <div class="tracklist-header">Tracks ({tracks.length})</div>
-      {#each tracks as t}
-        <button class="track-row" type="button" onclick={() => onTrackSelect?.(t.id)}>
-          <span class="position">{t.position ?? ''}</span>
-          <span class="track-title">{t.title}</span>
-          <span class="track-dur">{durationLabel(t.duration_ms)}</span>
-          <SourceGrid present={t.sources} />
-        </button>
-      {/each}
-    </div>
-  {/if}
 </div>
 
 <style>
@@ -206,6 +206,7 @@
 
   .tracklist {
     margin-top: 18px;
+    margin-bottom: 18px;
     border-top: 1px solid var(--border);
     padding-top: 12px;
   }
