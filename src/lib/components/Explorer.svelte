@@ -15,6 +15,8 @@
   import SyncRunHistory from './SyncRunHistory.svelte';
   import { explorerState } from '$lib/stores/explorerState.svelte';
   import { collection } from '$lib/stores/collection.svelte';
+  import Player from './Player.svelte';
+  import PlayerBar from './PlayerBar.svelte';
 
   // ----- Source meta + counts ------------------------------------------------
 
@@ -300,6 +302,13 @@
     isAddView ? 'Search Discogs…' : 'Search library…',
   );
 
+  const discogsSearchUrl = $derived.by(() => {
+    if (!isAddView) return null;
+    const q = explorerState.q.trim();
+    if (!q) return null;
+    return `https://www.discogs.com/search?q=${encodeURIComponent(q)}&type=all`;
+  });
+
   const toolbarMeta = $derived.by(() => {
     if (isAddView) {
       const q = explorerState.q.trim();
@@ -546,7 +555,10 @@
   });
 </script>
 
-<div class="explorer">
+<Player />
+
+<div class="shell">
+  <div class="explorer">
   <Rail
     nav={explorerState.nav}
     entity={currentEntity}
@@ -571,6 +583,7 @@
       syncing={syncing === selectedSource?.id}
       onSync={handleSync}
       meta={toolbarMeta}
+      externalSearchUrl={discogsSearchUrl}
     />
 
     {#if scannerOpen}
@@ -679,13 +692,21 @@
       <EmptyState title="Loading…" />
     {/if}
   </section>
+  </div>
+  <PlayerBar />
 </div>
 
 <style>
+  .shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
   .explorer {
     display: grid;
     grid-template-columns: 220px 1fr 360px;
-    height: 100vh;
+    flex: 1;
+    min-height: 0;
     overflow: hidden;
   }
   .middle {
