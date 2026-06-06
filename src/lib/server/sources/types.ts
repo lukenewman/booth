@@ -1,3 +1,5 @@
+import type { Database } from 'bun:sqlite';
+
 export type EntityKind = 'track' | 'release' | 'artist';
 
 export interface SourceTrack {
@@ -56,4 +58,16 @@ export class NotImplementedError extends Error {
     super(message);
     this.name = 'NotImplementedError';
   }
+}
+
+export type TrackStream =
+  | { kind: 'file'; path: string; mimeType: string }
+  | { kind: 'redirect'; url: string };
+
+export interface Playable {
+  resolveTrackStream(entityId: string, db: Database): Promise<TrackStream | null>;
+}
+
+export function isPlayable(source: MusicSource): source is MusicSource & Playable {
+  return typeof (source as unknown as Record<string, unknown>).resolveTrackStream === 'function';
 }
