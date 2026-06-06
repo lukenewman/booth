@@ -368,6 +368,7 @@ export interface ArtistListItem extends ArtistRow {
   releaseCount: number;
   trackCount: number;
   sources: string[];
+  albums: { title: string; thumbUrl: string | null }[];
 }
 
 export function listArtists(
@@ -457,10 +458,36 @@ export function listArtists(
     }
   }
 
+  const albumMap = new Map<string, { title: string; thumbUrl: string | null }[]>();
+  if (ids.length) {
+    const placeholders = ids.map(() => '?').join(',');
+    const albumRows = db
+      .prepare(
+        `SELECT for_artist, title, thumb_url FROM (
+           SELECT r.artist_id AS for_artist, r.id AS release_id, r.title, r.thumb_url, r.year
+             FROM release r
+            WHERE r.artist_id IN (${placeholders})
+           UNION
+           SELECT t.artist_id AS for_artist, r.id AS release_id, r.title, r.thumb_url, r.year
+             FROM track t
+             JOIN release r ON r.id = t.release_id
+            WHERE t.artist_id IN (${placeholders}) AND t.release_id IS NOT NULL
+         )
+         ORDER BY COALESCE(year, 9999999), title COLLATE NOCASE`,
+      )
+      .all(...ids, ...ids) as Array<{ for_artist: string; title: string; thumb_url: string | null }>;
+    for (const { for_artist, title, thumb_url } of albumRows) {
+      const list = albumMap.get(for_artist) ?? [];
+      list.push({ title, thumbUrl: thumb_url });
+      albumMap.set(for_artist, list);
+    }
+  }
+
   return {
     items: rows.map((r) => ({
       ...r,
       sources: Array.from(sourceMap.get(r.id) ?? []),
+      albums: albumMap.get(r.id) ?? [],
     })),
     total: totalRow.n,
     hasMore: args.offset + rows.length < totalRow.n,

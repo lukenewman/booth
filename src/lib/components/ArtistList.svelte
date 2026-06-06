@@ -9,6 +9,7 @@
     releaseCount: number;
     trackCount: number;
     sources: string[];
+    albums: { title: string; thumbUrl: string | null }[];
   }
 
   let {
@@ -43,6 +44,7 @@
   {#snippet headers()}
     <div class="cols">
       <span>Artist</span>
+      <span>Albums</span>
       <span class="right">Rel.</span>
       <span class="right">Trk.</span>
       <span class="src-label">
@@ -54,6 +56,15 @@
     <div class="row">
       <div class="meta">
         <div class="name">{item.name}</div>
+      </div>
+      <div class="album-strip">
+        {#each item.albums as album}
+          {#if album.thumbUrl}
+            <img src={album.thumbUrl} alt={album.title} class="cover" />
+          {:else}
+            <div class="cover placeholder"></div>
+          {/if}
+        {/each}
       </div>
       <span class="count">{(item.releaseCount ?? 0).toLocaleString()}</span>
       <span class="count">{(item.trackCount ?? 0).toLocaleString()}</span>
@@ -68,7 +79,7 @@
 <style>
   .cols, .row {
     display: grid;
-    grid-template-columns: 1fr 44px 44px 56px;
+    grid-template-columns: 1fr 160px 44px 44px 56px;
     gap: 14px;
     padding: 6px 14px;
     align-items: center;
@@ -106,4 +117,20 @@
     font-size: 12px;
     text-align: right;
   }
+  .album-strip {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .album-strip::-webkit-scrollbar { display: none; }
+  .cover {
+    width: 44px;
+    height: 44px;
+    border-radius: 3px;
+    object-fit: cover;
+    display: block;
+    flex-shrink: 0;
+  }
+  .placeholder { background: #252525; }
 </style>
