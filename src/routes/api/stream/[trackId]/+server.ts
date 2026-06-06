@@ -58,6 +58,14 @@ export const GET: RequestHandler = async ({ params, request }) => {
       const start = parseInt(match[1], 10);
       const end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
       const safeEnd = Math.min(end, fileSize - 1);
+      if (start >= fileSize) {
+        return new Response(null, {
+          status: 416,
+          headers: {
+            'Content-Range': `bytes */${fileSize}`,
+          },
+        });
+      }
       const chunk = file.slice(start, safeEnd + 1);
       return new Response(chunk, {
         status: 206,
