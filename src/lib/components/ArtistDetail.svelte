@@ -9,6 +9,7 @@
     title: string;
     year: number | null;
     sources: string[];
+    thumb_url: string | null;
   }
   interface Artist { id: string; name: string; }
   interface SourceMeta { id: string; name: string; isStub: boolean; }
@@ -68,6 +69,11 @@
       <div class="releases-header">Releases</div>
       {#each releases as r}
         <button class="release-row" type="button" onclick={() => onReleaseSelect?.(r.id)}>
+          {#if r.thumb_url}
+            <img src={r.thumb_url} alt={r.title} class="rel-thumb" />
+          {:else}
+            <div class="rel-thumb placeholder"></div>
+          {/if}
           <span class="rel-title">{r.title}</span>
           <span class="rel-year">{r.year ?? '—'}</span>
           <SourceGrid present={r.sources} />
@@ -107,7 +113,7 @@
   }
   .release-row {
     display: grid;
-    grid-template-columns: 1fr 44px 56px;
+    grid-template-columns: 40px 1fr 44px 56px;
     gap: 10px;
     padding: 6px 0;
     align-items: center;
@@ -120,6 +126,15 @@
     font-family: inherit;
     font-size: 12px;
   }
+  .rel-thumb {
+    width: 40px;
+    height: 40px;
+    border-radius: 3px;
+    object-fit: cover;
+    display: block;
+    flex-shrink: 0;
+  }
+  .placeholder { background: #252525; }
   .release-row:hover { background: var(--bg-row-hover); }
   .rel-title {
     color: var(--text);
