@@ -7,6 +7,7 @@
   import { collection } from '$lib/stores/collection.svelte';
   import { toast } from '$lib/stores/toast.svelte';
   import { explorerState } from '$lib/stores/explorerState.svelte';
+  import { player } from '$lib/stores/player.svelte';
 
   let setupNeeded = $state<null | 'no_token' | 'invalid_token'>(null);
   let probed = $state(false);
@@ -151,6 +152,10 @@
           const idx = items.findIndex((el) => el.classList.contains('active'));
           const prev = idx > 0 ? items[idx - 1] : null;
           prev?.click();
+        },
+        togglePlay: () => {
+          if (!player.nowPlaying) return;
+          player.isPlaying ? player.pause() : player.resume();
         },
       },
       {

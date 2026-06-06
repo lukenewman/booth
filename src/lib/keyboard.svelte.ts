@@ -23,6 +23,7 @@ export interface KeyboardActions {
   toggleShortcuts: () => void;
   navRailNext: () => void;
   navRailPrev: () => void;
+  togglePlay: () => void;
 }
 
 export interface KeyboardGuards {
@@ -67,6 +68,12 @@ export function installKeyboard(actions: KeyboardActions, guards: KeyboardGuards
     ) {
       e.preventDefault();
       actions.toggleEntity();
+      return;
+    }
+
+    if (e.key === ' ' && !inEditable) {
+      e.preventDefault();
+      actions.togglePlay();
       return;
     }
 
