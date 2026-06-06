@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import Rail from './Rail.svelte';
   import ListviewToolbar from './ListviewToolbar.svelte';
   import ReleaseList from './ReleaseList.svelte';
@@ -100,8 +100,9 @@
           country: r.country ?? null,
           label: r.label ?? null,
           catno: r.catno ?? null,
+          format: r.format ?? null,
           thumbUrl: r.thumb ?? null,
-          coverUrl: r.cover_image ?? null,
+          coverUrl: r.coverImage ?? null,
           sources: collection.has(Number(r.id)) ? ['discogs'] : [],
           _isDiscogsSearchHit: true,
         }));
@@ -177,7 +178,14 @@
       if (hit) {
         detailKind = 'release';
         detailData = {
-          release: { id: hit.id, title: hit.title, artist: hit.artist, year: hit.year, cover_url: hit.coverUrl ?? null },
+          release: {
+            id: hit.id, title: hit.title, artist: hit.artist, year: hit.year,
+            cover_url: hit.coverUrl ?? null,
+            country: hit.country ?? null,
+            label: hit.label ?? null,
+            catno: hit.catno ?? null,
+            format: hit.format ?? null,
+          },
           sources: hit.sources.includes('discogs')
             ? [{
                 source: 'discogs',
@@ -194,6 +202,27 @@
           tracks: [],
           _isDiscogsSearchHit: true,
         };
+
+        // Background fetch: enrich with format text (vinyl color etc.) from the
+        // full release endpoint, which the search API doesn't include.
+        const selectedId = hit.id;
+        fetch(`/api/discogs/releases/${hit.id}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => {
+            if (!d?.formatText) return;
+            // Guard: only update if the user hasn't moved to a different result.
+            if (explorerState.id !== selectedId || !detailData?.release) return;
+            detailData = {
+              ...detailData,
+              release: {
+                ...detailData.release,
+                format: detailData.release.format
+                  ? `${detailData.release.format}, ${d.formatText}`
+                  : d.formatText,
+              },
+            };
+          })
+          .catch(() => {});
       }
       return;
     }
@@ -286,14 +315,15 @@
 
   // ----- Reactive triggers ---------------------------------------------------
 
-  // Reload list when the view-defining inputs change.
+  // Reload list when nav or entity changes. Query changes are handled by the
+  // debounced onQueryChange callback below — reading explorerState.q here would
+  // fire a fetch on every keystroke, bypassing the SearchBar debounce entirely.
   $effect(() => {
     explorerState.nav.section;
     explorerState.nav.item;
-    explorerState.q;
     currentEntity;
     if (sources.length === 0) return; // wait until source meta is loaded
-    loadList(true);
+    untrack(() => loadList(true));
   });
 
   // Reload detail when id changes.
@@ -529,7 +559,7 @@
     <ListviewToolbar
       bind:query={explorerState.q}
       placeholder={toolbarPlaceholder}
-      onQueryChange={() => { /* effect above triggers reload */ }}
+      onQueryChange={() => { if (sources.length) loadList(true); }}
       showScanner={isAddView}
       onScan={() => (scannerOpen = true)}
       showEntityToggle={showEntityToggle}
@@ -624,6 +654,7 @@
         sourceMeta={sourceMetaForDetail}
         addCta={releaseDetailCta}
         onTrackSelect={(id) => explorerState.setEntity(id)}
+        onArtistSelect={(id) => explorerState.setEntity(id)}
       />
     {:else if detailKind === 'track' && detailData}
       <TrackDetail

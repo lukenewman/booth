@@ -15,8 +15,13 @@
     id: string;
     title: string;
     artist: string;
+    artist_id?: string | null;
     year: number | null;
     cover_url?: string | null;
+    country?: string | null;
+    label?: string | null;
+    catno?: string | null;
+    format?: string | null;
   }
   interface SourceMeta { id: string; name: string; isStub: boolean; }
 
@@ -28,6 +33,7 @@
     sourceMeta,
     addCta = null,
     onTrackSelect,
+    onArtistSelect,
   }: {
     release: Release;
     sources: SourceLink[];
@@ -41,6 +47,7 @@
       variant?: 'primary' | 'quiet';
     } | null;
     onTrackSelect?: (trackId: string) => void;
+    onArtistSelect?: (artistId: string) => void;
   } = $props();
 
   /** Group facets by source id, deciding which keys to show as mono. */
@@ -71,13 +78,29 @@
 </script>
 
 <div class="detail">
+  {#if release.artist_id}
+    <button class="breadcrumb" onclick={() => onArtistSelect?.(release.artist_id!)}>
+      ← {release.artist}
+    </button>
+  {/if}
   {#if release.cover_url}
     <img class="cover" src={release.cover_url} alt="{release.title} cover" loading="lazy">
   {:else}
     <div class="cover"></div>
   {/if}
-  <div class="title">{release.title}</div>
-  <div class="artist">{release.artist}{release.year ? ` · ${release.year}` : ''}</div>
+  <div class="release-header">
+    <div class="title">{release.title}</div>
+    <div class="artist">{release.artist}{release.year ? ` · ${release.year}` : ''}</div>
+    {#if release.label || release.catno || release.country || release.format}
+      <div class="release-meta">
+        {[
+          [release.label, release.catno].filter(Boolean).join(' – '),
+          release.country,
+          release.format,
+        ].filter(Boolean).join(' · ')}
+      </div>
+    {/if}
+  </div>
 
   {#if tracks.length > 0}
     <div class="tracklist">
@@ -128,6 +151,15 @@
 
 <style>
   .detail { padding: 18px 20px 24px; overflow-y: auto; height: 100%; }
+  .breadcrumb {
+    background: transparent; border: 0; color: var(--text-muted);
+    padding: 0 0 8px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    display: block;
+  }
+  .breadcrumb:hover { color: var(--text); }
   .cover {
     width: 100%;
     aspect-ratio: 1;
@@ -154,10 +186,16 @@
     margin-bottom: 2px;
     line-height: 1.3;
   }
+  .release-header { margin-bottom: 14px; }
   .artist {
     color: var(--text-muted);
     font-size: 13px;
-    margin-bottom: 14px;
+    margin-bottom: 4px;
+  }
+  .release-meta {
+    font-size: 12px;
+    color: var(--text-subtle);
+    line-height: 1.4;
   }
 
   .cta-row { margin-bottom: 16px; }

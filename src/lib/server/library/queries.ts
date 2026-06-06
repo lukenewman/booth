@@ -230,7 +230,7 @@ export function getReleaseDetail(
   db: Database,
   id: string,
 ): {
-  release: ReleaseRow;
+  release: ReleaseRow & { artist_id: string };
   sources: SourceLinkRow[];
   facets: SourceFacetRow[];
   tracks: Array<TrackRow & { sources: string[] }>;
@@ -238,13 +238,14 @@ export function getReleaseDetail(
   const release = db
     .prepare(
       `SELECT release.id, release.title, artist.name AS artist,
+              release.artist_id,
               release.year, release.country, release.label, release.catno,
               release.thumb_url, release.cover_url
          FROM release
          JOIN artist ON artist.id = release.artist_id
          WHERE release.id = ?`,
     )
-    .get(id) as ReleaseRow | undefined;
+    .get(id) as (ReleaseRow & { artist_id: string }) | undefined;
   if (!release) return null;
 
   const sources = db
