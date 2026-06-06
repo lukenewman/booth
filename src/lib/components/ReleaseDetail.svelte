@@ -1,6 +1,7 @@
 <script lang="ts">
   import SourcePanel from './SourcePanel.svelte';
   import SourceGrid from './SourceGrid.svelte';
+  import { player } from '$lib/stores/player.svelte';
 
   interface SourceLink { source: string; external_id: string; external_url: string | null; match_method: string; }
   interface Facet { source: string; key: string; value: string; }
@@ -10,6 +11,7 @@
     position: string | null;
     duration_ms: number | null;
     sources: string[];
+    canPlay: boolean;
   }
   interface Release {
     id: string;
@@ -106,11 +108,29 @@
     <div class="tracklist">
       <div class="tracklist-header">Tracks ({tracks.length})</div>
       {#each tracks as t}
-        <button class="track-row" type="button" onclick={() => onTrackSelect?.(t.id)}>
+        <button
+          class="track-row"
+          class:playing={player.nowPlaying?.trackId === t.id}
+          type="button"
+          onclick={() => onTrackSelect?.(t.id)}
+        >
           <span class="position">{t.position ?? ''}</span>
           <span class="track-title">{t.title}</span>
           <span class="track-dur">{durationLabel(t.duration_ms)}</span>
           <SourceGrid present={t.sources} />
+          {#if t.canPlay}
+            <span
+              class="play-icon"
+              class:active={player.nowPlaying?.trackId === t.id}
+              role="button"
+              tabindex="-1"
+              aria-label="Play {t.title}"
+              onclick={(e) => {
+                e.stopPropagation();
+                player.play({ trackId: t.id, title: t.title, artist: release.artist });
+              }}
+            >▶</span>
+          {/if}
         </button>
       {/each}
     </div>
@@ -258,7 +278,7 @@
   }
   .track-row {
     display: grid;
-    grid-template-columns: 28px 1fr 48px 56px;
+    grid-template-columns: 28px 1fr 48px 56px 20px;
     gap: 10px;
     padding: 4px 0;
     align-items: center;
@@ -287,4 +307,14 @@
     font-size: 11px;
     text-align: right;
   }
+  .track-row .play-icon {
+    color: transparent;
+    font-size: 11px;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+  }
+  .track-row:hover .play-icon { color: var(--text-muted); }
+  .track-row .play-icon.active { color: var(--accent) !important; }
+  .track-row.playing .track-title { color: var(--accent); }
 </style>
