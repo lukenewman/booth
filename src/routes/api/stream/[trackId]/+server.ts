@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { existsSync } from 'node:fs';
 import { getDb } from '$lib/server/db';
 import { listSources } from '$lib/server/sources/registry';
-import { isPlayable } from '$lib/server/sources/types';
+import { isPlayable, type Playable } from '$lib/server/sources/types';
 
 export const GET: RequestHandler = async ({ params, request }) => {
   const db = getDb();
@@ -23,16 +23,14 @@ export const GET: RequestHandler = async ({ params, request }) => {
 
   const sourceIds = new Set(links.map((l) => l.source));
   const playableSources = listSources().filter(
-    (s) => sourceIds.has(s.id) && isPlayable(s),
+    (s): s is typeof s & Playable => sourceIds.has(s.id) && isPlayable(s),
   );
 
   // Try each playable source until one resolves a stream.
   let stream = null;
   for (const source of playableSources) {
-    if (isPlayable(source)) {
-      stream = await source.resolveTrackStream(params.trackId, db);
-      if (stream) break;
-    }
+    stream = await source.resolveTrackStream(params.trackId, db);
+    if (stream) break;
   }
 
   if (!stream) throw error(404, 'No audio available for this track');

@@ -38,7 +38,7 @@
         max={player.duration || 1}
         step="0.5"
         value={player.currentTime}
-        oninput={onScrub}
+        onchange={onScrub}
         aria-label="Seek"
       />
 

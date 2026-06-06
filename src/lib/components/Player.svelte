@@ -45,7 +45,7 @@
   ontimeupdate={() => player._setCurrentTime(audio.currentTime)}
   ondurationchange={() => player._setDuration(isNaN(audio.duration) ? 0 : audio.duration)}
   onplay={() => player._setIsPlaying(true)}
-  onpause={() => player._setIsPlaying(false)}
+  onpause={() => { if (!audio.seeking) player._setIsPlaying(false); }}
   onerror={() => player._setError('Could not load audio')}
   onended={() => player.stop()}
 />
