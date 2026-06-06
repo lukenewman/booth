@@ -1,5 +1,12 @@
 import type { Database } from 'bun:sqlite';
 import type { EntityKind } from '../sources/types';
+import { listSources } from '../sources/registry';
+import { isPlayable } from '../sources/types';
+
+// Computed once at module load — source registry is static.
+const playableSources = new Set(
+  listSources().filter(isPlayable).map((s) => s.id),
+);
 
 export function getMembershipExternalIds(
   db: Database,
@@ -155,7 +162,7 @@ interface ListTracksArgs {
 export function listTracks(
   db: Database,
   args: ListTracksArgs,
-): PagedResult<TrackRow & { sources: string[] }> {
+): PagedResult<TrackRow & { sources: string[]; canPlay: boolean }> {
   const where: string[] = [];
   const params: string[] = [];
 
@@ -220,7 +227,10 @@ export function listTracks(
   }
 
   return {
-    items: rows.map((r) => ({ ...r, sources: sourceMap.get(r.id) ?? [] })),
+    items: rows.map((r) => {
+      const sources = sourceMap.get(r.id) ?? [];
+      return { ...r, sources, canPlay: sources.some((s) => playableSources.has(s)) };
+    }),
     total: totalRow.n,
     hasMore: args.offset + rows.length < totalRow.n,
   };
@@ -233,7 +243,7 @@ export function getReleaseDetail(
   release: ReleaseRow & { artist_id: string };
   sources: SourceLinkRow[];
   facets: SourceFacetRow[];
-  tracks: Array<TrackRow & { sources: string[] }>;
+  tracks: Array<TrackRow & { sources: string[]; canPlay: boolean }>;
 } | null {
   const release = db
     .prepare(
@@ -294,7 +304,10 @@ export function getReleaseDetail(
     release,
     sources,
     facets,
-    tracks: tracks.map((t) => ({ ...t, sources: trackSourceMap.get(t.id) ?? [] })),
+    tracks: tracks.map((t) => {
+      const sources = trackSourceMap.get(t.id) ?? [];
+      return { ...t, sources, canPlay: sources.some((s) => playableSources.has(s)) };
+    }),
   };
 }
 
