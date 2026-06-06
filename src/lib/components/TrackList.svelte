@@ -2,6 +2,7 @@
   import Listview from './Listview.svelte';
   import SourceGrid from './SourceGrid.svelte';
   import EmptyState from './EmptyState.svelte';
+  import { player } from '$lib/stores/player.svelte';
 
   interface TrackItem {
     id: string;
@@ -10,6 +11,7 @@
     album: string | null;
     duration_ms: number | null;
     sources: string[];
+    canPlay: boolean;
   }
 
   let {
@@ -49,6 +51,7 @@
 >
   {#snippet headers()}
     <div class="cols">
+      <span></span>
       <span>Track</span>
       <span>Album</span>
       <span class="right">Length</span>
@@ -58,7 +61,20 @@
     </div>
   {/snippet}
   {#snippet row(item)}
-    <div class="row">
+    <div class="row" class:playing={player.nowPlaying?.trackId === item.id}>
+      <span
+        class="play-icon"
+        class:can-play={item.canPlay}
+        class:active={player.nowPlaying?.trackId === item.id}
+        role="button"
+        tabindex="-1"
+        aria-label="Play {item.title}"
+        onclick={(e) => {
+          if (!item.canPlay) return;
+          e.stopPropagation();
+          player.play({ trackId: item.id, title: item.title, artist: item.artist });
+        }}
+      >▶</span>
       <div class="meta">
         <div class="title">{item.title}</div>
         <div class="artist">{item.artist}</div>
@@ -76,7 +92,7 @@
 <style>
   .cols, .row {
     display: grid;
-    grid-template-columns: 1fr 100px 60px 56px;
+    grid-template-columns: 20px 1fr 100px 60px 56px;
     gap: 14px;
     padding: 6px 14px;
     align-items: center;
@@ -126,4 +142,17 @@
     font-size: 11.5px;
     text-align: right;
   }
+
+  .play-icon {
+    color: transparent;
+    font-size: 11px;
+    line-height: 1;
+    text-align: center;
+    cursor: default;
+    user-select: none;
+  }
+  .play-icon.can-play { cursor: pointer; }
+  .row:hover .play-icon.can-play { color: var(--text-muted); }
+  .play-icon.active { color: var(--accent) !important; }
+  .row.playing .title { color: var(--accent); }
 </style>
