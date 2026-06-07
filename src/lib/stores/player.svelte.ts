@@ -2,6 +2,7 @@ export interface NowPlaying {
   trackId: string;
   title: string;
   artist: string;
+  thumbUrl?: string | null;
 }
 
 let nowPlaying = $state<NowPlaying | null>(null);

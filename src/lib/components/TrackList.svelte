@@ -12,6 +12,7 @@
     duration_ms: number | null;
     sources: string[];
     canPlay: boolean;
+    thumb_url: string | null;
   }
 
   let {
@@ -62,11 +63,14 @@
   {/snippet}
   {#snippet row(item)}
     {@const isPlaying = player.nowPlaying?.trackId === item.id}
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
       class="row"
       class:playing={isPlaying}
+      role="listitem"
+      onkeydown={(e) => { if (e.key === 'Enter' && item.canPlay) player.play({ trackId: item.id, title: item.title, artist: item.artist, thumbUrl: item.thumb_url }); }}
       onclick={(e) => { if (e.detail > 0) e.stopPropagation(); }}
-      ondblclick={() => { if (item.canPlay) player.play({ trackId: item.id, title: item.title, artist: item.artist }); }}
+      ondblclick={() => { if (item.canPlay) player.play({ trackId: item.id, title: item.title, artist: item.artist, thumbUrl: item.thumb_url }); }}
     >
       <span
         class="info-icon"
@@ -75,6 +79,7 @@
         tabindex="-1"
         aria-label="View details for {item.title}"
         onclick={(e) => { e.stopPropagation(); onSelect?.(item.id); }}
+        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onSelect?.(item.id); } }}
         ondblclick={(e) => e.stopPropagation()}
       >{isPlaying ? '▶' : '›'}</span>
       <div class="meta">

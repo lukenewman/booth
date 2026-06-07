@@ -15,6 +15,11 @@
 
 {#if player.nowPlaying}
   <div class="bar">
+    {#if player.nowPlaying.thumbUrl}
+      <img class="thumb" src={player.nowPlaying.thumbUrl} alt="" aria-hidden="true" />
+    {:else}
+      <div class="thumb thumb-placeholder"></div>
+    {/if}
     <div class="info">
       <span class="title">{player.nowPlaying.title}</span>
       <span class="artist">{player.nowPlaying.artist}</span>
@@ -59,6 +64,18 @@
     background: var(--bg-raised);
     border-top: 1px solid var(--border-strong);
     flex-shrink: 0;
+  }
+
+  .thumb {
+    width: 36px;
+    height: 36px;
+    border-radius: 2px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+  .thumb-placeholder {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
   }
 
   .info {

@@ -44,6 +44,7 @@ export interface TrackRow {
   duration_ms: number | null;
   release_id: string | null;
   position: string | null;
+  thumb_url: string | null;
 }
 
 export interface SourceLinkRow {
@@ -200,9 +201,11 @@ export function listTracks(
   const rows = db
     .prepare(
       `SELECT track.id, track.title, artist.name AS artist,
-              track.album, track.duration_ms, track.release_id, track.position
+              track.album, track.duration_ms, track.release_id, track.position,
+              release.thumb_url
          FROM track
          JOIN artist ON artist.id = track.artist_id
+         LEFT JOIN release ON release.id = track.release_id
          ${whereSql}
          ORDER BY artist.name COLLATE NOCASE, track.album COLLATE NOCASE, track.title COLLATE NOCASE
          LIMIT ? OFFSET ?`,

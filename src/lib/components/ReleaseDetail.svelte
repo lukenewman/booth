@@ -19,6 +19,7 @@
     artist: string;
     artist_id?: string | null;
     year: number | null;
+    thumb_url?: string | null;
     cover_url?: string | null;
     country?: string | null;
     label?: string | null;
@@ -114,7 +115,7 @@
           class:playing={isPlaying}
           type="button"
           onclick={(e) => { if (e.detail > 0) e.stopPropagation(); else onTrackSelect?.(t.id); }}
-          ondblclick={() => { if (t.canPlay) player.play({ trackId: t.id, title: t.title, artist: release.artist }); }}
+          ondblclick={() => { if (t.canPlay) player.play({ trackId: t.id, title: t.title, artist: release.artist, thumbUrl: release.thumb_url }); }}
         >
           <span class="position">{t.position ?? ''}</span>
           <span class="track-title">{t.title}</span>
@@ -127,6 +128,7 @@
             tabindex="-1"
             aria-label="View details for {t.title}"
             onclick={(e) => { e.stopPropagation(); onTrackSelect?.(t.id); }}
+            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onTrackSelect?.(t.id); } }}
             ondblclick={(e) => e.stopPropagation()}
           >{isPlaying ? '▶' : '›'}</span>
         </button>
