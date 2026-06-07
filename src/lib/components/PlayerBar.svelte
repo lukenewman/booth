@@ -8,8 +8,19 @@
     return `${m}:${String(sec).padStart(2, '0')}`;
   }
 
-  function onScrub(e: Event) {
+  let scrubbing = $state(false);
+  let scrubValue = $state(0);
+
+  function onScrubStart() {
+    scrubbing = true;
+    scrubValue = player.currentTime;
+  }
+  function onScrubMove(e: Event) {
+    scrubValue = Number((e.target as HTMLInputElement).value);
+  }
+  function onScrubEnd(e: Event) {
     player.seekTo(Number((e.target as HTMLInputElement).value));
+    scrubbing = false;
   }
 </script>
 
@@ -42,8 +53,10 @@
         min="0"
         max={player.duration || 1}
         step="0.5"
-        value={player.currentTime}
-        onchange={onScrub}
+        value={scrubbing ? scrubValue : player.currentTime}
+        onmousedown={onScrubStart}
+        oninput={onScrubMove}
+        onchange={onScrubEnd}
         aria-label="Seek"
       />
 
