@@ -61,20 +61,22 @@
     </div>
   {/snippet}
   {#snippet row(item)}
-    <div class="row" class:playing={player.nowPlaying?.trackId === item.id}>
+    {@const isPlaying = player.nowPlaying?.trackId === item.id}
+    <div
+      class="row"
+      class:playing={isPlaying}
+      onclick={(e) => { if (e.detail > 0) e.stopPropagation(); }}
+      ondblclick={() => { if (item.canPlay) player.play({ trackId: item.id, title: item.title, artist: item.artist }); }}
+    >
       <span
-        class="play-icon"
-        class:can-play={item.canPlay}
-        class:active={player.nowPlaying?.trackId === item.id}
+        class="info-icon"
+        class:playing={isPlaying}
         role="button"
         tabindex="-1"
-        aria-label="Play {item.title}"
-        onclick={(e) => {
-          if (!item.canPlay) return;
-          e.stopPropagation();
-          player.play({ trackId: item.id, title: item.title, artist: item.artist });
-        }}
-      >▶</span>
+        aria-label="View details for {item.title}"
+        onclick={(e) => { e.stopPropagation(); onSelect?.(item.id); }}
+        ondblclick={(e) => e.stopPropagation()}
+      >{isPlaying ? '▶' : '›'}</span>
       <div class="meta">
         <div class="title">{item.title}</div>
         <div class="artist">{item.artist}</div>
@@ -143,16 +145,15 @@
     text-align: right;
   }
 
-  .play-icon {
+  .info-icon {
     color: transparent;
-    font-size: 11px;
+    font-size: 13px;
     line-height: 1;
     text-align: center;
-    cursor: default;
+    cursor: pointer;
     user-select: none;
   }
-  .play-icon.can-play { cursor: pointer; }
-  .row:hover .play-icon.can-play { color: var(--text-muted); }
-  .play-icon.active { color: var(--accent) !important; }
+  .row:hover .info-icon { color: var(--text-muted); }
+  .info-icon.playing { color: var(--accent) !important; }
   .row.playing .title { color: var(--accent); }
 </style>
