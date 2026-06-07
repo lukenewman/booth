@@ -108,29 +108,27 @@
     <div class="tracklist">
       <div class="tracklist-header">Tracks ({tracks.length})</div>
       {#each tracks as t}
+        {@const isPlaying = player.nowPlaying?.trackId === t.id}
         <button
           class="track-row"
-          class:playing={player.nowPlaying?.trackId === t.id}
+          class:playing={isPlaying}
           type="button"
-          onclick={() => onTrackSelect?.(t.id)}
+          onclick={(e) => { if (e.detail > 0) e.stopPropagation(); else onTrackSelect?.(t.id); }}
+          ondblclick={() => { if (t.canPlay) player.play({ trackId: t.id, title: t.title, artist: release.artist }); }}
         >
           <span class="position">{t.position ?? ''}</span>
           <span class="track-title">{t.title}</span>
           <span class="track-dur">{durationLabel(t.duration_ms)}</span>
           <SourceGrid present={t.sources} />
-          {#if t.canPlay}
-            <span
-              class="play-icon"
-              class:active={player.nowPlaying?.trackId === t.id}
-              role="button"
-              tabindex="-1"
-              aria-label="Play {t.title}"
-              onclick={(e) => {
-                e.stopPropagation();
-                player.play({ trackId: t.id, title: t.title, artist: release.artist });
-              }}
-            >▶</span>
-          {/if}
+          <span
+            class="info-icon"
+            class:playing={isPlaying}
+            role="button"
+            tabindex="-1"
+            aria-label="View details for {t.title}"
+            onclick={(e) => { e.stopPropagation(); onTrackSelect?.(t.id); }}
+            ondblclick={(e) => e.stopPropagation()}
+          >{isPlaying ? '▶' : '›'}</span>
         </button>
       {/each}
     </div>
@@ -307,14 +305,14 @@
     font-size: 11px;
     text-align: right;
   }
-  .track-row .play-icon {
+  .track-row .info-icon {
     color: transparent;
-    font-size: 11px;
+    font-size: 13px;
     text-align: center;
     cursor: pointer;
     user-select: none;
   }
-  .track-row:hover .play-icon { color: var(--text-muted); }
-  .track-row .play-icon.active { color: var(--accent) !important; }
+  .track-row:hover .info-icon { color: var(--text-muted); }
+  .track-row .info-icon.playing { color: var(--accent) !important; }
   .track-row.playing .track-title { color: var(--accent); }
 </style>
