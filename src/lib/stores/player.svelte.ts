@@ -13,6 +13,8 @@ let error = $state<string | null>(null);
 
 // Set by Player.svelte on mount so seekTo() can update the audio element directly.
 let audioEl: HTMLAudioElement | null = null;
+// Prevents ontimeupdate from snapping currentTime back during an in-progress seek.
+let _seeking = false;
 
 export const player = {
   get nowPlaying() { return nowPlaying; },
@@ -32,6 +34,7 @@ export const player = {
   resume() { isPlaying = true; },
 
   seekTo(t: number) {
+    _seeking = true;
     currentTime = t;
     if (audioEl) audioEl.currentTime = t;
   },
@@ -46,7 +49,8 @@ export const player = {
 
   // Called by Player.svelte only.
   _bindAudio(el: HTMLAudioElement | null) { audioEl = el; },
-  _setCurrentTime(t: number) { currentTime = t; },
+  _setCurrentTime(t: number) { if (!_seeking) currentTime = t; },
+  _onSeeked() { _seeking = false; },
   _setDuration(d: number) { duration = d; },
   _setIsPlaying(v: boolean) { isPlaying = v; },
   _setError(e: string | null) { error = e; },

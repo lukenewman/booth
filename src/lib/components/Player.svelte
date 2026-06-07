@@ -46,6 +46,7 @@
   ondurationchange={() => player._setDuration(isNaN(audio.duration) ? 0 : audio.duration)}
   onplay={() => player._setIsPlaying(true)}
   onpause={() => { if (!audio.seeking) player._setIsPlaying(false); }}
+  onseeked={() => player._onSeeked()}
   onerror={() => player._setError('Could not load audio')}
   onended={() => player.stop()}
-/>
+></audio>
