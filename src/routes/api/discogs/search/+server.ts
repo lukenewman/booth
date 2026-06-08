@@ -5,6 +5,7 @@ import { discogsFetch, DiscogsError } from '$lib/server/sources/discogs/api';
 
 interface DiscogsSearchResult {
   id: number;
+  type?: string;
   title: string; // "Artist - Title"
   year?: string;
   country?: string;
@@ -57,7 +58,10 @@ export const GET: RequestHandler = async ({ url }) => {
     const data = (await discogsFetch(
       `/database/search?${params}`,
     )) as DiscogsSearchResponse;
-    const results = (data.results ?? []).map(trim).sort(byYearAsc);
+    const results = (data.results ?? [])
+      .filter((r) => r.type !== 'master' && r.format?.[0] !== 'File')
+      .map(trim)
+      .sort(byYearAsc);
     return json({ results });
   } catch (e) {
     if (e instanceof DiscogsError) {

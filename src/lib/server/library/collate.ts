@@ -417,6 +417,12 @@ export function upsertMatchKey(
   // Two unique constraints on this table:
   //   PK   (entity_kind, key_type, key_value)  → "this key already maps to that entity"
   //   UQ   (entity_kind, entity_id, key_type)  → "this entity already has a key of this type"
+  //
+  // If the entity's key value changed (e.g. artist name updated between syncs), the stale
+  // row must be removed first — the ON CONFLICT below only targets the PK, not the UQ.
+  db.prepare(
+    `DELETE FROM match_key WHERE entity_kind=? AND entity_id=? AND key_type=? AND key_value!=?`,
+  ).run(kind, entityId, keyType, keyValue);
   db.prepare(
     `INSERT INTO match_key (entity_kind, entity_id, key_type, key_value)
      VALUES (?, ?, ?, ?)

@@ -26,6 +26,7 @@
     syncing = false,
     onSync,
     meta = '',
+    externalSearchUrl = null,
   }: {
     query?: string;
     placeholder?: string;
@@ -42,6 +43,7 @@
     syncing?: boolean;
     onSync?: () => void;
     meta?: string;
+    externalSearchUrl?: string | null;
   } = $props();
 
   let searchBar: SearchBar | undefined = $state();
@@ -77,6 +79,9 @@
         <path d="M2 2v10M4 2v10M6 2v6M8 2v10M10 2v6M12 2v10" stroke="currentColor" stroke-width="1"/>
       </svg>
     </button>
+  {/if}
+  {#if externalSearchUrl}
+    <a class="open-link" href={externalSearchUrl} target="_blank" rel="noreferrer" title="Open search in Discogs">discogs ↗</a>
   {/if}
   {#if showSyncChip}
     <SyncChip isStub={syncIsStub} lastSyncedAt={syncLastAt} {syncing} {onSync} />
@@ -133,4 +138,11 @@
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
+  .open-link {
+    color: var(--text-subtle);
+    font-size: 11px;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .open-link:hover { color: var(--accent); }
 </style>

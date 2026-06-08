@@ -10,6 +10,10 @@
     year: number | null;
     sources: string[];
     thumbUrl?: string | null;
+    country?: string | null;
+    label?: string | null;
+    catno?: string | null;
+    format?: string | null;
   }
 
   let {
@@ -61,6 +65,15 @@
       <div class="meta">
         <div class="title">{item.title}</div>
         <div class="artist">{item.artist}</div>
+        {#if item.label || item.catno || item.country || item.format}
+          <div class="detail">
+            {[
+              [item.label, item.catno].filter(Boolean).join(' – '),
+              item.country,
+              item.format,
+            ].filter(Boolean).join(' · ')}
+          </div>
+        {/if}
       </div>
       <span class="year">{item.year ?? '—'}</span>
       <SourceGrid present={item.sources} />
@@ -74,7 +87,7 @@
 <style>
   .cols, .row {
     display: grid;
-    grid-template-columns: 40px 1fr 56px 56px;
+    grid-template-columns: 56px 1fr 56px 56px;
     gap: 14px;
     padding: 6px 14px;
     align-items: center;
@@ -101,8 +114,8 @@
   }
 
   .cover {
-    width: 40px;
-    height: 40px;
+    width: 56px;
+    height: 56px;
     border-radius: 3px;
     background: var(--bg-raised);
     flex-shrink: 0;
@@ -127,6 +140,12 @@
     color: var(--text-muted);
     font-size: 12px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .detail {
+    color: var(--text-subtle);
+    font-size: 11px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    margin-top: 2px;
   }
   .year {
     color: var(--text-subtle);
