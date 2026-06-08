@@ -4,6 +4,7 @@
   import Rail from './Rail.svelte';
   import ListviewToolbar from './ListviewToolbar.svelte';
   import ReleaseList from './ReleaseList.svelte';
+  import ReleaseGrid from './ReleaseGrid.svelte';
   import TrackList from './TrackList.svelte';
   import ArtistList from './ArtistList.svelte';
   import ReleaseDetail from './ReleaseDetail.svelte';
@@ -513,6 +514,7 @@
   // ----- Scanner popover -----------------------------------------------------
 
   let scannerOpen = $state(false);
+  let releaseView = $state<'list' | 'grid'>('list');
 
   // ----- Source meta for detail panes ----------------------------------------
 
@@ -584,6 +586,9 @@
       onSync={handleSync}
       meta={toolbarMeta}
       externalSearchUrl={discogsSearchUrl}
+      showViewToggle={!isAddView && currentEntity === 'releases'}
+      view={releaseView}
+      onViewChange={(v) => (releaseView = v)}
     />
 
     {#if scannerOpen}
@@ -609,15 +614,27 @@
         detail="This source only contributes releases. Switch the toolbar toggle back to Releases (or press Tab) to see them."
       />
     {:else if currentEntity === 'releases'}
-      <ReleaseList
-        items={listItems}
-        total={listTotal}
-        hasMore={listHasMore}
-        selectedId={explorerState.id}
-        onSelect={(id) => explorerState.setEntity(id)}
-        loadMore={() => loadList(false)}
-        emptyTitle={isAddView && !explorerState.q ? 'Search Discogs to add records' : 'No releases'}
-      />
+      {#if releaseView === 'grid'}
+        <ReleaseGrid
+          items={listItems}
+          total={listTotal}
+          hasMore={listHasMore}
+          selectedId={explorerState.id}
+          onSelect={(id) => explorerState.setEntity(id)}
+          loadMore={() => loadList(false)}
+          emptyTitle={isAddView && !explorerState.q ? 'Search Discogs to add records' : 'No releases'}
+        />
+      {:else}
+        <ReleaseList
+          items={listItems}
+          total={listTotal}
+          hasMore={listHasMore}
+          selectedId={explorerState.id}
+          onSelect={(id) => explorerState.setEntity(id)}
+          loadMore={() => loadList(false)}
+          emptyTitle={isAddView && !explorerState.q ? 'Search Discogs to add records' : 'No releases'}
+        />
+      {/if}
     {:else if currentEntity === 'tracks'}
       <TrackList
         items={listItems}
