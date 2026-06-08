@@ -27,6 +27,9 @@
     onSync,
     meta = '',
     externalSearchUrl = null,
+    showViewToggle = false,
+    view = 'list' as 'list' | 'grid',
+    onViewChange,
   }: {
     query?: string;
     placeholder?: string;
@@ -44,6 +47,9 @@
     onSync?: () => void;
     meta?: string;
     externalSearchUrl?: string | null;
+    showViewToggle?: boolean;
+    view?: 'list' | 'grid';
+    onViewChange?: (v: 'list' | 'grid') => void;
   } = $props();
 
   let searchBar: SearchBar | undefined = $state();
@@ -63,6 +69,40 @@
           onclick={() => onEntityChange?.(choice)}
         >{choice === 'releases' ? 'Releases' : choice === 'tracks' ? 'Tracks' : 'Artists'}</button>
       {/each}
+    </div>
+  {/if}
+  {#if showViewToggle}
+    <div class="view-toggle">
+      <button
+        class="icon-btn"
+        class:active={view === 'list'}
+        title="List view"
+        onclick={() => onViewChange?.('list')}
+        type="button"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <rect x="1" y="2" width="3" height="3" rx="0.5" fill="currentColor"/>
+          <line x1="6" y1="3.5" x2="13" y2="3.5" stroke="currentColor" stroke-width="1.2"/>
+          <rect x="1" y="5.5" width="3" height="3" rx="0.5" fill="currentColor"/>
+          <line x1="6" y1="7" x2="13" y2="7" stroke="currentColor" stroke-width="1.2"/>
+          <rect x="1" y="9" width="3" height="3" rx="0.5" fill="currentColor"/>
+          <line x1="6" y1="10.5" x2="13" y2="10.5" stroke="currentColor" stroke-width="1.2"/>
+        </svg>
+      </button>
+      <button
+        class="icon-btn"
+        class:active={view === 'grid'}
+        title="Grid view"
+        onclick={() => onViewChange?.('grid')}
+        type="button"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <rect x="1" y="1" width="5" height="5" rx="0.5" fill="currentColor"/>
+          <rect x="8" y="1" width="5" height="5" rx="0.5" fill="currentColor"/>
+          <rect x="1" y="8" width="5" height="5" rx="0.5" fill="currentColor"/>
+          <rect x="8" y="8" width="5" height="5" rx="0.5" fill="currentColor"/>
+        </svg>
+      </button>
     </div>
   {/if}
   <div class="search-wrap">
@@ -112,6 +152,15 @@
   .icon-btn:hover {
     color: var(--text);
     border-color: var(--text-muted);
+  }
+  .icon-btn.active {
+    color: var(--text);
+    border-color: var(--accent-border);
+    background: var(--accent-bg);
+  }
+  .view-toggle {
+    display: flex;
+    gap: 4px;
   }
   .toggle {
     display: flex;
