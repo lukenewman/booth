@@ -62,6 +62,13 @@ let uploadChain: Promise<void> = Promise.resolve();
 let recordStart = 0;
 let meterRaf = 0;
 
+// Live waveform: one peak per ~50ms hop, accumulated across the take as it
+// records. Plain (non-reactive) array drawn by RecordSession's own rAF loop.
+let livePeaks: number[] = [];
+let livePeakMax = 0;
+let livePeakSamples = 0;
+let liveHopFrames = 2400; // sampleRate * 0.05, set per take
+
 const FLUSH_SAMPLES = 48000 * 2; // ~1s of stereo interleaved samples
 
 async function flushPending(): Promise<void> {
@@ -140,6 +147,10 @@ export const recorder = {
   get sampleRate() {
     return sampleRate;
   },
+  /** Accumulating per-hop peaks for the current take (drawn live). */
+  get livePeaks(): readonly number[] {
+    return livePeaks;
+  },
 
   /** Open session + input device; enter live preview. */
   async start(release: string, deviceId?: string) {
@@ -183,9 +194,22 @@ export const recorder = {
       worklet = new AudioWorkletNode(ctx, 'pcm-recorder', { numberOfInputs: 1, numberOfOutputs: 0 });
       worklet.port.onmessage = (e: MessageEvent<Float32Array>) => {
         if (phase !== 'recording') return;
-        pending.push(e.data);
-        pendingSamples += e.data.length;
+        const data = e.data;
+        pending.push(data);
+        pendingSamples += data.length;
         if (pendingSamples >= FLUSH_SAMPLES) void flushPending();
+        // Accumulate one peak per hop for the live waveform.
+        for (let i = 0; i + 1 < data.length; i += 2) {
+          const a = data[i] < 0 ? -data[i] : data[i];
+          const b = data[i + 1] < 0 ? -data[i + 1] : data[i + 1];
+          const m = a > b ? a : b;
+          if (m > livePeakMax) livePeakMax = m;
+          if (++livePeakSamples >= liveHopFrames) {
+            livePeaks.push(livePeakMax);
+            livePeakMax = 0;
+            livePeakSamples = 0;
+          }
+        }
       };
       src.connect(worklet);
       clipped = false;
@@ -212,6 +236,10 @@ export const recorder = {
       return;
     }
     currentTakeId = ((await res.json()) as { takeId: string }).takeId;
+    livePeaks = [];
+    livePeakMax = 0;
+    livePeakSamples = 0;
+    liveHopFrames = Math.max(1, Math.round(ctx.sampleRate * 0.05));
     recordStart = performance.now();
     elapsedMs = 0;
     phase = 'recording';

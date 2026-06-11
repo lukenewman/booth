@@ -50,6 +50,48 @@
   }
 
   const phase = $derived(recorder.phase);
+
+  // Live waveform: draw the accumulating per-hop peaks (scaled to fill width)
+  // on every frame while recording.
+  let liveCanvas = $state<HTMLCanvasElement>();
+  const LW = 1000;
+  const LH = 72;
+  function drawLive(canvas: HTMLCanvasElement) {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, LW, LH);
+    ctx.fillStyle = '#161616';
+    ctx.fillRect(0, 0, LW, LH);
+    const peaks = recorder.livePeaks;
+    const n = peaks.length;
+    if (n === 0) return;
+    ctx.fillStyle = '#3a86ff';
+    // Compress the whole take-so-far into the canvas width (max per column).
+    const cols = Math.min(LW, n);
+    const per = n / cols;
+    for (let c = 0; c < cols; c++) {
+      let m = 0;
+      for (let i = Math.floor(c * per); i < Math.floor((c + 1) * per) + 1 && i < n; i++) {
+        if (peaks[i] > m) m = peaks[i];
+      }
+      const h = m * (LH - 6);
+      const x = (c / cols) * LW;
+      ctx.fillRect(x, (LH - h) / 2, Math.max(1, LW / cols - 0.5), h);
+    }
+  }
+  $effect(() => {
+    if (phase !== 'recording' || !liveCanvas) return;
+    const canvas = liveCanvas;
+    canvas.width = LW;
+    canvas.height = LH;
+    let raf = 0;
+    const loop = () => {
+      drawLive(canvas);
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  });
 </script>
 
 <div class="record-overlay">
@@ -101,6 +143,7 @@
               {/if}
             </div>
           {:else if phase === 'recording'}
+            <canvas class="live-wave" bind:this={liveCanvas}></canvas>
             <div class="actions">
               <span class="elapsed">⏺ {fmt(recorder.elapsedMs)}</span>
               <button class="primary" onclick={() => recorder.stopTake()}>⏹ Stop</button>
@@ -230,6 +273,13 @@
   .rate {
     font-size: 11px;
     opacity: 0.5;
+  }
+  .live-wave {
+    width: 100%;
+    max-width: 1000px;
+    height: 72px;
+    border-radius: 5px;
+    background: #161616;
   }
   .actions {
     display: flex;
