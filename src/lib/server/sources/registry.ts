@@ -20,8 +20,8 @@ export function listSources(): readonly MusicSource[] {
 import { discogsSource } from './discogs';
 registerSource(discogsSource);
 
-import { itunesSource } from './itunes';
-registerSource(itunesSource);
+import { localSource } from './local';
+registerSource(localSource);
 
 import { rekordboxSource } from './rekordbox';
 import { plexSource } from './plex';

@@ -26,13 +26,14 @@ function autoSyncOnce(sourceId: string) {
 
 /**
  * On the first request after server start, kick off a background sync for
- * every non-stub source. Skips iTunes if ITUNES_XML_PATH isn't set, since
- * the adapter would just throw. Each source fires at most once per process.
+ * every non-stub source. Skips the local source if ITUNES_XML_PATH isn't set,
+ * since its sync (Apple Music XML parse) would just throw. Each source fires
+ * at most once per process.
  */
 function autoSyncAll() {
   for (const source of listSources()) {
     if (source.isStub) continue;
-    if (source.id === 'itunes' && !env.ITUNES_XML_PATH) continue;
+    if (source.id === 'local' && !env.ITUNES_XML_PATH) continue;
     autoSyncOnce(source.id);
   }
 }

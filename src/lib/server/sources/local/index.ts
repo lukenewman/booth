@@ -9,13 +9,14 @@ function mimeFromPath(p: string): string {
     case 'mp3': return 'audio/mpeg';
     case 'flac': return 'audio/flac';
     case 'aiff': case 'aif': return 'audio/aiff';
+    case 'wav': return 'audio/wav';
     default: return 'application/octet-stream';
   }
 }
 
-export const itunesSource: MusicSource & Playable = {
-  id: 'itunes',
-  name: 'iTunes',
+export const localSource: MusicSource & Playable = {
+  id: 'local',
+  name: 'Local',
   contributes: ['track', 'release'],
   sync: syncITunesLibrary,
   async resolveTrackStream(entityId: string, db: Database) {

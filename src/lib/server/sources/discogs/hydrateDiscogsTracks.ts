@@ -136,14 +136,15 @@ export async function hydrateDiscogsTracks(
           .get(posKey) as { entity_id: string } | undefined;
         if (byPosKey) entityId = byPosKey.entity_id;
 
-        // 2. Direct iTunes entity lookup — handles pre-feature iTunes entities
-        //    that have numeric positions but no release_position match_key yet.
+        // 2. Direct local (Apple-origin) entity lookup — handles pre-feature
+        //    entities that have numeric positions but no release_position
+        //    match_key yet.
         if (!entityId) {
           const direct = db
             .prepare(
               `SELECT t.id FROM track t
                  INNER JOIN source_link sl
-                   ON sl.entity_kind='track' AND sl.entity_id=t.id AND sl.source='itunes'
+                   ON sl.entity_kind='track' AND sl.entity_id=t.id AND sl.source='local'
                  WHERE t.release_id = ? AND CAST(t.position AS INTEGER) = ?
                  LIMIT 1`,
             )

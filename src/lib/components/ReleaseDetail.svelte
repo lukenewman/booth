@@ -74,7 +74,7 @@
   // Sources we want to *always* render a panel for (in registry order),
   // regardless of whether the release has a link. Lets stub sources show
   // their "not implemented" placeholder.
-  const ALL_SOURCE_IDS = ['discogs', 'itunes', 'rekordbox', 'plex'];
+  const ALL_SOURCE_IDS = ['discogs', 'local', 'rekordbox', 'plex'];
 
   const sourcesById = $derived(new Map(sources.map((s) => [s.source, s])));
   const metaById = $derived(new Map(sourceMeta.map((m) => [m.id, m])));

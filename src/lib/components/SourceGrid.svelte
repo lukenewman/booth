@@ -1,13 +1,13 @@
 <script lang="ts">
   /**
-   * Fixed 4-slot grid: D / i / R / P (Discogs, iTunes, Rekordbox, Plex).
+   * Fixed 4-slot grid: D / L / R / P (Discogs, Local, Rekordbox, Plex).
    * `present` is the set of source ids the entity has a source_link for.
    */
   let { present }: { present: string[] } = $props();
 
   const SLOTS: { id: string; cls: string }[] = [
     { id: 'discogs', cls: 'discogs' },
-    { id: 'itunes', cls: 'itunes' },
+    { id: 'local', cls: 'local' },
     { id: 'rekordbox', cls: 'rekordbox' },
     { id: 'plex', cls: 'plex' },
   ];
@@ -36,7 +36,7 @@
     background: transparent;
   }
   .slot.on.discogs   { background: var(--src-discogs);   border-color: var(--src-discogs); }
-  .slot.on.itunes    { background: var(--src-itunes);    border-color: var(--src-itunes); }
+  .slot.on.local    { background: var(--src-local);    border-color: var(--src-local); }
   .slot.on.rekordbox { background: var(--src-rekordbox); border-color: var(--src-rekordbox); }
   .slot.on.plex      { background: var(--src-plex);      border-color: var(--src-plex); }
 </style>

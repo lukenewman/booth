@@ -40,7 +40,7 @@
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }
 
-  const ALL_SOURCE_IDS = ['discogs', 'itunes', 'rekordbox', 'plex'];
+  const ALL_SOURCE_IDS = ['discogs', 'local', 'rekordbox', 'plex'];
 
   const sourcesById = $derived(new Map(sources.map((s) => [s.source, s])));
   const metaById = $derived(new Map(sourceMeta.map((m) => [m.id, m])));

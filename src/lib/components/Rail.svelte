@@ -146,7 +146,7 @@
     flex-shrink: 0;
   }
   .dot.discogs   { background: var(--src-discogs); }
-  .dot.itunes    { background: var(--src-itunes); }
+  .dot.local    { background: var(--src-local); }
   .dot.rekordbox { background: var(--src-rekordbox); }
   .dot.plex      { background: var(--src-plex); }
   .dot.dim { opacity: 0.35; }

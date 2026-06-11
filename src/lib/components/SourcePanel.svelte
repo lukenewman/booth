@@ -82,7 +82,7 @@
     flex-shrink: 0;
   }
   .dot.discogs   { background: var(--src-discogs); }
-  .dot.itunes    { background: var(--src-itunes); }
+  .dot.local    { background: var(--src-local); }
   .dot.rekordbox { background: var(--src-rekordbox); opacity: 0.45; }
   .dot.plex      { background: var(--src-plex);      opacity: 0.45; }
 
