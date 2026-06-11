@@ -4,6 +4,7 @@ import { collate, type CollateSummary } from './collate';
 import { getSource } from '../sources/registry';
 import { NotImplementedError } from '../sources/types';
 import { hydrateDiscogsTracks } from '../sources/discogs/hydrateDiscogsTracks';
+import { resolvedRecordingsRoot } from '../recording/env';
 
 export interface SyncRunRow {
   id: string;
@@ -28,7 +29,7 @@ export async function runSync(db: Database, sourceId: string): Promise<SyncRunRo
 
   try {
     const result = await source.sync();
-    const summary = collate(db, sourceId, result);
+    const summary = collate(db, sourceId, result, { recordingsRoot: resolvedRecordingsRoot() });
 
     // After collating Discogs releases, fetch tracklists for any that don't
     // have track rows yet.  Results are folded into the summary so the

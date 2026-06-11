@@ -34,10 +34,20 @@ export type MatchMethod =
  *   - delete source_links whose external_ids are no longer present in this sync
  *   - delete entities that have zero remaining source_links
  */
+export interface CollateOptions {
+  /**
+   * Absolute root of Booth's vinyl-rip recordings. When set, local-source
+   * prunes skip external_ids under this root — an Apple Music XML re-sync
+   * must never delete vinyl rips, which are absent from the XML by nature.
+   */
+  recordingsRoot?: string;
+}
+
 export function collate(
   db: Database,
   sourceId: string,
   result: SyncResult,
+  opts: CollateOptions = {},
 ): CollateSummary {
   const summary: CollateSummary = {
     rowsIn: result.tracks.length + result.releases.length,
@@ -75,11 +85,15 @@ export function collate(
       ...result.releases.map((r) => r.externalId),
       ...result.tracks.map((t) => t.externalId),
     ]);
+    const isVinylRip = (externalId: string): boolean =>
+      sourceId === 'local' &&
+      !!opts.recordingsRoot &&
+      externalId.startsWith(opts.recordingsRoot);
     if (result.releases.length > 0) {
-      summary.releasesDeleted = pruneSource(db, 'release', sourceId, externalIds);
+      summary.releasesDeleted = pruneSource(db, 'release', sourceId, externalIds, isVinylRip);
     }
     if (result.tracks.length > 0) {
-      summary.tracksDeleted = pruneSource(db, 'track', sourceId, externalIds);
+      summary.tracksDeleted = pruneSource(db, 'track', sourceId, externalIds, isVinylRip);
     }
 
     db.prepare(
@@ -457,6 +471,7 @@ function pruneSource(
   kind: EntityKind,
   sourceId: string,
   keepExternalIds: Set<string>,
+  keepPredicate?: (externalId: string) => boolean,
 ): number {
   const toDelete = db
     .prepare(
@@ -468,6 +483,7 @@ function pruneSource(
   let orphans = 0;
   for (const row of toDelete) {
     if (keepExternalIds.has(row.external_id)) continue;
+    if (keepPredicate?.(row.external_id)) continue;
     db.prepare(
       `DELETE FROM source_link
         WHERE entity_kind=? AND source=? AND external_id=?`,
