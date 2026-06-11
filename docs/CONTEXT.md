@@ -4,7 +4,7 @@
 
 ## What it is
 
-Single-user, local-only SvelteKit app for adding records to a personal Discogs collection. Two ways in: text search and webcam barcode scan. Keyboard-first, dark theme, no auth UI (token lives in `.env`). Data layer is a generic source-adapter system backed by local SQLite, with Discogs + Apple Music.app adapters wired up and Rekordbox + Plex stubbed.
+Single-user, local-only SvelteKit app for adding records to a personal Discogs collection. Two ways in: text search and webcam barcode scan. Keyboard-first, dark theme, no auth UI (token lives in `.env`). Data layer is a generic source-adapter system backed by local SQLite, with Discogs + Apple Music.app adapters wired up and Rekordbox + Plex stubbed. Tracks backed by a local file (iTunes) play in-app through a built-in `<audio>` player.
 
 ## Tech
 
@@ -46,7 +46,7 @@ src/
     types.ts                                  DiscogsRelease, SessionEntry, ApiError, AddResponse
     keyboard.svelte.ts                        installKeyboard(actions, guards) — global keydown handler dispatching DOM-driven actions
     components/
-      Explorer.svelte                         three-pane shell (rail / listview / detail); owns URL ↔ store sync, data fetching, add/remove handlers
+      Explorer.svelte                         three-pane shell (rail / listview / detail); owns URL ↔ store sync, data fetching, add/remove handlers; mounts <Player /> + <PlayerBar />
       Rail.svelte                             left rail: Library / Sources / Add → Discogs sections
       Listview.svelte                         generic paginated row container; IntersectionObserver sentinel + selection state
       ListviewToolbar.svelte                  list header: search input + scanner btn + entity toggle (releases/tracks/artists) + sync chip + meta
@@ -66,6 +66,8 @@ src/
       Toast.svelte                            bottom-center toast container
       SessionLog.svelte                       32px footer strip; only shown in Add → Discogs
       ShortcutOverlay.svelte                  `?` overlay listing shortcuts
+      Player.svelte                           invisible <audio> element bound to /api/stream/{trackId}; bridges element events ↔ player store
+      PlayerBar.svelte                        48px bottom transport bar (thumb, title/artist, play-pause, elapsed/total, seek scrubber); shown only while a track is loaded
     server/
       db/
         index.ts                              singleton bun:sqlite connection; reads BOOTH_DB_PATH or falls back to ~/.booth/booth.db
@@ -77,7 +79,7 @@ src/
           004_sync_run.sql                    sync_run table (id, source, started_at, finished_at, summary JSON, error); indexed by (source, started_at DESC) for history queries
           005_cover_art.sql                   adds thumb_url TEXT and cover_url TEXT to release (nullable; NULL for iTunes-only releases)
       sources/
-        types.ts                              MusicSource (with isStub), CollectionWritable, SourceTrack, SourceRelease, SyncResult
+        types.ts                              MusicSource (with isStub), CollectionWritable, Playable + TrackStream (file|redirect) + isPlayable(), SourceTrack, SourceRelease, SyncResult
         registry.ts                           statically-populated source list; getSource(id), listSources()
         discogs/
           api.ts                              discogsFetch + DiscogsError; reads token via $env/dynamic/private
@@ -87,7 +89,7 @@ src/
         itunes/
           parse.ts                            plist/XML → typed iTunes records
           sync.ts                             parses Library.xml → SyncResult; emits emergent releases
-          index.ts                            itunesSource: MusicSource (read-only)
+          index.ts                            itunesSource: MusicSource & Playable (read-only sync; resolveTrackStream → local {kind:'file'} via the track's file_path match key)
         rekordbox/
           index.ts                            stub: isStub=true; sync() throws NotImplementedError
         plex/
@@ -95,13 +97,14 @@ src/
       library/
         normalize.ts                          normalization helpers for match keys (artist_album_year, file_path, artist_name)
         collate.ts                            post-sync: maps SyncResult → entity + source_link upserts; writes source_state. Exports upsertArtist(db, name) for callers outside collate (e.g. Discogs add path) that need to resolve an artist string to an artist row id.
-        queries.ts                            listReleases / listTracks (paginated), getReleaseDetail / getTrackDetail, listSourcesWithState, getMembershipExternalIds. All release/track selects JOIN the artist table and alias artist.name AS artist so the wire shape is unchanged.
+        queries.ts                            listReleases / listTracks (paginated), getReleaseDetail / getTrackDetail, listSourcesWithState, getMembershipExternalIds. All release/track selects JOIN the artist table and alias artist.name AS artist so the wire shape is unchanged. Computes `playableSources` once from listSources().filter(isPlayable) and tags every track row with canPlay.
         sync_run.ts                           runSync(db, sourceId) wraps adapter.sync + collate, writes a sync_run row (start row up front, summary or error on completion); listSyncRuns(db, source, limit) reads recent runs. Used by /api/sources/[id]/sync, the boot hook, and the runs endpoint.
     stores/
       session.svelte.ts                       in-memory session log (entries, count, last)
       toast.svelte.ts                         toast queue with auto-dismiss + retry actions
       collection.svelte.ts                    client mirror of Discogs membership (Set<releaseId>); fetches /api/library/membership?source=discogs
       explorerState.svelte.ts                 singleton mirror of URL params ?nav / ?id / ?q / ?entity; hydrate() + serialize()
+      player.svelte.ts                        in-memory now-playing state (trackId/title/artist/thumbUrl, isPlaying, currentTime, duration); play/pause/resume/seekTo/stop; _-prefixed bridge methods set by Player.svelte
   routes/
     +layout.svelte                            imports app.css; mounts <Toast />
     +page.svelte                              mounts <Explorer> + <ShortcutOverlay>; setup gate; installKeyboard with DOM-driven actions
@@ -123,6 +126,10 @@ src/
         collection/
           add/+server.ts                      POST {releaseId,…} — adds to Discogs; writes source_link + appends instance_id to source_facets.instanceIds
           remove/+server.ts                   DELETE {releaseId, instanceId?} — removes from Discogs; instanceId optional (falls back to source_facets.instanceIds[0])
+      stream/
+        [trackId]/+server.ts                  GET → resolves a track's playable source via resolveTrackStream; 302 for {kind:'redirect'}, HTTP-range file stream (206/416) for {kind:'file'}; 404 when no source resolves
+      artwork/
+        [filename]/+server.ts                 GET → serves cached cover art from ~/.booth/artwork/ (path-traversal-guarded, immutable cache)
 docs/
   CONTEXT.md                                  ← this file (deferred work lives in Linear; see ## Backlog below)
   superpowers/
@@ -169,6 +176,15 @@ docs/
 - Keyboard `u` / `Cmd|Ctrl+Z`: prefer the visible detail-pane Remove button; fall back to undoing the most-recent session-log entry if no Remove is on screen.
 - Add/undo errors surface via toast.
 
+### Playback
+- **In-app audio player** for tracks backed by a `Playable` source. Today only **iTunes** is `Playable` (local files); Discogs is not (release-only, no local audio).
+- **`Playable` interface** (`sources/types.ts`): `resolveTrackStream(entityId, db): Promise<TrackStream | null>`, where `TrackStream = { kind: 'file', path, mimeType } | { kind: 'redirect', url }`. `isPlayable(source)` narrows a source. iTunes resolves via the track's `file_path` match key → `{ kind: 'file' }`, MIME inferred from the file extension.
+- **`canPlay` flag**: `queries.ts` computes `playableSources` once from `listSources().filter(isPlayable)`; every track row carries `canPlay = sources.some((s) => playableSources.has(s))`. Gates whether a row's play affordance is live.
+- **Stream endpoint** `GET /api/stream/[trackId]`: looks up the track's source links, filters to playable sources, calls `resolveTrackStream` until one returns non-null. `file` → byte-range-capable response (206/416 honoured for seeking); `redirect` → 302 to the URL. 404 when nothing resolves.
+- **Client**: `stores/player.svelte.ts` holds now-playing state. `Player.svelte` is an invisible `<audio>` bound to `/api/stream/{trackId}` that bridges element events back to the store. `PlayerBar.svelte` is a 48px bottom transport bar (thumb, title/artist, play-pause, elapsed/total, seek scrubber) shown only while a track is loaded. Both mounted in `Explorer.svelte`.
+- **Affordance**: double-click a track row (in `TrackList` or the `ReleaseDetail` tracklist) plays it when `canPlay`; the playing row shows ▶. `Space` toggles play/pause. `TrackDetail` has no play control today.
+- **`{ kind: 'redirect' }` caveat**: only suits direct-audio URLs the `<audio>` element can load — not YouTube watch pages, which need an iframe. No source emits redirect streams yet.
+
 ### URL state
 - Four params, mirrored by `explorerState.svelte.ts` singleton:
   - `?nav=<rail-item>` — e.g., `library:all`, `sources:discogs`, `add:discogs`. Source of truth for which rail item is selected. Legacy `library:all-releases` / `library:all-tracks` URLs are redirected to `library:all` on hydrate, carrying their entity-kind through as `?entity=`.
@@ -188,6 +204,8 @@ docs/
 - `/` focus search · `s` toggle scanner · `?` toggle overlay
 - `Tab` toggles the app-wide tracks/releases lens. Suppressed when focus is inside an input/textarea (preserves standard form-field tabbing) and when the current rail item has no tracks-side concept (the toolbar's `.toggle` element is the DOM-driven probe — its absence makes Tab a no-op).
 - `↑/↓` walk listview rows via DOM focus; `↑` from row 1 returns focus to the search input; `↓` from the search input jumps to row 1.
+- `[` / `]` select the previous / next rail item (DOM-driven: clicks the adjacent `.rail button.item`).
+- `Space` toggles play/pause for the loaded track (no-op when nothing is playing; suppressed when focus is in an input/textarea).
 - `Enter` — context-aware: on a focused row, opens its detail (same as clicking); otherwise clicks the visible primary Add CTA.
 - `Esc` closes scanner overlay; otherwise clears search-input value, then blurs it.
 - `u` or `Cmd/Ctrl+Z` — prefer visible detail-pane Remove (handles persistent removal via facet); else undoes most-recent session add.
@@ -203,8 +221,8 @@ docs/
   - `GET /api/library/releases?source=&limit=` — releases from the unified store.
   - `GET /api/library/membership?source=discogs` — set of Discogs `external_id` strings for releases currently in the collection. This is what `collection.svelte.ts` fetches to populate the "in collection" badge.
 - **Adapters:**
-  - **Discogs** (`id: 'discogs'`) — real, full read+write via `CollectionWritable`. Syncs the entire collection folder via paginated Discogs API. Writes (add/remove) go through to both Discogs and the SQLite `source_link` table.
-  - **Apple Music.app** (`id: 'itunes'`) — real, read-only. Parses `ITUNES_XML_PATH` Library.xml via the `plist` package. Contributes tracks with file-path match keys and emergent releases grouped by `(Album Artist || Artist, Album, Year)`. Synthetic release `external_id`s are deterministic hashes of the normalized group key. Track facets include `rating`, `playCount`, `dateAdded`, `kind`, `bitRate`, `sampleRate`, `genre`.
+  - **Discogs** (`id: 'discogs'`) — real, full read+write via `CollectionWritable`. Syncs the entire collection folder via paginated Discogs API. Writes (add/remove) go through to both Discogs and the SQLite `source_link` table. Not `Playable` (release-only; no local audio).
+  - **Apple Music.app** (`id: 'itunes'`) — real, read-only. Parses `ITUNES_XML_PATH` Library.xml via the `plist` package. Contributes tracks with file-path match keys and emergent releases grouped by `(Album Artist || Artist, Album, Year)`. Synthetic release `external_id`s are deterministic hashes of the normalized group key. Track facets include `rating`, `playCount`, `dateAdded`, `kind`, `bitRate`, `sampleRate`, `genre`. Implements `Playable` — `resolveTrackStream` returns a local `{ kind: 'file' }` from the track's `file_path` match key, which is what lights up the in-app player.
   - **Rekordbox** (`id: 'rekordbox'`) and **Plex** (`id: 'plex'`) — stubs. Registered in the source registry with correct `id`/`name`/`contributes` but `sync()` throws `NotImplementedError`, which the route translates to HTTP 501.
 
 ## Data model
@@ -250,6 +268,8 @@ Limitations of code that's currently in production. For deferred features and no
 - **No automated tests.** Verification is via `bun verify scripts/<name>.ts`, curl, sqlite3, and manual browser testing.
 - **`Cmd+Z` is intercepted by the browser** when the search input is focused (it'll undo typed text first). The on-screen button and `u` key still work.
 - **Source-grid on listview rows doesn't refresh after a Discogs-remove** for other rows of the same release still on screen. Only the currently-detail-open row updates. Likely benign until duplicate-release scenarios appear.
+- **Playback affordance is on list/tracklist rows only.** `TrackDetail` (the track right-pane) has no play control; only `TrackList` rows and the `ReleaseDetail` tracklist support double-click-to-play.
+- **Only iTunes-backed tracks are playable.** A track with no `file_path` match key (e.g. a release with no local files) has `canPlay = false` and no play affordance.
 
 ## Local development
 
