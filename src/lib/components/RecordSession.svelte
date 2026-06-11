@@ -58,7 +58,18 @@
   const LW = 1000;
   const LH = 72;
   const HOP_MS = 50; // matches the store's ~50ms live hop
-  const WINDOW_MS = 60000;
+
+  // Waveform zoom: 'full' compresses the whole take to width; the numbers are a
+  // constant-zoom scrolling window of that many seconds.
+  type WaveZoom = 'full' | '30' | '60' | '120';
+  const ZOOMS: { id: WaveZoom; label: string }[] = [
+    { id: 'full', label: 'Full' },
+    { id: '30', label: '30s' },
+    { id: '60', label: '60s' },
+    { id: '120', label: '120s' },
+  ];
+  let waveZoom = $state<WaveZoom>('60');
+
   function drawLive(canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -68,14 +79,28 @@
     const peaks = recorder.livePeaks;
     const n = peaks.length;
     if (n === 0) return;
+    ctx.fillStyle = '#3a86ff';
 
-    const windowHops = WINDOW_MS / HOP_MS; // constant zoom: hops mapped across full width
+    if (waveZoom === 'full') {
+      // Compress the whole take-so-far across the full width.
+      for (let px = 0; px < LW; px++) {
+        const from = Math.floor((px / LW) * n);
+        const to = Math.floor(((px + 1) / LW) * n);
+        let m = 0;
+        for (let i = from; i <= to && i < n; i++) if (peaks[i] > m) m = peaks[i];
+        const h = m * (LH - 6);
+        ctx.fillRect(px, (LH - h) / 2, 1, h);
+      }
+      return;
+    }
+
+    // Constant-zoom scrolling window: the most recent N seconds, newest at the
+    // right. Fills from the left until the window is full, then scrolls.
+    const windowHops = (Number(waveZoom) * 1000) / HOP_MS;
     const hopsPerPixel = windowHops / LW;
     const visibleStart = Math.max(0, n - windowHops);
     const visibleCount = n - visibleStart;
-    const usedW = Math.min(LW, (visibleCount / windowHops) * LW); // grows, then pins at LW
-
-    ctx.fillStyle = '#3a86ff';
+    const usedW = Math.min(LW, (visibleCount / windowHops) * LW);
     for (let px = 0; px < usedW; px++) {
       const from = visibleStart + Math.floor(px * hopsPerPixel);
       const to = visibleStart + Math.floor((px + 1) * hopsPerPixel);
@@ -149,6 +174,11 @@
               {/if}
             </div>
           {:else if phase === 'recording'}
+            <div class="zoom-toggle">
+              {#each ZOOMS as z}
+                <button class:active={waveZoom === z.id} onclick={() => (waveZoom = z.id)}>{z.label}</button>
+              {/each}
+            </div>
             <canvas class="live-wave" bind:this={liveCanvas}></canvas>
             <div class="actions">
               <span class="elapsed">⏺ {fmt(recorder.elapsedMs)}</span>
@@ -279,6 +309,26 @@
   .rate {
     font-size: 11px;
     opacity: 0.5;
+  }
+  .zoom-toggle {
+    display: flex;
+    gap: 4px;
+  }
+  .zoom-toggle button {
+    background: #1c1c1c;
+    border: 1px solid #2a2a2a;
+    color: inherit;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0.7;
+  }
+  .zoom-toggle button.active {
+    background: #2962ff;
+    border-color: #2962ff;
+    color: #fff;
+    opacity: 1;
   }
   .live-wave {
     width: 100%;
