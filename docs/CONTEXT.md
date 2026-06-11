@@ -85,6 +85,8 @@ src/
           api.ts                              discogsFetch + DiscogsError; reads token via $env/dynamic/private
           username.ts                         lazy /oauth/identity username cache
           sync.ts                             full collection re-pull → SyncResult; populates instanceIds facet
+          videos.ts                           fetchReleaseVideos(externalId) → release .videos[] (deduped by uri, YouTube ids parsed)
+          youtube.ts                          parseYouTubeId(uri) — pure URL → video-id helper (youtube.com / youtu.be / music. / m.)
           index.ts                            discogsSource: MusicSource & CollectionWritable
         itunes/
           parse.ts                            plist/XML → typed iTunes records
@@ -113,6 +115,7 @@ src/
         +server.ts                            GET → [{ id, name, isStub, lastSyncedAt, lastSummary }] for the rail Sources section
         [id]/sync/+server.ts                  POST → runSync(getDb(), id) → return summary; 404 unknown, 501 stub
         [id]/runs/+server.ts                  GET ?limit= → { items: SyncRunRow[] } recent sync_run rows for the given source (default 20, max 200)
+        discogs/releases/[id]/videos/+server.ts  GET → { videos: [{url,title,youtubeId}] } for a release ULID; resolves ULID→Discogs external_id, fetches /releases/{id}.videos[]; empty when no discogs link/videos
       library/
         tracks/+server.ts                     GET ?source=&q=&multiSource=&limit=&offset=  paginated tracks
         tracks/[id]/+server.ts                GET → { track, sources, facets, release, sourceMeta } for TrackDetail
@@ -184,6 +187,12 @@ docs/
 - **Client**: `stores/player.svelte.ts` holds now-playing state. `Player.svelte` is an invisible `<audio>` bound to `/api/stream/{trackId}` that bridges element events back to the store. `PlayerBar.svelte` is a 48px bottom transport bar (thumb, title/artist, play-pause, elapsed/total, seek scrubber) shown only while a track is loaded. Both mounted in `Explorer.svelte`.
 - **Affordance**: double-click a track row (in `TrackList` or the `ReleaseDetail` tracklist) plays it when `canPlay`; the playing row shows ▶. `Space` toggles play/pause. `TrackDetail` has no play control today.
 - **`{ kind: 'redirect' }` caveat**: only suits direct-audio URLs the `<audio>` element can load — not YouTube watch pages, which need an iframe. No source emits redirect streams yet.
+
+### Release videos
+- **Discogs release detail lazy-loads YouTube videos.** `ReleaseDetail.svelte` fetches `/api/sources/discogs/releases/{id}/videos` when a release with a Discogs `source_link` opens, and renders a list of `<iframe>` embeds (`loading="lazy"`, `youtube-nocookie.com`), each captioned with the Discogs video title. A `$effect` keyed on `release.id` cancels stale fetches when the user switches releases.
+- **Server**: `fetchReleaseVideos(externalId)` (`discogs/videos.ts`) calls the full `/releases/{id}` Discogs endpoint and returns its `.videos[]`, deduped by uri (Discogs sometimes repeats one); `parseYouTubeId` (`discogs/youtube.ts`, pure) resolves the embeddable id. A non-YouTube uri renders as a plain link instead of an embed.
+- **Endpoint** returns `{ videos: [] }` (not 404) when the release has no Discogs link or no videos; a Discogs 429 surfaces as HTTP 429.
+- **Release-level only** — no tracklist matching. Discogs `.videos[]` aren't mapped to specific tracks, so there are no per-track play buttons here (this is the deliberately-scoped version of the Discogs "Playable" idea).
 
 ### URL state
 - Four params, mirrored by `explorerState.svelte.ts` singleton:

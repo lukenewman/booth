@@ -78,6 +78,30 @@
 
   const sourcesById = $derived(new Map(sources.map((s) => [s.source, s])));
   const metaById = $derived(new Map(sourceMeta.map((m) => [m.id, m])));
+
+  interface ReleaseVideo { url: string; title: string; youtubeId: string | null; }
+  let videos = $state<ReleaseVideo[]>([]);
+  let videosLoading = $state(false);
+  let videosError = $state(false);
+
+  // Lazy-load Discogs videos when a release with a Discogs link is shown.
+  $effect(() => {
+    const rid = release.id;
+    const hasDiscogs = sources.some((s) => s.source === 'discogs');
+    videos = [];
+    videosError = false;
+    videosLoading = false;
+    if (!hasDiscogs) return;
+
+    let cancelled = false;
+    videosLoading = true;
+    fetch(`/api/sources/discogs/releases/${rid}/videos`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((data) => { if (!cancelled) videos = data.videos ?? []; })
+      .catch(() => { if (!cancelled) videosError = true; })
+      .finally(() => { if (!cancelled) videosLoading = false; });
+    return () => { cancelled = true; };
+  });
 </script>
 
 <div class="detail">
@@ -167,6 +191,40 @@
       {/if}
     {/if}
   {/each}
+
+  {#if sourcesById.has('discogs')}
+    <div class="videos">
+      <div class="videos-header">
+        Videos{#if videos.length}<span class="videos-count"> ({videos.length})</span>{/if}
+      </div>
+      {#if videosLoading}
+        <div class="videos-note">Loading…</div>
+      {:else if videosError}
+        <div class="videos-note">Couldn’t load videos.</div>
+      {:else if videos.length === 0}
+        <div class="videos-note">No videos on this release.</div>
+      {:else}
+        {#each videos as v (v.url)}
+          <div class="video">
+            {#if v.youtubeId}
+              <iframe
+                class="video-embed"
+                src={`https://www.youtube-nocookie.com/embed/${v.youtubeId}`}
+                title={v.title}
+                loading="lazy"
+                referrerpolicy="strict-origin-when-cross-origin"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen
+              ></iframe>
+              <div class="video-title">{v.title}</div>
+            {:else}
+              <a class="video-link" href={v.url} target="_blank" rel="noopener noreferrer">{v.title} ↗</a>
+            {/if}
+          </div>
+        {/each}
+      {/if}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -317,4 +375,45 @@
   .track-row:hover .info-icon { color: var(--text-muted); }
   .track-row .info-icon.playing { color: var(--accent) !important; }
   .track-row.playing .track-title { color: var(--accent); }
+
+  .videos {
+    margin-top: 18px;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+  }
+  .videos-header {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-subtle);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .videos-count { color: var(--text-subtle); }
+  .videos-note {
+    font-size: 12px;
+    color: var(--text-subtle);
+    padding: 2px 0 6px;
+  }
+  .video { margin-bottom: 14px; }
+  .video-embed {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border: 0;
+    border-radius: 4px;
+    display: block;
+    background: var(--bg-raised);
+  }
+  .video-title {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    line-height: 1.3;
+  }
+  .video-link {
+    font-size: 12px;
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .video-link:hover { text-decoration: underline; }
 </style>
