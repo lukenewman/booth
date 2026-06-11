@@ -37,6 +37,7 @@
     addCta = null,
     onTrackSelect,
     onArtistSelect,
+    onRecord,
   }: {
     release: Release;
     sources: SourceLink[];
@@ -51,7 +52,10 @@
     } | null;
     onTrackSelect?: (trackId: string) => void;
     onArtistSelect?: (artistId: string) => void;
+    onRecord?: () => void;
   } = $props();
+
+  const hasDiscogs = $derived(sources.some((s) => s.source === 'discogs'));
 
   /** Group facets by source id, deciding which keys to show as mono. */
   function facetRowsFor(sourceId: string) {
@@ -176,6 +180,12 @@
     </div>
   {/if}
 
+  {#if hasDiscogs && onRecord}
+    <div class="cta-row">
+      <button class="record-cta" onclick={onRecord}>⏺ Record from vinyl</button>
+    </div>
+  {/if}
+
   {#each ALL_SOURCE_IDS as sid}
     {@const link = sourcesById.get(sid)}
     {@const meta = metaById.get(sid)}
@@ -277,6 +287,19 @@
   }
 
   .cta-row { margin-bottom: 16px; }
+  .record-cta {
+    width: 100%;
+    padding: 7px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    background: none;
+    border: 1px solid #c0392b;
+    color: #c0392b;
+  }
+  .record-cta:hover { background: #c0392b22; }
   .cta-btn {
     width: 100%;
     padding: 7px 12px;

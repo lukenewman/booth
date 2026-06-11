@@ -18,6 +18,7 @@
   import { collection } from '$lib/stores/collection.svelte';
   import Player from './Player.svelte';
   import PlayerBar from './PlayerBar.svelte';
+  import RecordSession from './RecordSession.svelte';
 
   // ----- Source meta + counts ------------------------------------------------
 
@@ -167,6 +168,7 @@
 
   let detailKind = $state<'release' | 'track' | 'artist' | null>(null);
   let detailData = $state<any>(null);
+  let recordingRelease = $state<{ id: string; title: string; artist: string } | null>(null);
 
   async function loadDetail() {
     if (!explorerState.id) {
@@ -685,6 +687,14 @@
         addCta={releaseDetailCta}
         onTrackSelect={(id) => explorerState.setEntity(id)}
         onArtistSelect={(id) => explorerState.setEntity(id)}
+        onRecord={detailData._isDiscogsSearchHit
+          ? undefined
+          : () =>
+              (recordingRelease = {
+                id: detailData.release.id,
+                title: detailData.release.title,
+                artist: detailData.release.artist,
+              })}
       />
     {:else if detailKind === 'track' && detailData}
       <TrackDetail
@@ -712,6 +722,15 @@
   </div>
   <PlayerBar />
 </div>
+
+{#if recordingRelease}
+  <RecordSession
+    releaseId={recordingRelease.id}
+    releaseTitle={recordingRelease.title}
+    releaseArtist={recordingRelease.artist}
+    onClose={() => (recordingRelease = null)}
+  />
+{/if}
 
 <style>
   .shell {
