@@ -186,22 +186,6 @@
     </div>
   {/if}
 
-  {#each ALL_SOURCE_IDS as sid}
-    {@const link = sourcesById.get(sid)}
-    {@const meta = metaById.get(sid)}
-    {#if meta}
-      {#if link || meta.isStub}
-        <SourcePanel
-          sourceId={sid}
-          sourceName={meta.name}
-          isStub={meta.isStub && !link}
-          externalUrl={link?.external_url ?? null}
-          facets={link ? facetRowsFor(sid) : []}
-        />
-      {/if}
-    {/if}
-  {/each}
-
   {#if sourcesById.has('discogs')}
     <div class="videos">
       <div class="videos-header">
@@ -235,6 +219,22 @@
       {/if}
     </div>
   {/if}
+
+  {#each ALL_SOURCE_IDS as sid}
+    {@const link = sourcesById.get(sid)}
+    {@const meta = metaById.get(sid)}
+    {#if meta}
+      {#if link || meta.isStub}
+        <SourcePanel
+          sourceId={sid}
+          sourceName={meta.name}
+          isStub={meta.isStub && !link}
+          externalUrl={link?.external_url ?? null}
+          facets={link ? facetRowsFor(sid) : []}
+        />
+      {/if}
+    {/if}
+  {/each}
 </div>
 
 <style>
