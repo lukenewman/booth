@@ -4,7 +4,7 @@
 
 ## What it is
 
-Single-user, local-only SvelteKit app for adding records to a personal Discogs collection. Two ways in: text search and webcam barcode scan. Keyboard-first, dark theme, no auth UI (token lives in `.env`). Data layer is a generic source-adapter system backed by local SQLite, with Discogs + Apple Music.app adapters wired up and Rekordbox + Plex stubbed. Tracks backed by a local file (iTunes) play in-app through a built-in `<audio>` player.
+Single-user, local-only SvelteKit app for adding records to a personal Discogs collection, browsing the unified library, playing tracks, and **recording vinyl into the library**. Ways in: text search, webcam barcode scan, and recording a release from an audio interface. Keyboard-first, dark theme, no auth UI (token lives in `.env`). Data layer is a generic source-adapter system backed by local SQLite, with Discogs + a unified **`local`** file source (Apple Music.app import + vinyl rips) wired up and Rekordbox + Plex stubbed. Tracks backed by a local file play in-app through a built-in `<audio>` player.
 
 ## Tech
 
@@ -31,9 +31,12 @@ ITUNES_XML_PATH=
 
 # Optional: override default DB location (defaults to ~/.booth/booth.db)
 # BOOTH_DB_PATH=
+
+# Optional: where vinyl rips are written (defaults to ~/.booth/recordings)
+# BOOTH_RECORDINGS_PATH=
 ```
 
-Server reads via `$env/dynamic/private` (NOT `process.env` — Vite doesn't auto-populate that).
+`ITUNES_XML_PATH` feeds the Apple-Music import path of the **`local`** source; it gates whether the `local` source auto-syncs on boot. Server reads via `$env/dynamic/private` (NOT `process.env` — Vite doesn't auto-populate that). Recording modules stay pure: `recording/env.ts` is the only one that imports `$env`; it resolves `BOOTH_RECORDINGS_PATH` and passes the root into the pure `recording/*` modules.
 
 ## File map
 
@@ -41,7 +44,7 @@ Server reads via `$env/dynamic/private` (NOT `process.env` — Vite doesn't auto
 src/
   app.css                                     dark-theme tokens + globals
   app.html                                    <title>booth</title>
-  hooks.server.ts                             auto-sync-on-boot: iterates registry on the first request after server start and fires runSync() once per non-stub source (iTunes is also gated on ITUNES_XML_PATH being set)
+  hooks.server.ts                             auto-sync-on-boot: iterates registry on the first request after server start and fires runSync() once per non-stub source (the `local` source is also gated on ITUNES_XML_PATH being set)
   lib/
     types.ts                                  DiscogsRelease, SessionEntry, ApiError, AddResponse
     keyboard.svelte.ts                        installKeyboard(actions, guards) — global keydown handler dispatching DOM-driven actions
@@ -53,10 +56,12 @@ src/
       ReleaseList.svelte                      Listview wrapper bound to release rows
       TrackList.svelte                        Listview wrapper bound to track rows
       ArtistList.svelte                       Listview wrapper bound to artist rows (name + release/track counts + SourceGrid)
-      ReleaseDetail.svelte                    right pane for a release; tracklist + per-source panels; optional add/remove CTA with variant
+      ReleaseDetail.svelte                    right pane for a release; tracklist + per-source panels; optional add/remove CTA with variant; "⏺ Record from vinyl" CTA (onRecord prop) for Discogs-linked library releases
+      RecordSession.svelte                    full-pane capture overlay: device picker, live L/R meters + clip light + sample-rate readout (input preview), ⏺ record / ⏹ stop per side, "another side?" loop, hands off to ReviewSplits
+      ReviewSplits.svelte                     per-take canvas waveform with draggable in/out region handles + synced editable track rows (assign, retitle, add-split, merge, ▶ region preview, ⎌ seam preview, ±nudge); "Save N tracks" commit + replace prompt
       TrackDetail.svelte                      right pane for a track; parent-release card + per-source panels
       ArtistDetail.svelte                     right pane for an artist; per-source panels + list of releases (click-through to release detail)
-      SourceGrid.svelte                       4-dot "DiRP" indicator (Discogs / iTunes / Rekordbox / Plex)
+      SourceGrid.svelte                       4-dot "D/L/R/P" indicator (Discogs / Local / Rekordbox / Plex)
       SourcePanel.svelte                      per-source detail block (facets + external link or stub placeholder)
       SyncChip.svelte                         last-synced timestamp + click-to-sync; disabled for stub sources
       SyncRunHistory.svelte                   right-pane sync_run list shown when a Sources rail item is selected with no entity; one row per run (relative time, duration, summary or error)
@@ -77,7 +82,16 @@ src/
           002_source_state.sql                source_state (source PRIMARY KEY, last_synced_at, last_summary)
           003_artist_entity.sql               artist table; release/track gain artist_id FK (denormalized artist text dropped); source_link/source_facets/match_key CHECK widened to include 'artist'
           004_sync_run.sql                    sync_run table (id, source, started_at, finished_at, summary JSON, error); indexed by (source, started_at DESC) for history queries
-          005_cover_art.sql                   adds thumb_url TEXT and cover_url TEXT to release (nullable; NULL for iTunes-only releases)
+          005_cover_art.sql                   adds thumb_url TEXT and cover_url TEXT to release (nullable; NULL for local-only releases)
+          006_local_source.sql                renames source='itunes' rows to 'local' across source_link/source_facets/source_state/sync_run (itunes→local merge)
+      recording/                              vinyl capture → split → commit (all pure except env.ts)
+        env.ts                                resolvedRecordingsRoot() — only recording module importing $env; reads BOOTH_RECORDINGS_PATH
+        paths.ts                              pure path helpers: defaultRecordingsRoot, sessionTmpDir, sanitizeName, releaseDir
+        wav.ts                                24-bit PCM WAV: createWav/appendFloat32/finalizeWav (chunked capture), readWavMeta, scanWav (RMS+peak envelope), extractRegionToFile (sample-exact slice)
+        splitter.ts                           RMS envelope → noiseThreshold (median-of-lowest-k, "no-silence" guard) → findGaps / audioExtent; tunable constants (MIN_GAP_MS, PAD_MS, …)
+        matcher.ts                            proposeRegions(rms, hop, sideBlocks) — contiguous in-order alignment: duration-snap when durations exist, count-constrained gap pick when missing, single-region fallback for beat-mixed; regions carry in/out + confidence
+        session.ts                            in-memory session registry, take WAV paths under <root>/.tmp, stale-tmp sweep, loadExpectedTracks (groups tracks into side blocks via discogsPosition facet)
+        commit.ts                             commitRegions: extract each region → .part → rename into place; one DB tx writing local source_link + file_path match_key + facets (origin:'vinyl', recordedAt, sampleRate, bitDepth, takeId, sourceDiscogsReleaseId) + duration backfill; conflict (replace) flow
       sources/
         types.ts                              MusicSource (with isStub), CollectionWritable, Playable + TrackStream (file|redirect) + isPlayable(), SourceTrack, SourceRelease, SyncResult
         registry.ts                           statically-populated source list; getSource(id), listSources()
@@ -85,13 +99,14 @@ src/
           api.ts                              discogsFetch + DiscogsError; reads token via $env/dynamic/private
           username.ts                         lazy /oauth/identity username cache
           sync.ts                             full collection re-pull → SyncResult; populates instanceIds facet
+          hydrateDiscogsTracks.ts             post-sync: fetch /releases/{id}.tracklist for Discogs releases lacking track rows → insert track rows (title, duration_ms when present, sequential position) + discogsPosition facet ("A1","B2"); merges onto existing local tracks via release_position. Called from sync_run after each discogs collate, and fire-and-forget on add.
           videos.ts                           fetchReleaseVideos(externalId) → release .videos[] (deduped by uri, YouTube ids parsed)
           youtube.ts                          parseYouTubeId(uri) — pure URL → video-id helper (youtube.com / youtu.be / music. / m.)
           index.ts                            discogsSource: MusicSource & CollectionWritable
-        itunes/
-          parse.ts                            plist/XML → typed iTunes records
-          sync.ts                             parses Library.xml → SyncResult; emits emergent releases
-          index.ts                            itunesSource: MusicSource & Playable (read-only sync; resolveTrackStream → local {kind:'file'} via the track's file_path match key)
+        local/                                (formerly itunes/) the unified local-files source
+          parse.ts                            plist/XML → typed Apple Music records
+          sync.ts                             parses Library.xml → SyncResult; emits emergent releases (Apple-Music ingest path of the local source)
+          index.ts                            localSource (id:'local', name:'Local'): MusicSource & Playable; resolveTrackStream → {kind:'file'} via the track's file_path match key (serves both Apple-import and vinyl-rip files; .wav mime added)
         rekordbox/
           index.ts                            stub: isStub=true; sync() throws NotImplementedError
         plex/
@@ -107,6 +122,9 @@ src/
       collection.svelte.ts                    client mirror of Discogs membership (Set<releaseId>); fetches /api/library/membership?source=discogs
       explorerState.svelte.ts                 singleton mirror of URL params ?nav / ?id / ?q / ?entity; hydrate() + serialize()
       player.svelte.ts                        in-memory now-playing state (trackId/title/artist/thumbUrl, isPlaying, currentTime, duration); play/pause/resume/seekTo/stop; _-prefixed bridge methods set by Player.svelte
+      recorder.svelte.ts                      recording session state machine (idle→arming→preview→recording→analyzing→reviewing→committing→done); owns getUserMedia + AudioWorklet capture, chunked PCM upload, live L/R meters, per-take split proposals, commit
+  static/
+    pcm-recorder-worklet.js                   AudioWorklet processor: emits interleaved-stereo Float32 PCM frames off the audio thread during recording
   routes/
     +layout.svelte                            imports app.css; mounts <Toast />
     +page.svelte                              mounts <Explorer> + <ShortcutOverlay>; setup gate; installKeyboard with DOM-driven actions
@@ -124,6 +142,14 @@ src/
         artists/+server.ts                    GET ?source=&q=&multi_source=&limit=&offset=  paginated artists (each row: name + releaseCount + trackCount + sources[])
         artists/[id]/+server.ts               GET → { artist, sources, facets, releases, trackCount } for ArtistDetail
         membership/+server.ts                 GET ?source=discogs  → set of external_ids (Discogs release-id strings)
+      recordings/
+        sessions/+server.ts                   POST {releaseId} → create capture session; hydrates tracklist if missing; returns { sessionId, tracks, sides }
+        sessions/[id]/+server.ts              DELETE → cancel session + clean temp takes
+        sessions/[id]/takes/+server.ts        POST {sampleRate,channels} → start a take (creates the growing WAV); returns { takeId }
+        sessions/[id]/takes/[takeId]/chunk/+server.ts     POST (raw float32 body) → append PCM to the take WAV
+        sessions/[id]/takes/[takeId]/finalize/+server.ts  POST → finalize WAV, scan envelope, run matcher → { durationMs, sampleRate, peaks, regions, sideGuess }
+        sessions/[id]/takes/[takeId]/audio/+server.ts     GET ?startMs=&endMs= → audio/wav slice for region/seam preview
+        sessions/[id]/commit/+server.ts       POST {regions, replace} → commitRegions; 409 {conflicts} when already ripped and replace=false
       discogs/
         search/+server.ts                     GET ?q= — live text search; returns { results: […] } sorted by year asc
         collection/
@@ -149,12 +175,12 @@ docs/
 ### Library explorer (Slice 2 shell)
 - **Three panes**: left rail (Library / Sources / Add → Discogs sections), middle listview (paginated rows + toolbar), right detail (release or track).
 - **Library rail items**: `all` (label flips between "All tracks" / "All releases" based on the app-wide entity lens) and `in-multiple-sources` (entities contributed by ≥2 sources, supports both kinds).
-- **Sources rail items**: one per registered source (`discogs`, `itunes`, `rekordbox`, `plex`); stubs render `EmptyState`. Release-only sources (Discogs) render a dedicated "No tracks indexed" empty state when the entity lens is set to tracks.
+- **Sources rail items**: one per registered source (`discogs`, `local`, `rekordbox`, `plex`); stubs render `EmptyState`. (Discogs *does* index tracks — `hydrateDiscogsTracks` pulls tracklists post-sync — so the tracks lens is populated for Discogs releases.)
 - **Add rail item**: `add:discogs` — Discogs live search, release-only by nature (the search API doesn't return tracks); toolbar omits the entity toggle here.
 - **Entity lens (releases ↔ tracks ↔ artists)**: app-wide viewing toggle, lives in the listview toolbar and is bound to `Tab` (cycles forward 3-way). Persists across rail switches (it's a lens, not a per-rail attribute). Detail pane keeps its open entity when the lens flips — the listview switches independently. URL: `?entity=releases|tracks|artists` (omitted when equal to the default `releases`).
 - **Listview**: lazy pagination via `IntersectionObserver` sentinel rooted on the scroll container (`?limit=200&offset=…`); row click selects + opens detail.
 - **Detail**: cover image (or grey placeholder for releases with no URL), title/artist/year, optional CTA, then per-source panels (`SourcePanel`) for all registered sources, then tracklist (releases only). Stub sources still render a "not implemented" panel.
-- **SourceGrid**: 4-dot indicator (D / i / R / P) shown on every row and in detail context to communicate which sources contribute to a given entity.
+- **SourceGrid**: 4-dot indicator (D / L / R / P) shown on every row and in detail context to communicate which sources contribute to a given entity.
 - **SyncChip** (in toolbar when a Sources rail item is selected): "last synced Nm ago" → click triggers `POST /api/sources/:id/sync` and flips to "Syncing…"; updates timestamp on completion. Stubs render as a disabled "Not implemented" chip.
 
 ### Search
@@ -180,8 +206,8 @@ docs/
 - Add/undo errors surface via toast.
 
 ### Playback
-- **In-app audio player** for tracks backed by a `Playable` source. Today only **iTunes** is `Playable` (local files); Discogs is not (release-only, no local audio).
-- **`Playable` interface** (`sources/types.ts`): `resolveTrackStream(entityId, db): Promise<TrackStream | null>`, where `TrackStream = { kind: 'file', path, mimeType } | { kind: 'redirect', url }`. `isPlayable(source)` narrows a source. iTunes resolves via the track's `file_path` match key → `{ kind: 'file' }`, MIME inferred from the file extension.
+- **In-app audio player** for tracks backed by a `Playable` source. Today only the **`local`** source is `Playable` (local files — Apple-Music imports + vinyl rips); Discogs is not.
+- **`Playable` interface** (`sources/types.ts`): `resolveTrackStream(entityId, db): Promise<TrackStream | null>`, where `TrackStream = { kind: 'file', path, mimeType } | { kind: 'redirect', url }`. `isPlayable(source)` narrows a source. The `local` source resolves via the track's `file_path` match key → `{ kind: 'file' }`, MIME inferred from the file extension (incl. `.wav` for rips).
 - **`canPlay` flag**: `queries.ts` computes `playableSources` once from `listSources().filter(isPlayable)`; every track row carries `canPlay = sources.some((s) => playableSources.has(s))`. Gates whether a row's play affordance is live.
 - **Stream endpoint** `GET /api/stream/[trackId]`: looks up the track's source links, filters to playable sources, calls `resolveTrackStream` until one returns non-null. `file` → byte-range-capable response (206/416 honoured for seeking); `redirect` → 302 to the URL. 404 when nothing resolves.
 - **Client**: `stores/player.svelte.ts` holds now-playing state. `Player.svelte` is an invisible `<audio>` bound to `/api/stream/{trackId}` that bridges element events back to the store. `PlayerBar.svelte` is a 48px bottom transport bar (thumb, title/artist, play-pause, elapsed/total, seek scrubber) shown only while a track is loaded. Both mounted in `Explorer.svelte`.
@@ -193,6 +219,15 @@ docs/
 - **Server**: `fetchReleaseVideos(externalId)` (`discogs/videos.ts`) calls the full `/releases/{id}` Discogs endpoint and returns its `.videos[]`, deduped by uri (Discogs sometimes repeats one); `parseYouTubeId` (`discogs/youtube.ts`, pure) resolves the embeddable id. A non-YouTube uri renders as a plain link instead of an embed.
 - **Endpoint** returns `{ videos: [] }` (not 404) when the release has no Discogs link or no videos; a Discogs 429 surfaces as HTTP 429.
 - **Release-level only** — no tracklist matching. Discogs `.videos[]` aren't mapped to specific tracks, so there are no per-track play buttons here (this is the deliberately-scoped version of the Discogs "Playable" idea).
+
+### Vinyl recording
+- **Goal**: record a vinyl release from an audio interface into the library, smart-split each side into per-track regions, review/adjust, save as lossless local files. Entry: "⏺ Record from vinyl" CTA on a Discogs-linked library release's detail pane → full-pane `RecordSession` overlay. Spec/plan: `docs/superpowers/specs/2026-06-10-vinyl-recording-design.md`, `docs/superpowers/plans/2026-06-10-vinyl-recording.md`.
+- **Capture**: in-browser `getUserMedia` (DSP disabled: echoCancellation/noiseSuppression/autoGainControl false) → `AudioWorklet` (`static/pcm-recorder-worklet.js`) emits Float32 PCM → streamed in ~1s chunks to the server, appended to a growing 24-bit WAV under `<recordings>/.tmp/<session>/take-N.wav`. **Setup state** shows a live input preview (L/R meters, clip light, sample-rate readout) with no disk writes.
+- **Session model**: one recording (take) per side, with an "another side?" loop (handles 7″ → 2×LP). The user does not declare which side a take is — the matcher proposes.
+- **Splitting (server-side)**: on finalize, `scanWav` builds an RMS envelope; `splitter.ts` finds candidate gaps relative to the take's own noise floor; `matcher.ts` aligns regions to the release's expected tracks (read locally from the `track` table + `discogsPosition` facet, grouped into side blocks). Durations present → snap predicted boundaries to gaps; durations missing → count-constrained gap pick; beat-mixed/no gaps → single region for manual splitting. Each track is a region with independent in/out points (PAD_MS into the silence); inter-track silence, lead-in, run-out are trimmed.
+- **Review** (`ReviewSplits.svelte`): canvas waveform per take with draggable in/out handles + synced editable rows (assign track, retitle, add-split, merge, ▶ region preview, ⎌ seam preview, ±10ms/±1s nudge). Confidence dots flag low-confidence boundaries. Region/seam preview streams a WAV slice from the take via `…/audio?startMs=&endMs=`.
+- **Commit** (`commitRegions`): extracts each region to a final 24-bit WAV at `<recordings>/<Artist> — <Album> [<catno>]/<NN Title>.wav` (written to `.part` then renamed), and in one DB transaction attaches a `local` source_link (`external_id` = path) + `file_path` match key + facets (`origin:'vinyl'`, …) onto the existing Discogs track entity, backfilling `duration_ms`. On failure, moved files are removed (no half-saved release). Re-ripping returns 409 `{conflicts}` unless `replace:true`. Playback is immediate via the existing `Playable` stream path — no new playback code.
+- **Verify scripts**: `verify-wav.ts` (round-trip + region extraction), `verify-splitter.ts` (gap/region/matcher cases), `verify-local-merge.ts` (migration + prune scoping), `verify-commit.ts` (commit path: files + DB rows + conflict/replace).
 
 ### URL state
 - Four params, mirrored by `explorerState.svelte.ts` singleton:
@@ -223,7 +258,7 @@ docs/
 
 ### Sources
 - **Manual sync:** `POST /api/sources/:id/sync` invokes `runSync()` — the named adapter's `sync()`, collated into SQLite, with a row written to `sync_run` (start row up front, summary or error captured on completion). Returns the summary `{ rowsIn, releasesUpserted, tracksUpserted, releasesDeleted, tracksDeleted, conflicts }`. Returns 404 for an unknown id, 501 if the adapter's `sync()` throws `NotImplementedError`.
-- **Auto-sync on boot:** `src/hooks.server.ts` fires `runSync()` once per non-stub source on the first request after server start (fire-and-forget; iTunes additionally requires `ITUNES_XML_PATH` to be set). Runs are written to `sync_run` like any other invocation. This means every server restart refreshes the library — so data stays current without the user touching the chip, at the cost of one Discogs API pull + iTunes XML parse per restart.
+- **Auto-sync on boot:** `src/hooks.server.ts` fires `runSync()` once per non-stub source on the first request after server start (fire-and-forget; the `local` source additionally requires `ITUNES_XML_PATH` to be set, since its `sync()` is the Apple-Music XML parse). Runs are written to `sync_run` like any other invocation. This means every server restart refreshes the library — so data stays current without the user touching the chip, at the cost of one Discogs API pull + Apple-Music XML parse per restart.
 - **Sync history:** `GET /api/sources/:id/runs?limit=` returns recent `sync_run` rows for a source. The `SyncRunHistory` component renders this in the right pane whenever a Sources rail item is selected without an entity highlighted; an in-flight sync from the toolbar chip shows a "Running…" row on top and the history refetches on completion.
 - **Inspection endpoints:**
   - `GET /api/library/tracks?source=&limit=` — tracks from the unified store, optionally filtered by source.
@@ -231,7 +266,7 @@ docs/
   - `GET /api/library/membership?source=discogs` — set of Discogs `external_id` strings for releases currently in the collection. This is what `collection.svelte.ts` fetches to populate the "in collection" badge.
 - **Adapters:**
   - **Discogs** (`id: 'discogs'`) — real, full read+write via `CollectionWritable`. Syncs the entire collection folder via paginated Discogs API. Writes (add/remove) go through to both Discogs and the SQLite `source_link` table. Not `Playable` (release-only; no local audio).
-  - **Apple Music.app** (`id: 'itunes'`) — real, read-only. Parses `ITUNES_XML_PATH` Library.xml via the `plist` package. Contributes tracks with file-path match keys and emergent releases grouped by `(Album Artist || Artist, Album, Year)`. Synthetic release `external_id`s are deterministic hashes of the normalized group key. Track facets include `rating`, `playCount`, `dateAdded`, `kind`, `bitRate`, `sampleRate`, `genre`. Implements `Playable` — `resolveTrackStream` returns a local `{ kind: 'file' }` from the track's `file_path` match key, which is what lights up the in-app player.
+  - **Local** (`id: 'local'`, formerly `itunes`) — real, file-backed, the unified home for on-disk audio. Two ingest paths: (1) **Apple Music.app import** — `sync()` parses `ITUNES_XML_PATH` Library.xml via the `plist` package, contributing tracks with file-path match keys and emergent releases grouped by `(Album Artist || Artist, Album, Year)` (synthetic release `external_id`s are deterministic hashes of the normalized group key; track facets `rating`, `playCount`, `dateAdded`, `kind`, `bitRate`, `sampleRate`, `genre`); (2) **vinyl rips** — written by the recording feature (`commitRegions`), attaching a `local` source_link (`external_id` = absolute WAV path) + `file_path` match key + `origin:'vinyl'` facets onto the existing Discogs track entity. Implements `Playable` — `resolveTrackStream` returns `{ kind: 'file' }` from the `file_path` match key (serves both ingest paths). **Origin is inferred from the path** (under the recordings root → vinyl rip), and `collate`'s prune is scoped so an Apple-Music re-sync never deletes vinyl rips (which are absent from the XML).
   - **Rekordbox** (`id: 'rekordbox'`) and **Plex** (`id: 'plex'`) — stubs. Registered in the source registry with correct `id`/`name`/`contributes` but `sync()` throws `NotImplementedError`, which the route translates to HTTP 501.
 
 ## Data model
@@ -243,6 +278,7 @@ docs/
 
 ## Notable divergences from the original plan
 
+- **Vinyl recording + `itunes`→`local` merge (2026-06-10).** Added vinyl capture→split→commit (`recording/*`, `/api/recordings/*`, `RecordSession`/`ReviewSplits`, `recorder` store, PCM worklet). Renamed the `itunes` source to a unified **`local`** file source (migration 006) whose `sync()` is the Apple-Music XML import and whose second ingest path is vinyl rips; `collate`'s prune is now origin-scoped (a re-sync can't delete rips). The splitter's noise floor is the median-of-lowest-k (not a percentile) with a "no-silence" guard, because inter-track silence is a tiny fraction of a side. See `docs/superpowers/specs/2026-06-10-vinyl-recording-design.md` + plan.
 - **Multi-source architecture (Slice 1, 2026-05-05).** Replaced the hardcoded-Discogs data layer with a generic source-adapter contract + SQLite-backed unified store. See `docs/superpowers/specs/2026-05-05-multi-source-architecture-design.md` and `docs/superpowers/plans/2026-05-05-multi-source-architecture.md`.
 - **Library explorer (Slice 2, 2026-05-06).** Three-pane explorer (rail / list / detail) replaces the single-purpose add screen. Add flow folded into the explorer as `Add → Discogs`; `ConfirmModal` deleted in favor of a detail-pane CTA. New `source_state` table + `SyncChip`. URL state in `?nav`/`?id`/`?q`/`?entity`. Keyboard wiring rewritten to be DOM-driven (`installKeyboard(actions, guards)`). See `docs/superpowers/specs/2026-05-06-library-explorer-design.md` and `docs/superpowers/plans/2026-05-06-library-explorer.md`.
 - **Slice 2 post-spec fixes** (folded in at the end of the slice):
@@ -278,7 +314,7 @@ Limitations of code that's currently in production. For deferred features and no
 - **`Cmd+Z` is intercepted by the browser** when the search input is focused (it'll undo typed text first). The on-screen button and `u` key still work.
 - **Source-grid on listview rows doesn't refresh after a Discogs-remove** for other rows of the same release still on screen. Only the currently-detail-open row updates. Likely benign until duplicate-release scenarios appear.
 - **Playback affordance is on list/tracklist rows only.** `TrackDetail` (the track right-pane) has no play control; only `TrackList` rows and the `ReleaseDetail` tracklist support double-click-to-play.
-- **Only iTunes-backed tracks are playable.** A track with no `file_path` match key (e.g. a release with no local files) has `canPlay = false` and no play affordance.
+- **Only `local`-backed tracks are playable.** A track with no `file_path` match key (e.g. a Discogs release with no Apple-import or vinyl-rip file) has `canPlay = false` and no play affordance.
 
 ## Local development
 
@@ -290,7 +326,7 @@ bun dev
 # open http://localhost:5173
 ```
 
-The DB is auto-initialized on first server boot — it creates `~/.booth/booth.db` (or `$BOOTH_DB_PATH`) and runs migrations automatically. Every server boot triggers a fresh sync for every non-stub source via the boot hook in `src/hooks.server.ts` (fire-and-forget; iTunes only if `ITUNES_XML_PATH` is set).
+The DB is auto-initialized on first server boot — it creates `~/.booth/booth.db` (or `$BOOTH_DB_PATH`) and runs migrations automatically. Every server boot triggers a fresh sync for every non-stub source via the boot hook in `src/hooks.server.ts` (fire-and-forget; the `local` source's Apple-Music parse only runs if `ITUNES_XML_PATH` is set). Vinyl rips are written to `$BOOTH_RECORDINGS_PATH` (default `~/.booth/recordings`).
 
 Run a verification script: `bun verify scripts/<name>.ts` (bun runs TypeScript natively — no separate transpile step).
 
