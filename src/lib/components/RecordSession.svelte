@@ -51,11 +51,14 @@
 
   const phase = $derived(recorder.phase);
 
-  // Live waveform: draw the accumulating per-hop peaks (scaled to fill width)
-  // on every frame while recording.
+  // Live waveform: a constant-zoom scrolling window — the most recent
+  // WINDOW_MS of audio at a fixed hops-per-pixel, newest anchored at the right.
+  // Fills from the left until the window is full, then scrolls.
   let liveCanvas = $state<HTMLCanvasElement>();
   const LW = 1000;
   const LH = 72;
+  const HOP_MS = 50; // matches the store's ~50ms live hop
+  const WINDOW_MS = 60000;
   function drawLive(canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -65,18 +68,21 @@
     const peaks = recorder.livePeaks;
     const n = peaks.length;
     if (n === 0) return;
+
+    const windowHops = WINDOW_MS / HOP_MS; // constant zoom: hops mapped across full width
+    const hopsPerPixel = windowHops / LW;
+    const visibleStart = Math.max(0, n - windowHops);
+    const visibleCount = n - visibleStart;
+    const usedW = Math.min(LW, (visibleCount / windowHops) * LW); // grows, then pins at LW
+
     ctx.fillStyle = '#3a86ff';
-    // Compress the whole take-so-far into the canvas width (max per column).
-    const cols = Math.min(LW, n);
-    const per = n / cols;
-    for (let c = 0; c < cols; c++) {
+    for (let px = 0; px < usedW; px++) {
+      const from = visibleStart + Math.floor(px * hopsPerPixel);
+      const to = visibleStart + Math.floor((px + 1) * hopsPerPixel);
       let m = 0;
-      for (let i = Math.floor(c * per); i < Math.floor((c + 1) * per) + 1 && i < n; i++) {
-        if (peaks[i] > m) m = peaks[i];
-      }
+      for (let i = from; i <= to && i < n; i++) if (peaks[i] > m) m = peaks[i];
       const h = m * (LH - 6);
-      const x = (c / cols) * LW;
-      ctx.fillRect(x, (LH - h) / 2, Math.max(1, LW / cols - 0.5), h);
+      ctx.fillRect(px, (LH - h) / 2, 1, h);
     }
   }
   $effect(() => {
