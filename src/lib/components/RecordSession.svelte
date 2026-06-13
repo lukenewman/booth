@@ -18,6 +18,7 @@
 
   let devices = $state<MediaDeviceInfo[]>([]);
   let deviceId = $state<string>('');
+  let confirmingClose = $state(false);
   // Derived from the store (not local) so the overlay restores correctly after
   // being minimized + remounted mid-capture instead of resetting to the picker.
   const started = $derived(recorder.phase !== 'idle');
@@ -55,6 +56,25 @@
   async function close() {
     await recorder.cancel();
     onClose();
+  }
+
+  // Closing mid-session throws away captured audio, so confirm first — but only
+  // when there's something to lose (a side mid-record or already-recorded takes;
+  // never after a successful commit).
+  const hasUnsavedCapture = $derived(
+    recorder.phase !== 'done' &&
+      (recorder.takes.length > 0 || recorder.phase === 'recording'),
+  );
+  const lostPhrase = $derived.by(() => {
+    const n = recorder.takes.length;
+    const parts: string[] = [];
+    if (recorder.phase === 'recording') parts.push('the current side');
+    if (n > 0) parts.push(`${n} recorded side${n === 1 ? '' : 's'}`);
+    return parts.join(' + ');
+  });
+  function requestClose() {
+    if (hasUnsavedCapture) confirmingClose = true;
+    else void close();
   }
 
   const phase = $derived(recorder.phase);
@@ -145,9 +165,19 @@
       {#if canMinimize}
         <button class="icon-btn" title="Minimize — keep recording while you browse" onclick={onMinimize}>–</button>
       {/if}
-      <button class="close" onclick={close}>✕</button>
+      <button class="close" onclick={requestClose}>✕</button>
     </div>
   </header>
+
+  {#if confirmingClose}
+    <div class="confirm-close" role="alertdialog" aria-label="Discard recording?">
+      <span class="confirm-msg">Discard recording? {lostPhrase} will be lost.</span>
+      <div class="confirm-actions">
+        <button class="confirm-keep" onclick={() => (confirmingClose = false)}>Keep recording</button>
+        <button class="confirm-discard" onclick={close}>Discard</button>
+      </div>
+    </div>
+  {/if}
 
   {#if recorder.error}
     <div class="error">{recorder.error}</div>
@@ -420,5 +450,79 @@
   }
   .icon-btn:hover {
     background: #1c1c1c;
+  }
+  .confirm-close {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 16px;
+    background: #2a1414;
+    border-bottom: 1px solid #4a1f1f;
+  }
+  .confirm-msg {
+    font-size: 13px;
+    color: #ffcaca;
+  }
+  .confirm-actions {
+    display: flex;
+    gap: 8px;
+    flex: none;
+  }
+  .confirm-keep,
+  .confirm-discard {
+    font-family: inherit;
+    font-size: 13px;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .confirm-keep {
+    background: none;
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+  }
+  .confirm-keep:hover {
+    background: #1c1c1c;
+  }
+  .confirm-discard {
+    background: #c0392b;
+    border: 1px solid #c0392b;
+    color: #fff;
+  }
+  .confirm-discard:hover {
+    background: #d4453a;
+  }
+  .label {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    max-width: 480px;
+    padding: 8px 34px 8px 12px;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text);
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+  select:hover {
+    border-color: var(--accent-border);
+  }
+  select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  select option {
+    background: var(--bg-raised);
+    color: var(--text);
   }
 </style>
