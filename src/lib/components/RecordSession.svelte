@@ -189,12 +189,30 @@
     <div class="body">
       <div class="setup">
         {#if !started}
-          <label class="label" for="dev">Input device</label>
-          <select id="dev" bind:value={deviceId}>
-            {#each devices as d}
-              <option value={d.deviceId}>{d.label || 'Audio input'}</option>
-            {/each}
-          </select>
+          <div class="device-section">
+            <span class="label" id="dev-label">Input device</span>
+            {#if devices.length === 0}
+              <p class="no-devices">No audio inputs found — the system default will be used.</p>
+            {:else}
+              <ul class="device-list" role="radiogroup" aria-labelledby="dev-label">
+                {#each devices as d (d.deviceId)}
+                  <li>
+                    <button
+                      type="button"
+                      class="device"
+                      class:selected={deviceId === d.deviceId}
+                      role="radio"
+                      aria-checked={deviceId === d.deviceId}
+                      onclick={() => (deviceId = d.deviceId)}
+                    >
+                      <span class="radio" aria-hidden="true"></span>
+                      <span class="device-label">{d.label || 'Audio input'}</span>
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          </div>
           <button class="primary" onclick={begin}>Open input</button>
         {:else}
           <div class="meters">
@@ -497,32 +515,74 @@
     font-size: 12px;
     color: var(--text-muted);
   }
-  select {
-    appearance: none;
-    -webkit-appearance: none;
+  .device-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     width: 100%;
     max-width: 480px;
-    padding: 8px 34px 8px 12px;
+  }
+  .device-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .device {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+    padding: 9px 12px;
     font-family: inherit;
     font-size: 13px;
     color: var(--text);
-    background-color: var(--bg-input);
-    border: 1px solid var(--border-strong);
+    background: var(--bg-input);
+    border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 12px center;
   }
-  select:hover {
+  .device:hover {
+    border-color: var(--border-strong);
+    background: var(--bg-row-hover);
+  }
+  .device.selected {
     border-color: var(--accent-border);
+    background: var(--accent-bg);
   }
-  select:focus {
+  .device:focus-visible {
     outline: none;
     border-color: var(--accent);
   }
-  select option {
-    background: var(--bg-raised);
-    color: var(--text);
+  .radio {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid var(--text-muted);
+    flex: none;
+    position: relative;
+  }
+  .device.selected .radio {
+    border-color: var(--accent);
+  }
+  .device.selected .radio::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .device-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .no-devices {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-muted);
   }
 </style>
