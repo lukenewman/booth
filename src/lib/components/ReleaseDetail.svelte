@@ -38,6 +38,7 @@
     onTrackSelect,
     onArtistSelect,
     onRecord,
+    recordDisabled = false,
   }: {
     release: Release;
     sources: SourceLink[];
@@ -53,6 +54,7 @@
     onTrackSelect?: (trackId: string) => void;
     onArtistSelect?: (artistId: string) => void;
     onRecord?: () => void;
+    recordDisabled?: boolean;
   } = $props();
 
   const hasDiscogs = $derived(sources.some((s) => s.source === 'discogs'));
@@ -182,7 +184,12 @@
 
   {#if hasDiscogs && onRecord}
     <div class="cta-row">
-      <button class="record-cta" onclick={onRecord}>⏺ Record from vinyl</button>
+      <button
+        class="record-cta"
+        onclick={onRecord}
+        disabled={recordDisabled}
+        title={recordDisabled ? 'Finish the current recording first' : undefined}
+      >⏺ Record from vinyl</button>
     </div>
   {/if}
 
@@ -299,7 +306,13 @@
     border: 1px solid #c0392b;
     color: #c0392b;
   }
-  .record-cta:hover { background: #c0392b22; }
+  .record-cta:hover:not(:disabled) { background: #c0392b22; }
+  .record-cta:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    border-color: var(--border-strong);
+    color: var(--text-muted);
+  }
   .cta-btn {
     width: 100%;
     padding: 7px 12px;

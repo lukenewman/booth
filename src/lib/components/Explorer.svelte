@@ -19,6 +19,7 @@
   import Player from './Player.svelte';
   import PlayerBar from './PlayerBar.svelte';
   import RecordSession from './RecordSession.svelte';
+import RecordingPill from './RecordingPill.svelte';
 
   // ----- Source meta + counts ------------------------------------------------
 
@@ -169,6 +170,9 @@
   let detailKind = $state<'release' | 'track' | 'artist' | null>(null);
   let detailData = $state<any>(null);
   let recordingRelease = $state<{ id: string; title: string; artist: string } | null>(null);
+  // While a session is open it can be minimized to a floating pill so the user
+  // can keep browsing; the recorder store keeps capturing regardless.
+  let recordingMinimized = $state(false);
 
   async function loadDetail() {
     if (!explorerState.id) {
@@ -687,14 +691,17 @@
         addCta={releaseDetailCta}
         onTrackSelect={(id) => explorerState.setEntity(id)}
         onArtistSelect={(id) => explorerState.setEntity(id)}
+        recordDisabled={recordingRelease !== null}
         onRecord={detailData._isDiscogsSearchHit
           ? undefined
-          : () =>
-              (recordingRelease = {
+          : () => {
+              recordingMinimized = false;
+              recordingRelease = {
                 id: detailData.release.id,
                 title: detailData.release.title,
                 artist: detailData.release.artist,
-              })}
+              };
+            }}
       />
     {:else if detailKind === 'track' && detailData}
       <TrackDetail
@@ -723,12 +730,21 @@
   <PlayerBar />
 </div>
 
-{#if recordingRelease}
+{#if recordingRelease && !recordingMinimized}
   <RecordSession
     releaseId={recordingRelease.id}
     releaseTitle={recordingRelease.title}
     releaseArtist={recordingRelease.artist}
-    onClose={() => (recordingRelease = null)}
+    onClose={() => {
+      recordingRelease = null;
+      recordingMinimized = false;
+    }}
+    onMinimize={() => (recordingMinimized = true)}
+  />
+{:else if recordingRelease && recordingMinimized}
+  <RecordingPill
+    release={{ title: recordingRelease.title, artist: recordingRelease.artist }}
+    onExpand={() => (recordingMinimized = false)}
   />
 {/if}
 

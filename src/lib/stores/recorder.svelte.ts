@@ -154,6 +154,7 @@ export const recorder = {
 
   /** Open session + input device; enter live preview. */
   async start(release: string, deviceId?: string) {
+    if (phase !== 'idle') return; // single global session — guard double-start
     err = null;
     phase = 'arming';
     try {

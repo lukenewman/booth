@@ -7,12 +7,20 @@
     releaseTitle,
     releaseArtist,
     onClose,
-  }: { releaseId: string; releaseTitle: string; releaseArtist: string; onClose: () => void } =
-    $props();
+    onMinimize,
+  }: {
+    releaseId: string;
+    releaseTitle: string;
+    releaseArtist: string;
+    onClose: () => void;
+    onMinimize: () => void;
+  } = $props();
 
   let devices = $state<MediaDeviceInfo[]>([]);
   let deviceId = $state<string>('');
-  let started = $state(false);
+  // Derived from the store (not local) so the overlay restores correctly after
+  // being minimized + remounted mid-capture instead of resetting to the picker.
+  const started = $derived(recorder.phase !== 'idle');
 
   async function loadDevices() {
     // Labels are only visible after permission is granted; grab a throwaway
@@ -27,11 +35,11 @@
     deviceId = devices[0]?.deviceId ?? '';
   }
   $effect(() => {
-    void loadDevices();
+    // Only enumerate inputs for the setup screen; skip on a mid-capture remount.
+    if (recorder.phase === 'idle') void loadDevices();
   });
 
   async function begin() {
-    started = true;
     await recorder.start(releaseId, deviceId || undefined);
   }
 
@@ -50,6 +58,11 @@
   }
 
   const phase = $derived(recorder.phase);
+  // Minimize is offered only during the capture phases (the long-running part);
+  // split review/commit stays full-screen and focused.
+  const canMinimize = $derived(
+    phase === 'preview' || phase === 'recording' || phase === 'analyzing',
+  );
 
   // Live waveform: a constant-zoom scrolling window — the most recent
   // WINDOW_MS of audio at a fixed hops-per-pixel, newest anchored at the right.
@@ -128,7 +141,12 @@
 <div class="record-overlay">
   <header>
     <span class="title">⏺ Recording · {releaseArtist} — {releaseTitle}</span>
-    <button class="close" onclick={close}>✕</button>
+    <div class="header-actions">
+      {#if canMinimize}
+        <button class="icon-btn" title="Minimize — keep recording while you browse" onclick={onMinimize}>–</button>
+      {/if}
+      <button class="close" onclick={close}>✕</button>
+    </div>
   </header>
 
   {#if recorder.error}
@@ -380,5 +398,27 @@
     color: inherit;
     cursor: pointer;
     font-size: 16px;
+  }
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .icon-btn {
+    background: none;
+    border: 1px solid #2a2a2a;
+    color: inherit;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .icon-btn:hover {
+    background: #1c1c1c;
   }
 </style>
