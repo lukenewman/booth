@@ -8,10 +8,14 @@
   import { toast } from '$lib/stores/toast.svelte';
   import { explorerState } from '$lib/stores/explorerState.svelte';
   import { player } from '$lib/stores/player.svelte';
+  import { playlists } from '$lib/stores/playlists.svelte';
+  import PlaylistPicker from '$lib/components/PlaylistPicker.svelte';
 
   let setupNeeded = $state<null | 'no_token' | 'invalid_token'>(null);
   let probed = $state(false);
   let shortcutOpen = $state(false);
+  let pickerOpen = $state(false);
+  let pickerTrackId = $state<string | null>(null);
 
   onMount(() => {
     // Fire-and-forget setup probe — kept out of onMount's return path so the
@@ -157,6 +161,24 @@
           if (!player.nowPlaying) return;
           player.isPlaying ? player.pause() : player.resume();
         },
+        addToPlaylist: () => {
+          const active = document.activeElement;
+          if (!(active instanceof HTMLElement) || !active.classList.contains('row-btn')) return;
+          const trackId = active.dataset.id;
+          if (!trackId) return;
+          // Only meaningful for track rows: the tracks lens, or inside a playlist.
+          if (explorerState.entity !== 'tracks' && explorerState.nav.section !== 'playlist') return;
+          pickerTrackId = trackId;
+          pickerOpen = true;
+        },
+        removeFromPlaylist: () => {
+          if (explorerState.nav.section !== 'playlist') return;
+          const active = document.activeElement;
+          if (!(active instanceof HTMLElement) || !active.classList.contains('row-btn')) return;
+          const trackId = active.dataset.id;
+          const pid = playlists.openPlaylist?.id;
+          if (trackId && pid) playlists.removeTrack(pid, trackId);
+        },
       },
       {
         isScannerOpen: () => !!document.querySelector('.scanner-overlay'),
@@ -191,6 +213,9 @@
 {:else}
   <Explorer />
   <ShortcutOverlay open={shortcutOpen} onClose={() => (shortcutOpen = false)} />
+  {#if pickerOpen && pickerTrackId}
+    <PlaylistPicker trackId={pickerTrackId} onClose={() => { pickerOpen = false; pickerTrackId = null; }} />
+  {/if}
 {/if}
 
 <style>

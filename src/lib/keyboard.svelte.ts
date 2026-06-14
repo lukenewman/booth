@@ -24,6 +24,8 @@ export interface KeyboardActions {
   navRailNext: () => void;
   navRailPrev: () => void;
   togglePlay: () => void;
+  addToPlaylist: () => void;
+  removeFromPlaylist: () => void;
 }
 
 export interface KeyboardGuards {
@@ -93,6 +95,8 @@ export function installKeyboard(actions: KeyboardActions, guards: KeyboardGuards
     if (e.key === 'ArrowUp')                                { e.preventDefault(); actions.moveUp();         return; }
     if (e.key === 'Enter')                                  { e.preventDefault(); actions.commit();         return; }
     if (e.key === 'u' || e.key === 'U')                     { e.preventDefault(); actions.undoLast();       return; }
+    if (e.key === 'a' || e.key === 'A')                     { e.preventDefault(); actions.addToPlaylist();      return; }
+    if (e.key === 'Delete' || e.key === 'Backspace')        { e.preventDefault(); actions.removeFromPlaylist(); return; }
     if (e.key === '?')                                      { e.preventDefault(); actions.toggleShortcuts(); return; }
   }
 
