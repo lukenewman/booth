@@ -1,4 +1,4 @@
-import { env } from '$env/dynamic/private';
+import { env } from '$lib/server/env';
 import { defaultRecordingsRoot } from './paths';
 
 /** The only recording module allowed to import $env — routes call this and

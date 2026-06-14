@@ -1,4 +1,4 @@
-import { env } from '$env/dynamic/private';
+import { env } from '$lib/server/env';
 import type { ApiError } from '$lib/types';
 
 const BASE = 'https://api.discogs.com';

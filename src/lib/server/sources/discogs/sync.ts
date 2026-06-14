@@ -1,6 +1,6 @@
 import { discogsFetch } from './api';
 import { getUsername } from './username';
-import { env } from '$env/dynamic/private';
+import { env } from '$lib/server/env';
 import type { SourceRelease, SyncResult } from '../types';
 
 interface DiscogsCollectionItem {

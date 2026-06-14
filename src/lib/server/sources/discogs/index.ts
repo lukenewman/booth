@@ -3,7 +3,7 @@ import type { CollectionWritable, MusicSource } from '../types';
 import { syncDiscogsCollection } from './sync';
 import { discogsFetch } from './api';
 import { getUsername } from './username';
-import { env } from '$env/dynamic/private';
+import { env } from '$lib/server/env';
 import { getDb } from '../../db';
 import { normalizeArtistAlbumYear } from '../../library/normalize';
 import { upsertArtist } from '../../library/collate';

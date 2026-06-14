@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite';
-import { env } from '$env/dynamic/private';
+import { env } from '$lib/server/env';
 import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';

@@ -36,7 +36,7 @@ ITUNES_XML_PATH=
 # BOOTH_RECORDINGS_PATH=
 ```
 
-`ITUNES_XML_PATH` feeds the Apple-Music import path of the **`local`** source; it gates whether the `local` source auto-syncs on boot. Server reads via `$env/dynamic/private` (NOT `process.env` — Vite doesn't auto-populate that). Recording modules stay pure: `recording/env.ts` is the only one that imports `$env`; it resolves `BOOTH_RECORDINGS_PATH` and passes the root into the pure `recording/*` modules.
+`ITUNES_XML_PATH` feeds the Apple-Music import path of the **`local`** source; it gates whether the `local` source auto-syncs on boot. Server env is read through `src/lib/server/env.ts` — a small accessor that prefers `$env/dynamic/private` but falls back to `process.env`. This matters because the dev server runs `bunx --bun vite dev` (the `--bun` flag is mandatory for `bun:sqlite`), and **under the Bun runtime SvelteKit's `$env/dynamic/private` comes back empty** (its dev-time injection only runs under Node); Bun instead loads `.env` straight into `process.env`. So `$lib/server/env` is the one place that imports the real `$env`; everything else (`api.ts`, `hooks.server.ts`, `db/index.ts`, the source syncs, `recording/env.ts`) imports `env` from it. Recording modules stay pure: `recording/env.ts` is the only recording module that reads env; it resolves `BOOTH_RECORDINGS_PATH` and passes the root into the pure `recording/*` modules.
 
 ## File map
 
@@ -301,7 +301,7 @@ docs/
   - **Persistent removal**: instance_id is now appended to `source_facets.instanceIds` on every successful add (in `/api/discogs/collection/add`); `/api/discogs/collection/remove` falls back to the facet when the body omits `instanceId`, so removal survives reloads.
   - **Detail-pane owned CTA**: was originally Slice-2 deferred. Shipped at session end — `ReleaseDetail` got a `variant: 'primary' | 'quiet'` prop and `Explorer` derives `releaseDetailCta` (quiet/Remove when owned, primary/Add for unowned hits).
   - **Arrow-key listview navigation**: was originally Slice-2 deferred. Shipped at session end — `moveDown`/`moveUp` focus row buttons via DOM, with search-input ↔ first-row transitions; `Enter` is context-aware (focused row → open, else → press Add CTA).
-- **Token loading.** Plan used `process.env.DISCOGS_TOKEN`; switched to `$env/dynamic/private` so `.env` actually loads in dev.
+- **Token loading.** Plan used `process.env.DISCOGS_TOKEN`; switched to `$env/dynamic/private`, then (2026-06-14) routed all server env reads through `src/lib/server/env.ts`, which prefers `$env/dynamic/private` but falls back to `process.env`. Under the Bun dev runtime (`bunx --bun vite dev`, required for `bun:sqlite`) SvelteKit's `$env/dynamic/private` is empty; Bun populates `process.env` from `.env`, so the fallback is what actually resolves `DISCOGS_TOKEN` / `ITUNES_XML_PATH` / etc. in dev.
 - **Barcode lookup endpoint.** Plan added `/api/discogs/barcode/[code]` (Task 23). Built, tested, then **deleted** when scanner flow was unified onto `/api/discogs/search?q=`. The Discogs text search already indexes barcodes well enough.
 - **No "in collection" feature in the plan.** Built post-MVP: SQLite `source_link` table + `collection.svelte.ts` store + `/api/library/membership?source=discogs` endpoint + row indicator via `SourceGrid`.
 - **No URL persistence in the original plan.** Slice 2 expanded this into the full `?nav`/`?id`/`?q`/`?entity` URL-state contract.

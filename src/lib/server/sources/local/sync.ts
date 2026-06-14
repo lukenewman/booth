@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { parseFile as parseAudioFile } from 'music-metadata';
-import { env } from '$env/dynamic/private';
+import { env } from '$lib/server/env';
 import { parseITunesLibrary, type ITunesTrack } from './parse';
 import type { SourceRelease, SourceTrack, SyncResult } from '../types';
 

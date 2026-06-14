@@ -1,5 +1,5 @@
 import type { Handle } from '@sveltejs/kit';
-import { env } from '$env/dynamic/private';
+import { env } from '$lib/server/env';
 import { getDb } from '$lib/server/db';
 import { runSync } from '$lib/server/library/sync_run';
 import { listSources } from '$lib/server/sources/registry';
