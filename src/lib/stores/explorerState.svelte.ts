@@ -8,7 +8,7 @@
  * across rail switches and is toggled by the Tab key.
  */
 
-export type NavSection = 'library' | 'sources' | 'add';
+export type NavSection = 'library' | 'sources' | 'add' | 'playlist';
 export interface NavValue { section: NavSection; item: string; }
 
 export type EntityKind = 'releases' | 'tracks' | 'artists';
@@ -25,7 +25,7 @@ const DEFAULT_NAV: NavValue = { section: 'library', item: 'all' };
 export function parseNav(raw: string | null): { nav: NavValue; entityHint: EntityKind | null } {
   if (!raw) return { nav: { ...DEFAULT_NAV }, entityHint: null };
   const [section, item] = raw.split(':');
-  if (section !== 'library' && section !== 'sources' && section !== 'add') {
+  if (section !== 'library' && section !== 'sources' && section !== 'add' && section !== 'playlist') {
     return { nav: { ...DEFAULT_NAV }, entityHint: null };
   }
   if (!item) return { nav: { ...DEFAULT_NAV }, entityHint: null };

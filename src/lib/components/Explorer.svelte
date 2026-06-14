@@ -16,6 +16,8 @@
   import SyncRunHistory from './SyncRunHistory.svelte';
   import { explorerState } from '$lib/stores/explorerState.svelte';
   import { collection } from '$lib/stores/collection.svelte';
+  import { playlists } from '$lib/stores/playlists.svelte';
+  import PlaylistView from './PlaylistView.svelte';
   import Player from './Player.svelte';
   import PlayerBar from './PlayerBar.svelte';
   import RecordSession from './RecordSession.svelte';
@@ -74,6 +76,9 @@ import RecordingPill from './RecordingPill.svelte';
     // Reset loads always proceed — they capture the current generation so any
     // in-flight load from a previous entity/nav state is silently discarded.
     if (!reset && listLoading) return;
+    // Playlist view owns its own data (PlaylistView reads playlists.openPlaylist);
+    // never fire library fetches for the playlist section.
+    if (explorerState.nav.section === 'playlist') return;
     const gen = reset ? ++loadGen : loadGen;
     listLoading = true;
     const offset = reset ? 0 : listItems.length;
@@ -285,6 +290,7 @@ import RecordingPill from './RecordingPill.svelte';
 
   const isAddView = $derived(explorerState.nav.section === 'add');
   const isSourcesView = $derived(explorerState.nav.section === 'sources');
+  const isPlaylistView = $derived(explorerState.nav.section === 'playlist');
 
   // The toggle is suppressed only for rail items where tracks aren't a
   // meaningful concept at all — currently just Add → Discogs (the Discogs
@@ -348,6 +354,13 @@ import RecordingPill from './RecordingPill.svelte';
     loadDetail();
   });
 
+  // Load the open playlist when a playlist rail item is selected (or switched).
+  $effect(() => {
+    if (explorerState.nav.section !== 'playlist') return;
+    const id = explorerState.nav.item;
+    untrack(() => playlists.loadPlaylist(id));
+  });
+
   // ----- URL sync ------------------------------------------------------------
 
   $effect(() => {
@@ -375,7 +388,7 @@ import RecordingPill from './RecordingPill.svelte';
 
   onMount(async () => {
     explorerState.hydrate(page.url.searchParams);
-    await Promise.all([loadSourcesAndCounts(), collection.load()]);
+    await Promise.all([loadSourcesAndCounts(), collection.load(), playlists.loadList()]);
   });
 
   // ----- Add → Discogs CTA ---------------------------------------------------
@@ -572,10 +585,27 @@ import RecordingPill from './RecordingPill.svelte';
     entity={currentEntity}
     {sources}
     {counts}
+    playlists={playlists.items}
     onSelect={(nav) => explorerState.setNav(nav)}
+    onCreatePlaylist={async (name) => {
+      const created = await playlists.create(name);
+      if (created) explorerState.setNav({ section: 'playlist', item: created.id });
+    }}
+    onAddTrackToPlaylist={async (playlistId, trackId) => {
+      const { added } = await playlists.addTrack(playlistId, trackId);
+      const name = playlists.items.find((p) => p.id === playlistId)?.name ?? 'playlist';
+      toast.show(added ? `Added to ${name}` : 'Already in playlist');
+    }}
   />
 
   <section class="middle">
+    {#if isPlaylistView}
+      <PlaylistView
+        selectedId={explorerState.id}
+        onTrackSelect={(id) => explorerState.setEntity(id)}
+        onDeleted={() => explorerState.setNav({ section: 'library', item: 'all' })}
+      />
+    {:else}
     <ListviewToolbar
       bind:query={explorerState.q}
       placeholder={toolbarPlaceholder}
@@ -664,10 +694,13 @@ import RecordingPill from './RecordingPill.svelte';
     {#if isAddView}
       <SessionLog onUndo={handleUndo} />
     {/if}
+    {/if}
   </section>
 
   <section class="right">
-    {#if !explorerState.id && isSourcesView && selectedSource}
+    {#if isPlaylistView && !explorerState.id}
+      <EmptyState title="Select a track to see details" />
+    {:else if !explorerState.id && isSourcesView && selectedSource}
       <SyncRunHistory
         sourceId={selectedSource.id}
         sourceName={selectedSource.name}

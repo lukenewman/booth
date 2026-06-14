@@ -21,13 +21,19 @@
     entity,
     sources,
     counts,
+    playlists = [],
     onSelect,
+    onCreatePlaylist,
+    onAddTrackToPlaylist,
   }: {
     nav: NavValue;
     entity: 'releases' | 'tracks' | 'artists';
     sources: SourceWithState[];
     counts: Counts;
+    playlists?: { id: string; name: string; trackCount: number }[];
     onSelect?: (nav: NavValue) => void;
+    onCreatePlaylist?: (name: string) => void;
+    onAddTrackToPlaylist?: (playlistId: string, trackId: string) => void;
   } = $props();
 
   const allCount = $derived(
@@ -52,6 +58,24 @@
   }
 
   const writableSources = $derived(sources.filter((s) => s.id === 'discogs')); // TODO: derive via CollectionWritable when more writable adapters land
+
+  let creating = $state(false);
+  let newName = $state('');
+  let dropTargetId = $state<string | null>(null);
+
+  function submitNewPlaylist() {
+    const name = newName.trim();
+    if (name) onCreatePlaylist?.(name);
+    newName = '';
+    creating = false;
+  }
+
+  function onPlaylistDrop(e: DragEvent, playlistId: string) {
+    e.preventDefault();
+    dropTargetId = null;
+    const trackId = e.dataTransfer?.getData('application/x-booth-track');
+    if (trackId) onAddTrackToPlaylist?.(playlistId, trackId);
+  }
 </script>
 
 <aside class="rail">
@@ -65,6 +89,40 @@
       <span>All</span>
       <span class="count">{allCount.toLocaleString()}</span>
     </button>
+  </div>
+
+  <div class="section">
+    <div class="label">Playlists</div>
+    {#each playlists as p (p.id)}
+      <button
+        class="item"
+        class:active={isActive('playlist', p.id)}
+        class:drop-target={dropTargetId === p.id}
+        onclick={() => onSelect?.({ section: 'playlist', item: p.id })}
+        ondragover={(e) => { e.preventDefault(); dropTargetId = p.id; }}
+        ondragleave={() => { if (dropTargetId === p.id) dropTargetId = null; }}
+        ondrop={(e) => onPlaylistDrop(e, p.id)}
+      >
+        <span>{p.name}</span>
+        <span class="count">{p.trackCount.toLocaleString()}</span>
+      </button>
+    {/each}
+    {#if creating}
+      <!-- svelte-ignore a11y_autofocus -->
+      <input
+        class="new-playlist"
+        bind:value={newName}
+        placeholder="Playlist name…"
+        autofocus
+        onkeydown={(e) => {
+          if (e.key === 'Enter') submitNewPlaylist();
+          else if (e.key === 'Escape') { e.stopPropagation(); newName = ''; creating = false; }
+        }}
+        onblur={submitNewPlaylist}
+      />
+    {:else}
+      <button class="new-btn" onclick={() => (creating = true)}>＋ New playlist</button>
+    {/if}
   </div>
 
   <div class="section">
@@ -150,4 +208,32 @@
   .dot.rekordbox { background: var(--src-rekordbox); }
   .dot.plex      { background: var(--src-plex); }
   .dot.dim { opacity: 0.35; }
+
+  .item.drop-target {
+    background: var(--accent-bg);
+    border-left-color: var(--accent);
+  }
+  .new-btn {
+    background: transparent;
+    border: 0;
+    padding: 5px 16px;
+    color: var(--text-subtle);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    width: 100%;
+    text-align: left;
+  }
+  .new-btn:hover { color: var(--text); background: var(--bg-row-hover); }
+  .new-playlist {
+    margin: 2px 12px;
+    width: calc(100% - 24px);
+    background: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    padding: 4px 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+  }
 </style>
