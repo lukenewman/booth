@@ -65,6 +65,7 @@
         <button
           class="row-btn"
           class:selected={item.id === selectedId}
+          data-id={item.id}
           onclick={() => onSelect?.(item.id)}
           type="button"
         >

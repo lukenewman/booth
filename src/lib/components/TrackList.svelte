@@ -68,6 +68,8 @@
       class="row"
       class:playing={isPlaying}
       role="listitem"
+      draggable="true"
+      ondragstart={(e) => { e.dataTransfer?.setData('application/x-booth-track', item.id); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; }}
       onkeydown={(e) => { if (e.key === 'Enter' && item.canPlay) player.play({ trackId: item.id, title: item.title, artist: item.artist, thumbUrl: item.thumb_url }); }}
       onclick={(e) => { if (e.detail > 0) e.stopPropagation(); }}
       ondblclick={() => { if (item.canPlay) player.play({ trackId: item.id, title: item.title, artist: item.artist, thumbUrl: item.thumb_url }); }}
