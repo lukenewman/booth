@@ -1,0 +1,127 @@
+export interface PlaylistSummary {
+  id: string;
+  name: string;
+  trackCount: number;
+}
+
+export interface PlaylistTrack {
+  id: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  duration_ms: number | null;
+  release_id: string | null;
+  position: string | null;
+  thumb_url: string | null;
+  sources: string[];
+  canPlay: boolean;
+}
+
+export interface PlaylistDetail {
+  id: string;
+  name: string;
+  tracks: PlaylistTrack[];
+}
+
+class PlaylistsStore {
+  items = $state<PlaylistSummary[]>([]);
+  openPlaylist = $state<PlaylistDetail | null>(null);
+
+  async loadList() {
+    try {
+      const res = await fetch('/api/playlists');
+      if (!res.ok) return;
+      const data = (await res.json()) as { items: PlaylistSummary[] };
+      this.items = data.items ?? [];
+    } catch {
+      // silent — rail just won't show playlists
+    }
+  }
+
+  async loadPlaylist(id: string) {
+    try {
+      const res = await fetch(`/api/playlists/${id}`);
+      if (!res.ok) {
+        this.openPlaylist = null;
+        return;
+      }
+      this.openPlaylist = (await res.json()) as PlaylistDetail;
+    } catch {
+      this.openPlaylist = null;
+    }
+  }
+
+  async create(name: string): Promise<PlaylistSummary | null> {
+    const res = await fetch('/api/playlists', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) return null;
+    const created = (await res.json()) as PlaylistSummary;
+    this.items = [...this.items, created].sort((a, b) => a.name.localeCompare(b.name));
+    return created;
+  }
+
+  async rename(id: string, name: string) {
+    const res = await fetch(`/api/playlists/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) return;
+    this.items = this.items
+      .map((p) => (p.id === id ? { ...p, name } : p))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (this.openPlaylist?.id === id) this.openPlaylist = { ...this.openPlaylist, name };
+  }
+
+  async remove(id: string) {
+    const res = await fetch(`/api/playlists/${id}`, { method: 'DELETE' });
+    if (!res.ok) return;
+    this.items = this.items.filter((p) => p.id !== id);
+    if (this.openPlaylist?.id === id) this.openPlaylist = null;
+  }
+
+  async addTrack(playlistId: string, trackId: string): Promise<{ added: boolean }> {
+    const res = await fetch(`/api/playlists/${playlistId}/tracks`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ trackId }),
+    });
+    if (!res.ok) return { added: false };
+    const data = (await res.json()) as { added: boolean; trackCount: number };
+    this.items = this.items.map((p) => (p.id === playlistId ? { ...p, trackCount: data.trackCount } : p));
+    if (data.added && this.openPlaylist?.id === playlistId) await this.loadPlaylist(playlistId);
+    return { added: data.added };
+  }
+
+  async removeTrack(playlistId: string, trackId: string) {
+    const res = await fetch(`/api/playlists/${playlistId}/tracks/${trackId}`, { method: 'DELETE' });
+    if (!res.ok) return;
+    const data = (await res.json()) as { trackCount: number };
+    this.items = this.items.map((p) => (p.id === playlistId ? { ...p, trackCount: data.trackCount } : p));
+    if (this.openPlaylist?.id === playlistId) {
+      this.openPlaylist = {
+        ...this.openPlaylist,
+        tracks: this.openPlaylist.tracks.filter((t) => t.id !== trackId),
+      };
+    }
+  }
+
+  /** Optimistically reorder the open playlist, then persist. */
+  async reorder(playlistId: string, orderedTrackIds: string[]) {
+    if (this.openPlaylist?.id === playlistId) {
+      const byId = new Map(this.openPlaylist.tracks.map((t) => [t.id, t]));
+      const next = orderedTrackIds.map((id) => byId.get(id)).filter((t): t is PlaylistTrack => !!t);
+      this.openPlaylist = { ...this.openPlaylist, tracks: next };
+    }
+    await fetch(`/api/playlists/${playlistId}/tracks`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ order: orderedTrackIds }),
+    });
+  }
+}
+
+export const playlists = new PlaylistsStore();
