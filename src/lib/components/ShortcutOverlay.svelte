@@ -16,6 +16,8 @@
     { key: '↵', label: 'Open confirm / confirm add' },
     { key: 'esc', label: 'Close modal / exit scanner' },
     { key: 'u  •  ⌘Z', label: 'Undo last add' },
+    { key: 'a', label: 'Add focused track to a playlist' },
+    { key: 'del', label: 'Remove focused track (in a playlist)' },
     { key: '?', label: 'Toggle this overlay' },
   ];
 </script>
