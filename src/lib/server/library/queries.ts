@@ -519,6 +519,52 @@ export interface ArtistDetail {
   trackCount: number;
 }
 
+/**
+ * Fetch tracks by id in the shared list shape (artist joined, canPlay computed).
+ * Returned as a Map keyed by track id so callers can re-order as they like
+ * (e.g. playlists order by their own `position`). Unknown ids are absent.
+ */
+export function getTracksByIds(
+  db: Database,
+  ids: string[],
+): Map<string, TrackRow & { sources: string[]; canPlay: boolean }> {
+  const out = new Map<string, TrackRow & { sources: string[]; canPlay: boolean }>();
+  if (ids.length === 0) return out;
+  const placeholders = ids.map(() => '?').join(',');
+
+  const rows = db
+    .prepare(
+      `SELECT track.id, track.title, artist.name AS artist,
+              track.album, track.duration_ms, track.release_id, track.position,
+              release.thumb_url
+         FROM track
+         JOIN artist ON artist.id = track.artist_id
+         LEFT JOIN release ON release.id = track.release_id
+         WHERE track.id IN (${placeholders})`,
+    )
+    .all(...ids) as TrackRow[];
+
+  const srcRows = db
+    .prepare(
+      `SELECT entity_id, source FROM source_link
+         WHERE entity_kind='track' AND entity_id IN (${placeholders})`,
+    )
+    .all(...ids) as { entity_id: string; source: string }[];
+
+  const sourceMap = new Map<string, string[]>();
+  for (const { entity_id, source } of srcRows) {
+    const list = sourceMap.get(entity_id) ?? [];
+    list.push(source);
+    sourceMap.set(entity_id, list);
+  }
+
+  for (const r of rows) {
+    const sources = sourceMap.get(r.id) ?? [];
+    out.set(r.id, { ...r, sources, canPlay: sources.some((s) => playableSources.has(s)) });
+  }
+  return out;
+}
+
 export function getArtistDetail(db: Database, id: string): ArtistDetail | null {
   const artist = db
     .prepare(`SELECT id, name FROM artist WHERE id = ?`)
