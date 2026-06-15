@@ -212,7 +212,10 @@
   .item.drop-target {
     background: var(--accent-bg);
     border-left-color: var(--accent);
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
   }
+  .item.drop-target span:first-child { color: var(--accent); }
   .new-btn {
     background: transparent;
     border: 0;

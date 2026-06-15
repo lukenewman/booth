@@ -176,8 +176,10 @@
           const active = document.activeElement;
           if (!(active instanceof HTMLElement) || !active.classList.contains('row-btn')) return;
           const trackId = active.dataset.id;
-          const pid = playlists.openPlaylist?.id;
-          if (trackId && pid) playlists.removeTrack(pid, trackId);
+          const open = playlists.openPlaylist;
+          if (!trackId || !open) return;
+          const title = open.tracks.find((t) => t.id === trackId)?.title ?? 'this track';
+          playlists.requestRemove(open.id, trackId, title);
         },
       },
       {

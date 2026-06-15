@@ -1,6 +1,7 @@
 <script lang="ts">
   import { playlists } from '$lib/stores/playlists.svelte';
   import { player } from '$lib/stores/player.svelte';
+  import { translucentDragImage } from '$lib/dnd';
   import EmptyState from './EmptyState.svelte';
 
   let {
@@ -20,6 +21,12 @@
   let confirmingDelete = $state(false);
   let dragId = $state<string | null>(null);
   let overId = $state<string | null>(null);
+  let confirmPanel = $state<HTMLDivElement>();
+
+  // Focus the confirm modal when it opens so Enter/Esc work immediately.
+  $effect(() => {
+    if (playlists.pendingRemove) confirmPanel?.focus();
+  });
 
   function startRename() {
     if (!open) return;
@@ -48,6 +55,7 @@
     dragId = trackId;
     e.dataTransfer?.setData('application/x-booth-track', trackId);
     if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+    if (e.currentTarget instanceof HTMLElement) translucentDragImage(e, e.currentTarget);
   }
 
   function onDrop(e: DragEvent, targetId: string) {
@@ -119,7 +127,10 @@
             ondblclick={() => { if (t.canPlay) player.play({ trackId: t.id, title: t.title, artist: t.artist, thumbUrl: t.thumb_url }); }}
           >
             <span class="row">
-              <span class="info-icon" class:playing={isPlaying}>{isPlaying ? '▶' : '⠿'}</span>
+              <span class="thumb" class:playing={isPlaying}>
+                {#if t.thumb_url}<img src={t.thumb_url} alt="" loading="lazy" />{/if}
+                {#if isPlaying}<span class="play-badge">▶</span>{/if}
+              </span>
               <span class="meta-cell">
                 <span class="title" class:dim={!t.canPlay}>{t.title}</span>
                 <span class="artist">{t.artist}</span>
@@ -130,8 +141,8 @@
                 role="button"
                 tabindex="-1"
                 aria-label="Remove {t.title}"
-                onclick={(e) => { e.stopPropagation(); if (open) playlists.removeTrack(open.id, t.id); }}
-                onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); if (open) playlists.removeTrack(open.id, t.id); } }}
+                onclick={(e) => { e.stopPropagation(); if (open) playlists.requestRemove(open.id, t.id, t.title); }}
+                onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); if (open) playlists.requestRemove(open.id, t.id, t.title); } }}
                 ondblclick={(e) => e.stopPropagation()}
               >×</span>
             </span>
@@ -140,6 +151,36 @@
       {/if}
     </div>
   </div>
+
+  {#if playlists.pendingRemove}
+    {@const pr = playlists.pendingRemove}
+    <div class="backdrop" onclick={() => playlists.cancelRemove()} role="presentation">
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="confirm-modal"
+        bind:this={confirmPanel}
+        tabindex={-1}
+        role="dialog"
+        aria-modal="true"
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Escape') { e.preventDefault(); playlists.cancelRemove(); }
+          else if (e.key === 'Enter') { e.preventDefault(); playlists.confirmRemove(); }
+        }}
+      >
+        <div class="modal-title">Remove from playlist?</div>
+        <div class="modal-body">
+          <span class="track-name">{pr.trackTitle}</span>
+          <span class="from">from {open.name}</span>
+        </div>
+        <div class="modal-actions">
+          <button class="ghost" onclick={() => playlists.cancelRemove()}>Cancel</button>
+          <button class="danger" onclick={() => playlists.confirmRemove()}>Remove</button>
+        </div>
+      </div>
+    </div>
+  {/if}
 {/if}
 
 <style>
@@ -184,11 +225,19 @@
   .row-btn.drop-over { box-shadow: inset 0 2px 0 var(--accent); }
   .row {
     display: grid;
-    grid-template-columns: 20px 1fr 60px 20px;
-    gap: 14px; padding: 7px 14px; align-items: center;
+    grid-template-columns: 28px 1fr 60px 20px;
+    gap: 12px; padding: 6px 14px; align-items: center;
   }
-  .info-icon { color: var(--text-subtle); font-size: 12px; text-align: center; cursor: grab; user-select: none; }
-  .info-icon.playing { color: var(--accent); }
+  .thumb {
+    width: 28px; height: 28px; border-radius: 3px;
+    background: var(--bg-raised); border: 1px solid var(--border);
+    position: relative; overflow: hidden; cursor: grab; flex-shrink: 0;
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .play-badge {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.45); color: var(--accent); font-size: 11px;
+  }
   .meta-cell { min-width: 0; }
   .title { color: var(--text); font-weight: 500; font-size: 13px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .title.dim { color: var(--text-muted); }
@@ -198,4 +247,28 @@
   .remove { color: transparent; text-align: center; cursor: pointer; font-size: 14px; user-select: none; }
   .row-btn:hover .remove { color: var(--text-subtle); }
   .remove:hover { color: var(--danger) !important; }
+
+  .backdrop {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6);
+    display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 160;
+  }
+  .confirm-modal {
+    background: var(--bg-raised); border: 1px solid var(--border-strong);
+    border-radius: var(--radius); padding: 18px 20px; min-width: 300px; max-width: 380px;
+    outline: none;
+  }
+  .modal-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+  .modal-body { font-size: 13px; color: var(--text-muted); margin-bottom: 18px; line-height: 1.5; }
+  .modal-body .track-name { color: var(--text); font-weight: 500; }
+  .modal-body .from { color: var(--text-subtle); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .modal-actions button {
+    border-radius: 4px; padding: 6px 14px; font-family: inherit; font-size: 12px; cursor: pointer;
+  }
+  .modal-actions .ghost {
+    background: transparent; border: 1px solid var(--border-strong); color: var(--text-muted);
+  }
+  .modal-actions .ghost:hover { border-color: var(--text-muted); color: var(--text); }
+  .modal-actions .danger { background: var(--danger); border: 1px solid var(--danger); color: #fff; }
+  .modal-actions .danger:hover { filter: brightness(1.1); }
 </style>

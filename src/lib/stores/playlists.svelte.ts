@@ -26,6 +26,9 @@ export interface PlaylistDetail {
 class PlaylistsStore {
   items = $state<PlaylistSummary[]>([]);
   openPlaylist = $state<PlaylistDetail | null>(null);
+  // A track removal awaiting confirmation. Both the row × button and the
+  // global Delete key set this; the confirm modal in PlaylistView reads it.
+  pendingRemove = $state<{ playlistId: string; trackId: string; trackTitle: string } | null>(null);
 
   async loadList() {
     try {
@@ -39,6 +42,7 @@ class PlaylistsStore {
   }
 
   async loadPlaylist(id: string) {
+    this.pendingRemove = null;
     try {
       const res = await fetch(`/api/playlists/${id}`);
       if (!res.ok) {
@@ -107,6 +111,22 @@ class PlaylistsStore {
         tracks: this.openPlaylist.tracks.filter((t) => t.id !== trackId),
       };
     }
+  }
+
+  /** Ask for confirmation before removing a track (both × button and Delete key). */
+  requestRemove(playlistId: string, trackId: string, trackTitle: string) {
+    this.pendingRemove = { playlistId, trackId, trackTitle };
+  }
+
+  cancelRemove() {
+    this.pendingRemove = null;
+  }
+
+  async confirmRemove() {
+    const pr = this.pendingRemove;
+    if (!pr) return;
+    this.pendingRemove = null;
+    await this.removeTrack(pr.playlistId, pr.trackId);
   }
 
   /** Optimistically reorder the open playlist, then persist. */

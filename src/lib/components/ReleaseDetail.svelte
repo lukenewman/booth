@@ -2,6 +2,7 @@
   import SourcePanel from './SourcePanel.svelte';
   import SourceGrid from './SourceGrid.svelte';
   import { player } from '$lib/stores/player.svelte';
+  import { translucentDragImage } from '$lib/dnd';
 
   interface SourceLink { source: string; external_id: string; external_url: string | null; match_method: string; }
   interface Facet { source: string; key: string; value: string; }
@@ -145,7 +146,7 @@
           class:playing={isPlaying}
           type="button"
           draggable="true"
-          ondragstart={(e) => { e.dataTransfer?.setData('application/x-booth-track', t.id); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; }}
+          ondragstart={(e) => { e.dataTransfer?.setData('application/x-booth-track', t.id); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; if (e.currentTarget instanceof HTMLElement) translucentDragImage(e, e.currentTarget); }}
           onclick={(e) => { if (e.detail > 0) e.stopPropagation(); else onTrackSelect?.(t.id); }}
           ondblclick={() => { if (t.canPlay) player.play({ trackId: t.id, title: t.title, artist: release.artist, thumbUrl: release.thumb_url }); }}
         >
