@@ -282,7 +282,7 @@ export function getReleaseDetail(
          FROM track
          JOIN artist ON artist.id = track.artist_id
          WHERE track.release_id = ?
-         ORDER BY track.position COLLATE NOCASE, track.title COLLATE NOCASE`,
+         ORDER BY track.position IS NULL, CAST(track.position AS INTEGER), track.title COLLATE NOCASE`,
     )
     .all(id) as TrackRow[];
 
