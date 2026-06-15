@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { NavValue } from '$lib/stores/explorerState.svelte';
+  import PlaylistCover from './PlaylistCover.svelte';
 
   interface SourceWithState {
     id: string;
@@ -30,7 +31,7 @@
     entity: 'releases' | 'tracks' | 'artists';
     sources: SourceWithState[];
     counts: Counts;
-    playlists?: { id: string; name: string; trackCount: number }[];
+    playlists?: { id: string; name: string; trackCount: number; coverUrl: string | null; mosaic: string[] }[];
     onSelect?: (nav: NavValue) => void;
     onCreatePlaylist?: (name: string) => void;
     onAddTrackToPlaylist?: (playlistId: string, trackId: string) => void;
@@ -103,7 +104,8 @@
         ondragleave={() => { if (dropTargetId === p.id) dropTargetId = null; }}
         ondrop={(e) => onPlaylistDrop(e, p.id)}
       >
-        <span>{p.name}</span>
+        <PlaylistCover coverUrl={p.coverUrl} mosaic={p.mosaic} size={22} />
+        <span class="pname">{p.name}</span>
         <span class="count">{p.trackCount.toLocaleString()}</span>
       </button>
     {/each}
@@ -215,7 +217,8 @@
     outline: 2px solid var(--accent);
     outline-offset: -2px;
   }
-  .item.drop-target span:first-child { color: var(--accent); }
+  .item.drop-target .pname { color: var(--accent); }
+  .pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .new-btn {
     background: transparent;
     border: 0;

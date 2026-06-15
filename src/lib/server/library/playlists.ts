@@ -6,6 +6,10 @@ export interface PlaylistSummary {
   id: string;
   name: string;
   trackCount: number;
+  /** Custom uploaded cover, or null to fall back to the mosaic. */
+  coverUrl: string | null;
+  /** Up to 4 distinct release covers for the default mosaic (in playlist order). */
+  mosaic: string[];
 }
 
 export type PlaylistTrack = TrackRow & { sources: string[]; canPlay: boolean };
@@ -13,20 +17,44 @@ export type PlaylistTrack = TrackRow & { sources: string[]; canPlay: boolean };
 export interface PlaylistDetail {
   id: string;
   name: string;
+  coverUrl: string | null;
+  mosaic: string[];
   tracks: PlaylistTrack[];
 }
 
 const NOW = `strftime('%Y-%m-%dT%H:%M:%fZ','now')`;
 
-export function listPlaylists(db: Database): PlaylistSummary[] {
-  return db
+/**
+ * Up to `limit` distinct release covers for a playlist, in playlist order.
+ * Distinct by thumb URL so a single-album playlist shows one image, not four
+ * copies. `playlist_track.position` is a real INTEGER column, so it sorts right.
+ */
+function mosaicFor(db: Database, playlistId: string, limit = 4): string[] {
+  const rows = db
     .prepare(
-      `SELECT playlist.id, playlist.name,
+      `SELECT r.thumb_url AS thumbUrl, MIN(pt.position) AS pos
+         FROM playlist_track pt
+         JOIN track t ON t.id = pt.track_id
+         JOIN release r ON r.id = t.release_id
+        WHERE pt.playlist_id = ? AND r.thumb_url IS NOT NULL
+        GROUP BY r.thumb_url
+        ORDER BY pos
+        LIMIT ?`,
+    )
+    .all(playlistId, limit) as { thumbUrl: string }[];
+  return rows.map((r) => r.thumbUrl);
+}
+
+export function listPlaylists(db: Database): PlaylistSummary[] {
+  const rows = db
+    .prepare(
+      `SELECT playlist.id, playlist.name, playlist.cover_url AS coverUrl,
               (SELECT COUNT(*) FROM playlist_track WHERE playlist_id = playlist.id) AS trackCount
          FROM playlist
          ORDER BY playlist.name COLLATE NOCASE`,
     )
-    .all() as PlaylistSummary[];
+    .all() as Omit<PlaylistSummary, 'mosaic'>[];
+  return rows.map((r) => ({ ...r, mosaic: mosaicFor(db, r.id) }));
 }
 
 export function createPlaylist(db: Database, name: string): PlaylistSummary {
@@ -34,7 +62,15 @@ export function createPlaylist(db: Database, name: string): PlaylistSummary {
   if (!clean) throw new Error('playlist name required');
   const id = ulid();
   db.prepare(`INSERT INTO playlist (id, name) VALUES (?, ?)`).run(id, clean);
-  return { id, name: clean, trackCount: 0 };
+  return { id, name: clean, trackCount: 0, coverUrl: null, mosaic: [] };
+}
+
+export function setPlaylistCover(db: Database, id: string, coverUrl: string): void {
+  db.prepare(`UPDATE playlist SET cover_url = ?, updated_at = ${NOW} WHERE id = ?`).run(coverUrl, id);
+}
+
+export function clearPlaylistCover(db: Database, id: string): void {
+  db.prepare(`UPDATE playlist SET cover_url = NULL, updated_at = ${NOW} WHERE id = ?`).run(id);
 }
 
 export function renamePlaylist(db: Database, id: string, name: string): void {
@@ -51,8 +87,8 @@ export function deletePlaylist(db: Database, id: string): void {
 
 export function getPlaylist(db: Database, id: string): PlaylistDetail | null {
   const playlist = db
-    .prepare(`SELECT id, name FROM playlist WHERE id = ?`)
-    .get(id) as { id: string; name: string } | undefined;
+    .prepare(`SELECT id, name, cover_url AS coverUrl FROM playlist WHERE id = ?`)
+    .get(id) as { id: string; name: string; coverUrl: string | null } | undefined;
   if (!playlist) return null;
 
   const orderRows = db
@@ -65,7 +101,7 @@ export function getPlaylist(db: Database, id: string): PlaylistDetail | null {
     const t = byId.get(track_id);
     if (t) tracks.push(t);
   }
-  return { id: playlist.id, name: playlist.name, tracks };
+  return { id: playlist.id, name: playlist.name, coverUrl: playlist.coverUrl, mosaic: mosaicFor(db, id), tracks };
 }
 
 export function addTrack(db: Database, playlistId: string, trackId: string): { added: boolean } {

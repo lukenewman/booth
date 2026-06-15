@@ -2,6 +2,8 @@ export interface PlaylistSummary {
   id: string;
   name: string;
   trackCount: number;
+  coverUrl: string | null;
+  mosaic: string[];
 }
 
 export interface PlaylistTrack {
@@ -20,6 +22,8 @@ export interface PlaylistTrack {
 export interface PlaylistDetail {
   id: string;
   name: string;
+  coverUrl: string | null;
+  mosaic: string[];
   tracks: PlaylistTrack[];
 }
 
@@ -111,6 +115,23 @@ class PlaylistsStore {
         tracks: this.openPlaylist.tracks.filter((t) => t.id !== trackId),
       };
     }
+  }
+
+  async uploadCover(id: string, file: File) {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`/api/playlists/${id}/cover`, { method: 'POST', body: fd });
+    if (!res.ok) return;
+    const { coverUrl } = (await res.json()) as { coverUrl: string };
+    this.items = this.items.map((p) => (p.id === id ? { ...p, coverUrl } : p));
+    if (this.openPlaylist?.id === id) this.openPlaylist = { ...this.openPlaylist, coverUrl };
+  }
+
+  async removeCover(id: string) {
+    const res = await fetch(`/api/playlists/${id}/cover`, { method: 'DELETE' });
+    if (!res.ok) return;
+    this.items = this.items.map((p) => (p.id === id ? { ...p, coverUrl: null } : p));
+    if (this.openPlaylist?.id === id) this.openPlaylist = { ...this.openPlaylist, coverUrl: null };
   }
 
   /** Ask for confirmation before removing a track (both × button and Delete key). */

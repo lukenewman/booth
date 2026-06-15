@@ -3,6 +3,7 @@
   import { player } from '$lib/stores/player.svelte';
   import { translucentDragImage } from '$lib/dnd';
   import EmptyState from './EmptyState.svelte';
+  import PlaylistCover from './PlaylistCover.svelte';
 
   let {
     selectedId = null,
@@ -51,6 +52,22 @@
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }
 
+  let fileInput = $state<HTMLInputElement>();
+  function pickCover() {
+    fileInput?.click();
+  }
+  function onCoverFile(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (open && file) playlists.uploadCover(open.id, file);
+    input.value = '';
+  }
+  function onCoverDrop(e: DragEvent) {
+    e.preventDefault();
+    const file = e.dataTransfer?.files?.[0];
+    if (open && file && file.type.startsWith('image/')) playlists.uploadCover(open.id, file);
+  }
+
   function onDragStart(e: DragEvent, trackId: string) {
     dragId = trackId;
     e.dataTransfer?.setData('application/x-booth-track', trackId);
@@ -76,32 +93,57 @@
 {#if !open}
   <EmptyState title="Loading…" />
 {:else}
-  <div class="pl-toolbar">
-    {#if renaming}
-      <!-- svelte-ignore a11y_autofocus -->
-      <input
-        class="name-input"
-        bind:value={nameDraft}
-        autofocus
-        onkeydown={(e) => {
-          if (e.key === 'Enter') commitRename();
-          else if (e.key === 'Escape') { e.stopPropagation(); renaming = false; }
-        }}
-        onblur={commitRename}
-      />
-    {:else}
-      <button class="name" onclick={startRename} title="Rename">{open.name}</button>
-    {/if}
-    <span class="meta">{open.tracks.length} {open.tracks.length === 1 ? 'track' : 'tracks'}</span>
-    {#if confirmingDelete}
-      <span class="confirm">
-        Delete playlist?
-        <button class="danger" onclick={confirmDelete}>Delete</button>
-        <button class="ghost" onclick={() => (confirmingDelete = false)}>Cancel</button>
-      </span>
-    {:else}
-      <button class="del" title="Delete playlist" onclick={() => (confirmingDelete = true)}>🗑</button>
-    {/if}
+  <div class="pl-header">
+    <button
+      class="cover-btn"
+      title="Upload a cover image"
+      onclick={pickCover}
+      ondragover={(e) => e.preventDefault()}
+      ondrop={onCoverDrop}
+    >
+      <PlaylistCover coverUrl={open.coverUrl} mosaic={open.mosaic} size={112} />
+      <span class="cover-edit">Change</span>
+    </button>
+    <input
+      class="file-input"
+      type="file"
+      accept="image/png,image/jpeg,image/webp"
+      bind:this={fileInput}
+      onchange={onCoverFile}
+    />
+
+    <div class="header-meta">
+      {#if renaming}
+        <!-- svelte-ignore a11y_autofocus -->
+        <input
+          class="name-input"
+          bind:value={nameDraft}
+          autofocus
+          onkeydown={(e) => {
+            if (e.key === 'Enter') commitRename();
+            else if (e.key === 'Escape') { e.stopPropagation(); renaming = false; }
+          }}
+          onblur={commitRename}
+        />
+      {:else}
+        <button class="name" onclick={startRename} title="Rename">{open.name}</button>
+      {/if}
+      <span class="meta">{open.tracks.length} {open.tracks.length === 1 ? 'track' : 'tracks'}</span>
+      <div class="header-actions">
+        {#if open.coverUrl}
+          <button class="link" onclick={() => open && playlists.removeCover(open.id)}>Remove custom cover</button>
+        {/if}
+        {#if confirmingDelete}
+          <span class="confirm">
+            Delete playlist?
+            <button class="danger" onclick={confirmDelete}>Delete</button>
+            <button class="ghost" onclick={() => (confirmingDelete = false)}>Cancel</button>
+          </span>
+        {:else}
+          <button class="del" title="Delete playlist" onclick={() => (confirmingDelete = true)}>🗑</button>
+        {/if}
+      </div>
+    </div>
   </div>
 
   <div class="listview">
@@ -184,14 +226,65 @@
 {/if}
 
 <style>
-  .pl-toolbar {
+  .pl-header {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
+  .cover-btn {
+    position: relative;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    line-height: 0;
+    border-radius: 4px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .cover-btn .cover-edit {
+    position: absolute;
+    inset: auto 0 0 0;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 10px;
+    text-align: center;
+    padding: 3px 0;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+  .cover-btn:hover .cover-edit { opacity: 1; }
+  .file-input { display: none; }
+  .header-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+    padding-top: 2px;
+  }
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    margin-top: 4px;
+  }
+  .link {
+    background: transparent;
+    border: 0;
+    color: var(--text-subtle);
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+  }
+  .link:hover { color: var(--text-muted); }
   .name {
     background: transparent; border: 0; color: var(--text);
     font-family: inherit; font-size: 14px; font-weight: 600;
