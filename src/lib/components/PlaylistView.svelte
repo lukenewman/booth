@@ -8,10 +8,14 @@
   let {
     selectedId = null,
     onTrackSelect,
+    onArtistSelect,
+    onReleaseSelect,
     onDeleted,
   }: {
     selectedId?: string | null;
     onTrackSelect?: (id: string) => void;
+    onArtistSelect?: (artistId: string) => void;
+    onReleaseSelect?: (releaseId: string) => void;
     onDeleted?: () => void;
   } = $props();
 
@@ -182,8 +186,24 @@
                 {#if isPlaying}<span class="play-badge">▶</span>{/if}
               </span>
               <span class="cell title" class:dim={!t.canPlay}>{t.title}</span>
-              <span class="cell artist">{t.artist}</span>
-              <span class="cell release">{t.album ?? '—'}</span>
+              <span
+                class="cell artist link"
+                role="link"
+                tabindex="-1"
+                onclick={(e) => { e.stopPropagation(); onArtistSelect?.(t.artist_id); }}
+                onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onArtistSelect?.(t.artist_id); } }}
+              >{t.artist}</span>
+              {#if t.release_id}
+                <span
+                  class="cell release link"
+                  role="link"
+                  tabindex="-1"
+                  onclick={(e) => { e.stopPropagation(); onReleaseSelect?.(t.release_id!); }}
+                  onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onReleaseSelect?.(t.release_id!); } }}
+                >{t.album ?? '—'}</span>
+              {:else}
+                <span class="cell release">{t.album ?? '—'}</span>
+              {/if}
               <span class="dur">{formatDuration(t.duration_ms)}</span>
               <span
                 class="remove"
@@ -355,6 +375,8 @@
   .title.dim { color: var(--text-muted); }
   .artist { color: var(--text-muted); font-size: 12px; }
   .release { color: var(--text-muted); font-size: 12px; }
+  .cell.link { cursor: pointer; }
+  .cell.link:hover { color: var(--text); text-decoration: underline; }
   .row-btn.playing .title { color: var(--accent); }
   .dur { color: var(--text-subtle); font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 11.5px; text-align: right; }
   .remove { color: transparent; text-align: center; cursor: pointer; font-size: 14px; user-select: none; }

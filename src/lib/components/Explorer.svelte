@@ -174,6 +174,19 @@ import RecordingPill from './RecordingPill.svelte';
 
   let detailKind = $state<'release' | 'track' | 'artist' | null>(null);
   let detailData = $state<any>(null);
+
+  // Playlist view has no track-detail pane, but clicking an artist/release link
+  // opens a dedicated detail on the right (reusing ReleaseDetail/ArtistDetail).
+  let plDetail = $state<{ kind: 'artist' | 'release'; data: any } | null>(null);
+
+  async function openPlaylistEntity(kind: 'artist' | 'release', id: string) {
+    const url =
+      kind === 'artist'
+        ? `/api/library/artists/${encodeURIComponent(id)}`
+        : `/api/library/releases/${encodeURIComponent(id)}`;
+    const res = await fetch(url);
+    if (res.ok) plDetail = { kind, data: await res.json() };
+  }
   let recordingRelease = $state<{ id: string; title: string; artist: string } | null>(null);
   // While a session is open it can be minimized to a floating pill so the user
   // can keep browsing; the recorder store keeps capturing regardless.
@@ -367,6 +380,13 @@ import RecordingPill from './RecordingPill.svelte';
     if (explorerState.nav.section !== 'playlist') return;
     const id = explorerState.nav.item;
     untrack(() => playlists.loadPlaylist(id));
+  });
+
+  // Close the playlist link-detail when the rail selection changes.
+  $effect(() => {
+    explorerState.nav.section;
+    explorerState.nav.item;
+    untrack(() => { plDetail = null; });
   });
 
   // ----- URL sync ------------------------------------------------------------
@@ -587,7 +607,7 @@ import RecordingPill from './RecordingPill.svelte';
 <Player />
 
 <div class="shell">
-  <div class="explorer" class:no-detail={isPlaylistView}>
+  <div class="explorer" class:no-detail={isPlaylistView && !plDetail}>
   <Rail
     nav={explorerState.nav}
     entity={currentEntity}
@@ -611,6 +631,8 @@ import RecordingPill from './RecordingPill.svelte';
       <PlaylistView
         selectedId={explorerState.id}
         onTrackSelect={(id) => explorerState.setEntity(id)}
+        onArtistSelect={(id) => openPlaylistEntity('artist', id)}
+        onReleaseSelect={(id) => openPlaylistEntity('release', id)}
         onDeleted={() => explorerState.setNav({ section: 'library', item: 'all' })}
       />
     {:else}
@@ -705,7 +727,33 @@ import RecordingPill from './RecordingPill.svelte';
     {/if}
   </section>
 
-  {#if !isPlaylistView}
+  {#if isPlaylistView}
+    {#if plDetail}
+      <section class="right">
+        <button class="pl-detail-close" onclick={() => (plDetail = null)}>← Close detail</button>
+        {#if plDetail.kind === 'release'}
+          <ReleaseDetail
+            release={plDetail.data.release}
+            sources={plDetail.data.sources}
+            facets={plDetail.data.facets}
+            tracks={plDetail.data.tracks ?? []}
+            sourceMeta={sourceMetaForDetail}
+            onArtistSelect={(id) => openPlaylistEntity('artist', id)}
+          />
+        {:else}
+          <ArtistDetail
+            artist={plDetail.data.artist}
+            sources={plDetail.data.sources}
+            facets={plDetail.data.facets}
+            releases={plDetail.data.releases}
+            trackCount={plDetail.data.trackCount}
+            sourceMeta={sourceMetaForDetail}
+            onReleaseSelect={(id) => openPlaylistEntity('release', id)}
+          />
+        {/if}
+      </section>
+    {/if}
+  {:else}
   <section class="right">
     {#if !explorerState.id && isSourcesView && selectedSource}
       <SyncRunHistory
@@ -815,6 +863,20 @@ import RecordingPill from './RecordingPill.svelte';
   .right {
     overflow-y: auto;
   }
+  .pl-detail-close {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: var(--bg-raised);
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 8px 14px;
+    cursor: pointer;
+  }
+  .pl-detail-close:hover { color: var(--text); }
   .scanner-overlay {
     position: absolute;
     top: 50px;

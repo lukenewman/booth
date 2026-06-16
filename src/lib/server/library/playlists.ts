@@ -12,7 +12,7 @@ export interface PlaylistSummary {
   mosaic: string[];
 }
 
-export type PlaylistTrack = TrackRow & { sources: string[]; canPlay: boolean };
+export type PlaylistTrack = TrackRow & { sources: string[]; canPlay: boolean; artist_id: string };
 
 export interface PlaylistDetail {
   id: string;

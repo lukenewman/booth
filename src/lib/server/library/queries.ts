@@ -524,17 +524,19 @@ export interface ArtistDetail {
  * Returned as a Map keyed by track id so callers can re-order as they like
  * (e.g. playlists order by their own `position`). Unknown ids are absent.
  */
+export type TrackRowWithRefs = TrackRow & { sources: string[]; canPlay: boolean; artist_id: string };
+
 export function getTracksByIds(
   db: Database,
   ids: string[],
-): Map<string, TrackRow & { sources: string[]; canPlay: boolean }> {
-  const out = new Map<string, TrackRow & { sources: string[]; canPlay: boolean }>();
+): Map<string, TrackRowWithRefs> {
+  const out = new Map<string, TrackRowWithRefs>();
   if (ids.length === 0) return out;
   const placeholders = ids.map(() => '?').join(',');
 
   const rows = db
     .prepare(
-      `SELECT track.id, track.title, artist.name AS artist,
+      `SELECT track.id, track.title, artist.name AS artist, track.artist_id,
               track.album, track.duration_ms, track.release_id, track.position,
               release.thumb_url
          FROM track
@@ -542,7 +544,7 @@ export function getTracksByIds(
          LEFT JOIN release ON release.id = track.release_id
          WHERE track.id IN (${placeholders})`,
     )
-    .all(...ids) as TrackRow[];
+    .all(...ids) as (TrackRow & { artist_id: string })[];
 
   const srcRows = db
     .prepare(

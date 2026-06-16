@@ -10,6 +10,7 @@ export interface PlaylistTrack {
   id: string;
   title: string;
   artist: string;
+  artist_id: string;
   album: string | null;
   duration_ms: number | null;
   release_id: string | null;
