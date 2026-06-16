@@ -147,6 +147,14 @@
   </div>
 
   <div class="listview">
+    <div class="cols">
+      <span></span>
+      <span>Track</span>
+      <span>Artist</span>
+      <span>Release</span>
+      <span class="right">Length</span>
+      <span></span>
+    </div>
     <div class="body">
       {#if open.tracks.length === 0}
         <EmptyState title="No tracks yet" detail="Drag tracks here, or press a on a track to add it." />
@@ -173,10 +181,9 @@
                 {#if t.thumb_url}<img src={t.thumb_url} alt="" loading="lazy" />{/if}
                 {#if isPlaying}<span class="play-badge">▶</span>{/if}
               </span>
-              <span class="meta-cell">
-                <span class="title" class:dim={!t.canPlay}>{t.title}</span>
-                <span class="artist">{t.artist}</span>
-              </span>
+              <span class="cell title" class:dim={!t.canPlay}>{t.title}</span>
+              <span class="cell artist">{t.artist}</span>
+              <span class="cell release">{t.album ?? '—'}</span>
               <span class="dur">{formatDuration(t.duration_ms)}</span>
               <span
                 class="remove"
@@ -316,11 +323,23 @@
   .row-btn:hover { background: var(--bg-row-hover); }
   .row-btn.selected { background: var(--accent-bg); }
   .row-btn.drop-over { box-shadow: inset 0 2px 0 var(--accent); }
-  .row {
+  .cols, .row {
     display: grid;
-    grid-template-columns: 28px 1fr 60px 20px;
-    gap: 12px; padding: 6px 14px; align-items: center;
+    grid-template-columns: 28px minmax(0, 2.2fr) minmax(0, 1.5fr) minmax(0, 1.5fr) 56px 20px;
+    gap: 12px;
+    align-items: center;
   }
+  .cols {
+    padding: 6px 14px;
+    color: var(--text-subtle);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .cols .right { text-align: right; }
+  .row { padding: 6px 14px; }
   .thumb {
     width: 28px; height: 28px; border-radius: 3px;
     background: var(--bg-raised); border: 1px solid var(--border);
@@ -331,10 +350,11 @@
     position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     background: rgba(0, 0, 0, 0.45); color: var(--accent); font-size: 11px;
   }
-  .meta-cell { min-width: 0; }
-  .title { color: var(--text); font-weight: 500; font-size: 13px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cell { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .title { color: var(--text); font-weight: 500; font-size: 13px; }
   .title.dim { color: var(--text-muted); }
-  .artist { color: var(--text-muted); font-size: 12px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .artist { color: var(--text-muted); font-size: 12px; }
+  .release { color: var(--text-muted); font-size: 12px; }
   .row-btn.playing .title { color: var(--accent); }
   .dur { color: var(--text-subtle); font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 11.5px; text-align: right; }
   .remove { color: transparent; text-align: center; cursor: pointer; font-size: 14px; user-select: none; }

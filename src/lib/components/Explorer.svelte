@@ -186,6 +186,14 @@ import RecordingPill from './RecordingPill.svelte';
       return;
     }
 
+    // Playlist view has no detail pane — selecting a row only highlights it,
+    // so skip the (now-invisible) detail fetch entirely.
+    if (explorerState.nav.section === 'playlist') {
+      detailKind = null;
+      detailData = null;
+      return;
+    }
+
     if (explorerState.nav.section === 'add' && explorerState.nav.item === 'discogs') {
       // Detail comes from the in-memory search result, not a library fetch.
       const hit = listItems.find((it) => it.id === explorerState.id);
@@ -579,7 +587,7 @@ import RecordingPill from './RecordingPill.svelte';
 <Player />
 
 <div class="shell">
-  <div class="explorer">
+  <div class="explorer" class:no-detail={isPlaylistView}>
   <Rail
     nav={explorerState.nav}
     entity={currentEntity}
@@ -697,10 +705,9 @@ import RecordingPill from './RecordingPill.svelte';
     {/if}
   </section>
 
+  {#if !isPlaylistView}
   <section class="right">
-    {#if isPlaylistView && !explorerState.id}
-      <EmptyState title="Select a track to see details" />
-    {:else if !explorerState.id && isSourcesView && selectedSource}
+    {#if !explorerState.id && isSourcesView && selectedSource}
       <SyncRunHistory
         sourceId={selectedSource.id}
         sourceName={selectedSource.name}
@@ -759,6 +766,7 @@ import RecordingPill from './RecordingPill.svelte';
       <EmptyState title="Loading…" />
     {/if}
   </section>
+  {/if}
   </div>
   <PlayerBar />
 </div>
@@ -794,6 +802,9 @@ import RecordingPill from './RecordingPill.svelte';
     min-height: 0;
     overflow: hidden;
   }
+  /* Playlist view has no detail pane — let the track list fill the width. */
+  .explorer.no-detail { grid-template-columns: 220px 1fr; }
+  .explorer.no-detail .middle { border-right: none; }
   .middle {
     display: flex;
     flex-direction: column;
