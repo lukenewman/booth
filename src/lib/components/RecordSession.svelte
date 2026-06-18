@@ -39,6 +39,21 @@
     clip: 'CLIP',
   };
 
+  let pendingLowConfirm = $state(false);
+
+  function tryRecord() {
+    const s = recorder.levelStatus;
+    if (s === 'too-low' || s === 'low' || s === 'clip') {
+      pendingLowConfirm = true;
+    } else {
+      void recorder.recordTake();
+    }
+  }
+  function recordAnyway() {
+    pendingLowConfirm = false;
+    void recorder.recordTake();
+  }
+
   async function loadDevices() {
     // Labels are only visible after permission is granted; grab a throwaway
     // stream first so the device dropdown is meaningful.
@@ -279,14 +294,25 @@
           </div>
 
           {#if phase === 'preview'}
-            <div class="actions">
-              <button class="rec" onclick={() => recorder.recordTake()}>⏺ Record side {recorder.takes.length + 1}</button>
-              {#if recorder.takes.length > 0}
-                <button class="primary" onclick={() => recorder.review()}>
-                  No more sides → review {recorder.takes.length} take{recorder.takes.length === 1 ? '' : 's'}
-                </button>
-              {/if}
-            </div>
+            {#if pendingLowConfirm}
+              <div class="low-confirm" role="alertdialog" aria-label="Input level looks low">
+                <span>
+                  Input peaked at {db(Math.max(recorder.heldPeakL, recorder.heldPeakR))}
+                  ({STATUS_LABEL[recorder.levelStatus]}). Turn up your interface gain, or record anyway?
+                </span>
+                <button class="rec" onclick={recordAnyway}>Record anyway</button>
+                <button class="ghost" onclick={() => (pendingLowConfirm = false)}>Keep adjusting</button>
+              </div>
+            {:else}
+              <div class="actions">
+                <button class="rec" onclick={tryRecord}>⏺ Record side {recorder.takes.length + 1}</button>
+                {#if recorder.takes.length > 0}
+                  <button class="primary" onclick={() => recorder.review()}>
+                    No more sides → review {recorder.takes.length} take{recorder.takes.length === 1 ? '' : 's'}
+                  </button>
+                {/if}
+              </div>
+            {/if}
           {:else if phase === 'recording'}
             <div class="zoom-toggle">
               {#each ZOOMS as z}
@@ -465,6 +491,26 @@
     border-radius: 4px;
     cursor: pointer;
     font-size: 11px;
+  }
+  .low-confirm {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    border: 1px solid #5a4a1a;
+    background: #241f12;
+    border-radius: 6px;
+    font-size: 13px;
+    max-width: 560px;
+  }
+  .low-confirm .ghost {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    padding: 6px 12px;
+    border-radius: 5px;
+    cursor: pointer;
   }
   .rate {
     font-size: 11px;
