@@ -1,6 +1,13 @@
 <script lang="ts">
   import { recorder } from '$lib/stores/recorder.svelte';
   import ReviewSplits from './ReviewSplits.svelte';
+  import {
+    toDbfs,
+    meterFraction,
+    GOOD_LO_DBFS,
+    GOOD_HI_DBFS,
+    type LevelStatus,
+  } from '$lib/loudness';
 
   let {
     releaseId,
@@ -23,6 +30,14 @@
   // Derived from the store (not local) so the overlay restores correctly after
   // being minimized + remounted mid-capture instead of resetting to the picker.
   const started = $derived(recorder.phase !== 'idle');
+
+  const STATUS_LABEL: Record<LevelStatus, string> = {
+    'too-low': 'TOO LOW',
+    low: 'LOW',
+    good: 'GOOD ✓',
+    hot: 'HOT',
+    clip: 'CLIP',
+  };
 
   async function loadDevices() {
     // Labels are only visible after permission is granted; grab a throwaway
@@ -232,16 +247,35 @@
           <div class="meters">
             <div class="meter">
               <span>L</span>
-              <div class="bar"><div class="fill" style:width="{Math.min(100, recorder.levelL * 100)}%"></div></div>
-              <span class="db">{db(recorder.levelL)}</span>
+              <div class="bar">
+                <div
+                  class="zone"
+                  style:left="{meterFraction(GOOD_LO_DBFS) * 100}%"
+                  style:width="{(meterFraction(GOOD_HI_DBFS) - meterFraction(GOOD_LO_DBFS)) * 100}%"
+                ></div>
+                <div class="fill" style:width="{meterFraction(toDbfs(recorder.levelL)) * 100}%"></div>
+                <div class="hold" style:left="{meterFraction(toDbfs(recorder.heldPeakL)) * 100}%"></div>
+              </div>
+              <span class="db">{db(recorder.heldPeakL)}</span>
             </div>
             <div class="meter">
               <span>R</span>
-              <div class="bar"><div class="fill" style:width="{Math.min(100, recorder.levelR * 100)}%"></div></div>
-              <span class="db">{db(recorder.levelR)}</span>
+              <div class="bar">
+                <div
+                  class="zone"
+                  style:left="{meterFraction(GOOD_LO_DBFS) * 100}%"
+                  style:width="{(meterFraction(GOOD_HI_DBFS) - meterFraction(GOOD_LO_DBFS)) * 100}%"
+                ></div>
+                <div class="fill" style:width="{meterFraction(toDbfs(recorder.levelR)) * 100}%"></div>
+                <div class="hold" style:left="{meterFraction(toDbfs(recorder.heldPeakR)) * 100}%"></div>
+              </div>
+              <span class="db">{db(recorder.heldPeakR)}</span>
             </div>
-            <div class="cliplight" class:clipped={recorder.clipped}>{recorder.clipped ? 'CLIP' : 'no clip'}</div>
-            <div class="rate">{recorder.sampleRate} Hz · 24-bit</div>
+            <div class="status-row">
+              <div class="status" data-status={recorder.levelStatus}>{STATUS_LABEL[recorder.levelStatus]}</div>
+              <button class="reset-peak" type="button" onclick={() => recorder.resetPeakHold()}>Reset peak</button>
+              <span class="rate">{recorder.sampleRate} Hz · 24-bit</span>
+            </div>
           </div>
 
           {#if phase === 'preview'}
@@ -361,15 +395,35 @@
     gap: 8px;
   }
   .bar {
+    position: relative;
     flex: 1;
     height: 14px;
     background: #222;
     border-radius: 3px;
     overflow: hidden;
   }
+  .zone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: rgba(46, 125, 50, 0.32);
+    border-left: 1px solid rgba(46, 125, 50, 0.9);
+    border-right: 1px solid rgba(46, 125, 50, 0.9);
+  }
   .fill {
+    position: absolute;
+    left: 0;
+    top: 0;
     height: 100%;
-    background: #2e7d32;
+    background: #3a86ff;
+  }
+  .hold {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    margin-left: -1px;
+    background: #fff;
   }
   .db {
     width: 52px;
@@ -377,14 +431,40 @@
     opacity: 0.7;
     text-align: right;
   }
-  .cliplight {
-    font-size: 11px;
-    opacity: 0.6;
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
-  .cliplight.clipped {
-    color: #e53935;
-    opacity: 1;
+  .status {
+    font-size: 11px;
     font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.03em;
+  }
+  .status[data-status='good'] {
+    color: #fff;
+    background: #2e7d32;
+  }
+  .status[data-status='low'],
+  .status[data-status='hot'] {
+    color: #1a1206;
+    background: #e0a23c;
+  }
+  .status[data-status='too-low'],
+  .status[data-status='clip'] {
+    color: #fff;
+    background: #c0392b;
+  }
+  .reset-peak {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
   }
   .rate {
     font-size: 11px;
