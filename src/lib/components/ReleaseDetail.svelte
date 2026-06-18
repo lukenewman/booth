@@ -28,6 +28,7 @@
     format?: string | null;
   }
   interface SourceMeta { id: string; name: string; isStub: boolean; }
+  interface Identifier { type: string; value: string; description: string | null; }
 
   let {
     release,
@@ -35,6 +36,8 @@
     facets,
     tracks,
     sourceMeta,
+    notes = null,
+    identifiers = [],
     addCta = null,
     onTrackSelect,
     onArtistSelect,
@@ -46,6 +49,8 @@
     facets: Facet[];
     tracks: Track[];
     sourceMeta: SourceMeta[];
+    notes?: string | null;
+    identifiers?: Identifier[];
     addCta?: {
       label: string;
       onClick: () => void;
@@ -59,6 +64,7 @@
   } = $props();
 
   const hasDiscogs = $derived(sources.some((s) => s.source === 'discogs'));
+  const hasIdentifyingInfo = $derived(!!notes || identifiers.length > 0);
 
   /** Group facets by source id, deciding which keys to show as mono. */
   function facetRowsFor(sourceId: string) {
@@ -181,6 +187,29 @@
           {addCta.label}
           {#if addCta.kbdHint}<span class="kbd-hint">{addCta.kbdHint}</span>{/if}
         </button>
+      {/if}
+    </div>
+  {/if}
+
+  {#if hasIdentifyingInfo}
+    <div class="identify">
+      {#if identifiers.length > 0}
+        <div class="identify-header">Barcode & identifiers</div>
+        <dl class="identifiers">
+          {#each identifiers as id}
+            <div class="identifier">
+              <dt>{id.type}</dt>
+              <dd>
+                <span class="id-value">{id.value}</span>
+                {#if id.description}<span class="id-desc">{id.description}</span>{/if}
+              </dd>
+            </div>
+          {/each}
+        </dl>
+      {/if}
+      {#if notes}
+        <div class="identify-header notes-header">Notes</div>
+        <div class="notes">{notes}</div>
       {/if}
     </div>
   {/if}
@@ -414,6 +443,55 @@
   .track-row:hover .info-icon { color: var(--text-muted); }
   .track-row .info-icon.playing { color: var(--accent) !important; }
   .track-row.playing .track-title { color: var(--accent); }
+
+  .identify {
+    margin-top: 18px;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+  }
+  .identify-header {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-subtle);
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .identify-header.notes-header { margin-top: 14px; }
+  .identifiers { margin: 0; }
+  .identifier {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 10px;
+    padding: 3px 0;
+    align-items: baseline;
+  }
+  .identifier dt {
+    font-size: 11px;
+    color: var(--text-subtle);
+    line-height: 1.4;
+  }
+  .identifier dd {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .id-value {
+    font-family: var(--font-mono);
+    color: var(--text);
+    word-break: break-word;
+  }
+  .id-desc {
+    color: var(--text-subtle);
+    margin-left: 6px;
+  }
+  .notes {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-muted);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
 
   .videos {
     margin-top: 18px;

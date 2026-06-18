@@ -238,23 +238,28 @@ import RecordingPill from './RecordingPill.svelte';
           _isDiscogsSearchHit: true,
         };
 
-        // Background fetch: enrich with format text (vinyl color etc.) from the
-        // full release endpoint, which the search API doesn't include.
+        // Background fetch: enrich with format text (vinyl color etc.), pressing
+        // notes, and the barcode/identifier list from the full release endpoint,
+        // none of which the search API includes.
         const selectedId = hit.id;
         fetch(`/api/discogs/releases/${hit.id}`)
           .then((r) => (r.ok ? r.json() : null))
           .then((d) => {
-            if (!d?.formatText) return;
+            if (!d) return;
             // Guard: only update if the user hasn't moved to a different result.
             if (explorerState.id !== selectedId || !detailData?.release) return;
             detailData = {
               ...detailData,
               release: {
                 ...detailData.release,
-                format: detailData.release.format
-                  ? `${detailData.release.format}, ${d.formatText}`
-                  : d.formatText,
+                format: d.formatText
+                  ? detailData.release.format
+                    ? `${detailData.release.format}, ${d.formatText}`
+                    : d.formatText
+                  : detailData.release.format,
               },
+              notes: d.notes ?? null,
+              identifiers: d.identifiers ?? [],
             };
           })
           .catch(() => {});
@@ -776,6 +781,8 @@ import RecordingPill from './RecordingPill.svelte';
         facets={detailData.facets}
         tracks={detailData.tracks ?? []}
         sourceMeta={sourceMetaForDetail}
+        notes={detailData.notes ?? null}
+        identifiers={detailData.identifiers ?? []}
         addCta={releaseDetailCta}
         onTrackSelect={(id) => explorerState.setEntity(id)}
         onArtistSelect={(id) => explorerState.setEntity(id)}

@@ -155,6 +155,7 @@ src/
         sessions/[id]/commit/+server.ts       POST {regions, replace} → commitRegions; 409 {conflicts} when already ripped and replace=false
       discogs/
         search/+server.ts                     GET ?q= — live text search; returns { results: […] } sorted by year asc
+        releases/[id]/+server.ts              GET → { formatText, notes, identifiers[] } from the full /releases/{id} endpoint; background-fetched by the add-flow detail pane to enrich a search hit (format text + pressing notes + the "Barcode and Other Identifiers" list)
         collection/
           add/+server.ts                      POST {releaseId,…} — adds to Discogs; writes source_link + appends instance_id to source_facets.instanceIds
           remove/+server.ts                   DELETE {releaseId, instanceId?} — removes from Discogs; instanceId optional (falls back to source_facets.instanceIds[0])
@@ -222,6 +223,10 @@ docs/
 - **Server**: `fetchReleaseVideos(externalId)` (`discogs/videos.ts`) calls the full `/releases/{id}` Discogs endpoint and returns its `.videos[]`, deduped by uri (Discogs sometimes repeats one); `parseYouTubeId` (`discogs/youtube.ts`, pure) resolves the embeddable id. A non-YouTube uri renders as a plain link instead of an embed.
 - **Endpoint** returns `{ videos: [] }` (not 404) when the release has no Discogs link or no videos; a Discogs 429 surfaces as HTTP 429.
 - **Release-level only** — no tracklist matching. Discogs `.videos[]` aren't mapped to specific tracks, so there are no per-track play buttons here (this is the deliberately-scoped version of the Discogs "Playable" idea).
+
+### Pressing notes & identifiers (Add → Discogs)
+- **The add-flow release detail surfaces Discogs `notes` + the "Barcode and Other Identifiers" list** so a record can be identified (matrix/runout, barcode, label code) without opening discogs.com. Shown only on Add → Discogs search-hit detail panes — the data rides on the background `/api/discogs/releases/{id}` fetch the add flow already makes (the one that enriches `formatText`), so it costs no extra Discogs request.
+- `ReleaseDetail.svelte` renders a "Barcode & identifiers" block (one `type` / `value` / optional `description` row each, value in mono) and a pre-wrapped "Notes" block, gated on the data being present (`notes` / `identifiers` props default empty, so library/non-Discogs releases show nothing). `Explorer.loadDetail` merges `notes`/`identifiers` from the endpoint into `detailData`. Notes render as-is (no BBCode parsing).
 
 ### Vinyl recording
 - **Goal**: record a vinyl release from an audio interface into the library, smart-split each side into per-track regions, review/adjust, save as lossless local files. Entry: "⏺ Record from vinyl" CTA on a Discogs-linked library release's detail pane → full-pane `RecordSession` overlay. Spec/plan: `docs/superpowers/specs/2026-06-10-vinyl-recording-design.md`, `docs/superpowers/plans/2026-06-10-vinyl-recording.md`.
