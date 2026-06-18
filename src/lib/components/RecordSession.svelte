@@ -18,6 +18,7 @@
 
   let devices = $state<MediaDeviceInfo[]>([]);
   let deviceId = $state<string>('');
+  let micBlocked = $state(false);
   let confirmingClose = $state(false);
   // Derived from the store (not local) so the overlay restores correctly after
   // being minimized + remounted mid-capture instead of resetting to the picker.
@@ -29,8 +30,13 @@
     try {
       const s = await navigator.mediaDevices.getUserMedia({ audio: true });
       s.getTracks().forEach((t) => t.stop());
-    } catch {
-      /* error surfaces on start() */
+      micBlocked = false;
+    } catch (err) {
+      // A denied permission yields only an unnamed placeholder device here and
+      // a hard failure later on start(); flag it so the picker explains the fix
+      // rather than silently showing a single meaningless "Audio input".
+      const name = (err as DOMException)?.name;
+      micBlocked = name === 'NotAllowedError' || name === 'SecurityError';
     }
     devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput');
     deviceId = devices[0]?.deviceId ?? '';
@@ -191,7 +197,13 @@
         {#if !started}
           <div class="device-section">
             <span class="label" id="dev-label">Input device</span>
-            {#if devices.length === 0}
+            {#if micBlocked}
+              <p class="mic-blocked">
+                Microphone access is blocked. Enable it for this site in your browser settings
+                (the icon at the left of the address bar → Microphone → Allow), then try again.
+              </p>
+              <button type="button" class="retry" onclick={() => loadDevices()}>Try again</button>
+            {:else if devices.length === 0}
               <p class="no-devices">No audio inputs found — the system default will be used.</p>
             {:else}
               <ul class="device-list" role="radiogroup" aria-labelledby="dev-label">
@@ -213,7 +225,9 @@
               </ul>
             {/if}
           </div>
-          <button class="primary" onclick={begin}>Open input</button>
+          {#if !micBlocked}
+            <button class="primary" onclick={begin}>Open input</button>
+          {/if}
         {:else}
           <div class="meters">
             <div class="meter">
@@ -584,5 +598,22 @@
     margin: 0;
     font-size: 12px;
     color: var(--text-muted);
+  }
+  .mic-blocked {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text);
+    border-left: 2px solid var(--danger);
+    padding-left: 10px;
+  }
+  .retry {
+    align-self: flex-start;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    padding: 6px 12px;
+    border-radius: 5px;
+    cursor: pointer;
   }
 </style>
