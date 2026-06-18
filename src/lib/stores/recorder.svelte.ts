@@ -4,6 +4,8 @@
  * per-take split proposals returned by the server.
  */
 
+import { toDbfs, classifyPeak, type LevelStatus } from '$lib/loudness';
+
 export type RecorderPhase =
   | 'idle'
   | 'arming'
@@ -44,6 +46,8 @@ let takes = $state<TakeClient[]>([]);
 let elapsedMs = $state(0);
 let levelL = $state(0);
 let levelR = $state(0);
+let heldPeakL = $state(0);
+let heldPeakR = $state(0);
 let clipped = $state(false);
 let err = $state<string | null>(null);
 let sampleRate = $state(0);
@@ -114,9 +118,16 @@ function meterLoop() {
   }
   levelL = pl;
   levelR = pr;
+  if (pl > heldPeakL) heldPeakL = pl;
+  if (pr > heldPeakR) heldPeakR = pr;
   if (pl >= 0.999 || pr >= 0.999) clipped = true;
   if (phase === 'recording') elapsedMs = performance.now() - recordStart;
   meterRaf = requestAnimationFrame(meterLoop);
+}
+
+function resetHold() {
+  heldPeakL = 0;
+  heldPeakR = 0;
 }
 
 export const recorder = {
@@ -140,6 +151,18 @@ export const recorder = {
   },
   get clipped() {
     return clipped;
+  },
+  get heldPeakL() {
+    return heldPeakL;
+  },
+  get heldPeakR() {
+    return heldPeakR;
+  },
+  get levelStatus(): LevelStatus {
+    return classifyPeak(toDbfs(Math.max(heldPeakL, heldPeakR)), clipped);
+  },
+  resetPeakHold() {
+    resetHold();
   },
   get error() {
     return err;
@@ -214,6 +237,7 @@ export const recorder = {
       };
       src.connect(worklet);
       clipped = false;
+      resetHold();
       phase = 'preview';
       meterLoop();
     } catch (e) {
@@ -226,6 +250,7 @@ export const recorder = {
   async recordTake() {
     if (!sessionId || !ctx) return;
     clipped = false;
+    resetHold();
     err = null;
     const res = await fetch(`/api/recordings/sessions/${sessionId}/takes`, {
       method: 'POST',
