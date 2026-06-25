@@ -59,7 +59,7 @@ export const GET: RequestHandler = async ({ url }) => {
       `/database/search?${params}`,
     )) as DiscogsSearchResponse;
     const results = (data.results ?? [])
-      .filter((r) => r.type !== 'master' && r.format?.[0] !== 'File')
+      .filter((r) => r.type !== 'master' && r.format?.includes('Vinyl'))
       .map(trim)
       .sort(byYearAsc);
     return json({ results });
