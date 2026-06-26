@@ -14,6 +14,11 @@
     label?: string | null;
     catno?: string | null;
     format?: string | null;
+    // Add → Discogs master rows: collapse several pressings into one row that
+    // drills into its versions.
+    isMaster?: boolean;
+    versionCount?: number;
+    yearLabel?: string | null;
   }
 
   let {
@@ -62,20 +67,29 @@
       {:else}
         <div class="cover"></div>
       {/if}
-      <div class="meta">
-        <div class="title">{item.title}</div>
-        <div class="artist">{item.artist}</div>
-        {#if item.label || item.catno || item.country || item.format}
-          <div class="detail">
-            {[
-              [item.label, item.catno].filter(Boolean).join(' – '),
-              item.country,
-              item.format,
-            ].filter(Boolean).join(' · ')}
-          </div>
-        {/if}
-      </div>
-      <span class="year">{item.year ?? '—'}</span>
+      {#if item.isMaster}
+        <div class="meta">
+          <div class="title">{item.title}</div>
+          <div class="artist">{item.artist}{item.yearLabel ? ` · ${item.yearLabel}` : ''}</div>
+          <div class="detail">{item.versionCount} versions</div>
+        </div>
+        <span class="chevron" aria-label="View versions">›</span>
+      {:else}
+        <div class="meta">
+          <div class="title">{item.title}</div>
+          <div class="artist">{item.artist}</div>
+          {#if item.label || item.catno || item.country || item.format}
+            <div class="detail">
+              {[
+                [item.label, item.catno].filter(Boolean).join(' – '),
+                item.country,
+                item.format,
+              ].filter(Boolean).join(' · ')}
+            </div>
+          {/if}
+        </div>
+        <span class="year">{item.year ?? '—'}</span>
+      {/if}
       <SourceGrid present={item.sources} />
     </div>
   {/snippet}
@@ -151,6 +165,12 @@
     color: var(--text-subtle);
     font-variant-numeric: tabular-nums;
     font-size: 12px;
+    text-align: right;
+  }
+  .chevron {
+    color: var(--text-subtle);
+    font-size: 18px;
+    line-height: 1;
     text-align: right;
   }
 </style>

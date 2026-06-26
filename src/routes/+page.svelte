@@ -106,7 +106,11 @@
               return;
             }
             input.blur();
+            return;
           }
+          // 3. If drilled into a master's versions (Add → Discogs), go back.
+          const back = document.querySelector<HTMLButtonElement>('button.drill-back');
+          if (back) { back.click(); return; }
         },
         undoLast: async () => {
           // Prefer the visible Remove button in the detail pane — it handles

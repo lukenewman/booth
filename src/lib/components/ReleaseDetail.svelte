@@ -65,6 +65,9 @@
 
   const hasDiscogs = $derived(sources.some((s) => s.source === 'discogs'));
   const hasIdentifyingInfo = $derived(!!notes || identifiers.length > 0);
+  const discogsUrl = $derived(
+    sources.find((s) => s.source === 'discogs')?.external_url ?? null,
+  );
 
   /** Group facets by source id, deciding which keys to show as mono. */
   function facetRowsFor(sourceId: string) {
@@ -139,6 +142,9 @@
           release.format,
         ].filter(Boolean).join(' · ')}
       </div>
+    {/if}
+    {#if discogsUrl}
+      <a class="discogs-link" href={discogsUrl} target="_blank" rel="noreferrer">View on Discogs ↗</a>
     {/if}
   </div>
 
@@ -324,6 +330,14 @@
     color: var(--text-subtle);
     line-height: 1.4;
   }
+  .discogs-link {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .discogs-link:hover { text-decoration: underline; }
 
   .cta-row { margin-bottom: 16px; }
   .record-cta {
@@ -446,6 +460,7 @@
 
   .identify {
     margin-top: 18px;
+    margin-bottom: 18px;
     border-top: 1px solid var(--border);
     padding-top: 12px;
   }

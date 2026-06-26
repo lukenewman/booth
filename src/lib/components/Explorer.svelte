@@ -16,6 +16,7 @@
   import SyncRunHistory from './SyncRunHistory.svelte';
   import { explorerState } from '$lib/stores/explorerState.svelte';
   import { collection } from '$lib/stores/collection.svelte';
+  import { groupByMaster, type SearchHit } from '$lib/discogs/group';
   import { playlists } from '$lib/stores/playlists.svelte';
   import PlaylistView from './PlaylistView.svelte';
   import Player from './Player.svelte';
@@ -63,6 +64,12 @@ import RecordingPill from './RecordingPill.svelte';
   let listItems = $state<any[]>([]);
   let listTotal = $state(0);
   let listHasMore = $state(false);
+
+  // Add → Discogs: raw search hits (with masterId) + which master is drilled
+  // into. The displayed list is derived from these via groupByMaster, so it's
+  // kept separate from `listItems` (which serves library/sources views).
+  let searchHits = $state<SearchHit[]>([]);
+  let drillMasterId = $state<number | null>(null);
   // Non-reactive: read+written by loadList from inside the load-list $effect,
   // which would trip Svelte's effect_update_depth_exceeded if it were $state.
   let listLoading = false;
@@ -85,39 +92,18 @@ import RecordingPill from './RecordingPill.svelte';
 
     try {
       if (explorerState.nav.section === 'add' && explorerState.nav.item === 'discogs') {
+        // A fresh search resets any master drill-down. The displayed list is
+        // derived from `searchHits` (see `addItems` below), so we only store
+        // the raw hits here. /api/discogs/search wraps results as {results:[…]}.
+        drillMasterId = null;
         const q = explorerState.q.trim();
         if (!q) {
-          listItems = [];
-          listTotal = 0;
+          searchHits = [];
           listHasMore = false;
           return;
         }
         const res = await fetch(`/api/discogs/search?q=${encodeURIComponent(q)}`).then((r) => r.json());
-        if (res?.error) {
-          listItems = [];
-          listTotal = 0;
-          listHasMore = false;
-          return;
-        }
-        // Map Discogs search results into the ReleaseItem shape, with an
-        // empty-or-Discogs source-grid based on the in-collection set.
-        // /api/discogs/search wraps results as `{results: [...]}` (Slice 1 shape).
-        const mapped = (res?.results ?? []).map((r: any) => ({
-          id: String(r.id),
-          title: r.title,
-          artist: r.artist,
-          year: r.year ?? null,
-          country: r.country ?? null,
-          label: r.label ?? null,
-          catno: r.catno ?? null,
-          format: r.format ?? null,
-          thumbUrl: r.thumb ?? null,
-          coverUrl: r.coverImage ?? null,
-          sources: collection.has(Number(r.id)) ? ['discogs'] : [],
-          _isDiscogsSearchHit: true,
-        }));
-        listItems = mapped;
-        listTotal = mapped.length;
+        searchHits = res?.error ? [] : ((res?.results ?? []) as SearchHit[]);
         listHasMore = false;
         return;
       }
@@ -209,7 +195,7 @@ import RecordingPill from './RecordingPill.svelte';
 
     if (explorerState.nav.section === 'add' && explorerState.nav.item === 'discogs') {
       // Detail comes from the in-memory search result, not a library fetch.
-      const hit = listItems.find((it) => it.id === explorerState.id);
+      const hit = addItems.find((it) => it.id === explorerState.id);
       if (hit) {
         detailKind = 'release';
         detailData = {
@@ -238,9 +224,9 @@ import RecordingPill from './RecordingPill.svelte';
           _isDiscogsSearchHit: true,
         };
 
-        // Background fetch: enrich with format text (vinyl color etc.), pressing
-        // notes, and the barcode/identifier list from the full release endpoint,
-        // none of which the search API includes.
+        // Background fetch: enrich with pressing notes + the barcode/identifier
+        // list from the full release endpoint, which the search API omits.
+        // (Format/color already rides on the search hit via formats[].text.)
         const selectedId = hit.id;
         fetch(`/api/discogs/releases/${hit.id}`)
           .then((r) => (r.ok ? r.json() : null))
@@ -250,14 +236,6 @@ import RecordingPill from './RecordingPill.svelte';
             if (explorerState.id !== selectedId || !detailData?.release) return;
             detailData = {
               ...detailData,
-              release: {
-                ...detailData.release,
-                format: d.formatText
-                  ? detailData.release.format
-                    ? `${detailData.release.format}, ${d.formatText}`
-                    : d.formatText
-                  : detailData.release.format,
-              },
               notes: d.notes ?? null,
               identifiers: d.identifiers ?? [],
             };
@@ -318,6 +296,98 @@ import RecordingPill from './RecordingPill.svelte';
   const isSourcesView = $derived(explorerState.nav.section === 'sources');
   const isPlaylistView = $derived(explorerState.nav.section === 'playlist');
 
+  // ----- Add → Discogs master grouping ---------------------------------------
+
+  // One shape for both row kinds: master rows carry the version-only fields as
+  // null (they're never selected as a release — clicking drills instead), so
+  // the list and detail lookups stay free of union narrowing.
+  interface AddItem {
+    id: string;
+    title: string;
+    artist: string;
+    year: number | null;
+    country: string | null;
+    label: string | null;
+    catno: string | null;
+    format: string | null;
+    thumbUrl: string | null;
+    coverUrl: string | null;
+    sources: string[];
+    _isDiscogsSearchHit: boolean;
+    isMaster?: boolean;
+    versionCount?: number;
+    yearLabel?: string | null;
+  }
+
+  /** One Discogs search hit → the ReleaseItem shape the listview renders. */
+  function mapVersion(h: SearchHit): AddItem {
+    return {
+      id: String(h.id),
+      title: h.title,
+      artist: h.artist,
+      year: h.year ?? null,
+      country: h.country ?? null,
+      label: h.label ?? null,
+      catno: h.catno ?? null,
+      format: h.format ?? null,
+      thumbUrl: h.thumb ?? null,
+      coverUrl: h.coverImage ?? null,
+      sources: collection.has(h.id) ? ['discogs'] : [],
+      _isDiscogsSearchHit: true,
+    };
+  }
+
+  const masterGroups = $derived(groupByMaster(searchHits));
+  const drilledMaster = $derived(
+    drillMasterId !== null
+      ? masterGroups.find((g) => g.masterId === drillMasterId) ?? null
+      : null,
+  );
+
+  // The rows shown in Add → Discogs: master rows + singletons at the top level,
+  // or a master's versions once drilled in. Owned state reads `collection` so it
+  // stays live across add/remove without manual row patching.
+  const addItems = $derived.by<AddItem[]>(() => {
+    if (drilledMaster) return drilledMaster.versions.map(mapVersion);
+    return masterGroups.map((g) =>
+      g.isMaster
+        ? {
+            id: g.key, // 'master:<id>' — onAddRowSelect drills instead of selecting
+            title: g.title,
+            artist: g.artist,
+            year: null,
+            country: null,
+            label: null,
+            catno: null,
+            format: null,
+            thumbUrl: g.thumb,
+            coverUrl: null,
+            sources: g.versions.some((v) => collection.has(v.id)) ? ['discogs'] : [],
+            _isDiscogsSearchHit: false,
+            isMaster: true,
+            versionCount: g.versionCount,
+            yearLabel: g.yearLabel,
+          }
+        : mapVersion(g.versions[0]),
+    );
+  });
+
+  /** Row click in Add → Discogs: drill into a master, else select the release. */
+  function onAddRowSelect(id: string) {
+    if (id.startsWith('master:')) {
+      drillMasterId = Number(id.slice('master:'.length));
+      explorerState.setEntity(null);
+    } else {
+      explorerState.setEntity(id);
+    }
+  }
+
+  /** Leave a master's version list, back to the master-level results. */
+  function popDrill() {
+    drillMasterId = null;
+    explorerState.setEntity(null);
+  }
+
   // The toggle is suppressed only for rail items where tracks aren't a
   // meaningful concept at all — currently just Add → Discogs (the Discogs
   // search API returns releases only). Stub sources still show the toggle
@@ -352,7 +422,8 @@ import RecordingPill from './RecordingPill.svelte';
     if (isAddView) {
       const q = explorerState.q.trim();
       if (!q) return '';
-      return `${listTotal} result${listTotal === 1 ? '' : 's'}`;
+      const n = addItems.length;
+      return `${n} result${n === 1 ? '' : 's'}`;
     }
     const noun =
       currentEntity === 'tracks'  ? 'tracks'
@@ -432,7 +503,7 @@ import RecordingPill from './RecordingPill.svelte';
   let addSubmitting = $state(false);
   async function handleAdd() {
     if (!detailData?._isDiscogsSearchHit) return;
-    const hit = listItems.find((it) => it.id === explorerState.id);
+    const hit = addItems.find((it) => it.id === explorerState.id);
     if (!hit) return;
     addSubmitting = true;
     try {
@@ -461,9 +532,8 @@ import RecordingPill from './RecordingPill.svelte';
           addedAt: Date.now(),
         });
         collection.markAdded(Number(hit.id));
-        listItems = listItems.map((it) =>
-          it.id === hit.id ? { ...it, sources: ['discogs'] } : it,
-        );
+        // The list's owned dots are derived from `collection`, so markAdded
+        // above refreshes the row — no manual list patch needed.
         detailData = {
           ...detailData,
           sources: [
@@ -674,6 +744,12 @@ import RecordingPill from './RecordingPill.svelte';
       </div>
     {/if}
 
+    {#if isAddView && drilledMaster}
+      <button class="drill-back" onclick={popDrill}>
+        ← {drilledMaster.versionCount} versions of “{drilledMaster.title}”
+      </button>
+    {/if}
+
     {#if isSourcesView && selectedSource?.isStub}
       <EmptyState
         title="{selectedSource.name} not yet implemented"
@@ -687,21 +763,21 @@ import RecordingPill from './RecordingPill.svelte';
     {:else if currentEntity === 'releases'}
       {#if releaseView === 'grid'}
         <ReleaseGrid
-          items={listItems}
-          total={listTotal}
-          hasMore={listHasMore}
+          items={isAddView ? addItems : listItems}
+          total={isAddView ? addItems.length : listTotal}
+          hasMore={isAddView ? false : listHasMore}
           selectedId={explorerState.id}
-          onSelect={(id) => explorerState.setEntity(id)}
+          onSelect={isAddView ? onAddRowSelect : (id) => explorerState.setEntity(id)}
           loadMore={() => loadList(false)}
           emptyTitle={isAddView && !explorerState.q ? 'Search Discogs to add records' : 'No releases'}
         />
       {:else}
         <ReleaseList
-          items={listItems}
-          total={listTotal}
-          hasMore={listHasMore}
+          items={isAddView ? addItems : listItems}
+          total={isAddView ? addItems.length : listTotal}
+          hasMore={isAddView ? false : listHasMore}
           selectedId={explorerState.id}
-          onSelect={(id) => explorerState.setEntity(id)}
+          onSelect={isAddView ? onAddRowSelect : (id) => explorerState.setEntity(id)}
           loadMore={() => loadList(false)}
           emptyTitle={isAddView && !explorerState.q ? 'Search Discogs to add records' : 'No releases'}
         />
@@ -884,6 +960,20 @@ import RecordingPill from './RecordingPill.svelte';
     cursor: pointer;
   }
   .pl-detail-close:hover { color: var(--text); }
+  .drill-back {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 8px 14px;
+    cursor: pointer;
+  }
+  .drill-back:hover { color: var(--text); }
   .scanner-overlay {
     position: absolute;
     top: 50px;

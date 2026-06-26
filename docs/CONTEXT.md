@@ -48,6 +48,7 @@ src/
   lib/
     types.ts                                  DiscogsRelease, SessionEntry, ApiError, AddResponse
     keyboard.svelte.ts                        installKeyboard(actions, guards) — global keydown handler dispatching DOM-driven actions
+    discogs/group.ts                          groupByMaster(hits) — pure: collapse Add → Discogs search hits into master groups (multi-version) + singletons (no-master / single-version); SearchHit = DiscogsRelease & {masterId}
     components/
       Explorer.svelte                         three-pane shell (rail / listview / detail); owns URL ↔ store sync, data fetching, add/remove handlers; mounts <Player /> + <PlayerBar />
       Rail.svelte                             left rail: Library / Sources / Add → Discogs sections
@@ -105,6 +106,7 @@ src/
           hydrateDiscogsTracks.ts             post-sync: fetch /releases/{id}.tracklist for Discogs releases lacking track rows → insert track rows (title, duration_ms when present, sequential position) + discogsPosition facet ("A1","B2"); merges onto existing local tracks via release_position. Called from sync_run after each discogs collate, and fire-and-forget on add.
           videos.ts                           fetchReleaseVideos(externalId) → release .videos[] (deduped by uri, YouTube ids parsed)
           youtube.ts                          parseYouTubeId(uri) — pure URL → video-id helper (youtube.com / youtu.be / music. / m.)
+          format.ts                           buildFormatLabel(formats[]) — pure: rich "Vinyl, LP, Album, Clear, 180g" string from a search result's formats[] (name + descriptions + text)
           index.ts                            discogsSource: MusicSource & CollectionWritable
         local/                                (formerly itunes/) the unified local-files source
           parse.ts                            plist/XML → typed Apple Music records
@@ -154,7 +156,7 @@ src/
         sessions/[id]/takes/[takeId]/audio/+server.ts     GET ?startMs=&endMs= → audio/wav slice for region/seam preview
         sessions/[id]/commit/+server.ts       POST {regions, replace} → commitRegions; 409 {conflicts} when already ripped and replace=false
       discogs/
-        search/+server.ts                     GET ?q= — live text search; returns { results: […] } sorted by year asc
+        search/+server.ts                     GET ?q= — live text search (per_page 100, vinyl-only: keeps results whose format includes "Vinyl"); returns { results: […] } each with a rich format string built from formats[] (color/weight via formats[].text, e.g. "Vinyl, LP, Album, Clear, 180g") + masterId for client-side master grouping; sorted by year asc
         releases/[id]/+server.ts              GET → { formatText, notes, identifiers[] } from the full /releases/{id} endpoint; background-fetched by the add-flow detail pane to enrich a search hit (format text + pressing notes + the "Barcode and Other Identifiers" list)
         collection/
           add/+server.ts                      POST {releaseId,…} — adds to Discogs; writes source_link + appends instance_id to source_facets.instanceIds
@@ -180,7 +182,7 @@ docs/
 - **Three panes**: left rail (Library / Sources / Add → Discogs sections), middle listview (paginated rows + toolbar), right detail (release or track).
 - **Library rail items**: `all` (label flips between "All tracks" / "All releases" based on the app-wide entity lens) and `in-multiple-sources` (entities contributed by ≥2 sources, supports both kinds).
 - **Sources rail items**: one per registered source (`discogs`, `local`, `rekordbox`, `plex`); stubs render `EmptyState`. (Discogs *does* index tracks — `hydrateDiscogsTracks` pulls tracklists post-sync — so the tracks lens is populated for Discogs releases.)
-- **Add rail item**: `add:discogs` — Discogs live search, release-only by nature (the search API doesn't return tracks); toolbar omits the entity toggle here.
+- **Add rail item**: `add:discogs` — Discogs live search, release-only by nature (the search API doesn't return tracks); toolbar omits the entity toggle here. Results are **vinyl-only** and **master-grouped** (see Search below).
 - **Entity lens (releases ↔ tracks ↔ artists)**: app-wide viewing toggle, lives in the listview toolbar and is bound to `Tab` (cycles forward 3-way). Persists across rail switches (it's a lens, not a per-rail attribute). Detail pane keeps its open entity when the lens flips — the listview switches independently. URL: `?entity=releases|tracks|artists` (omitted when equal to the default `releases`).
 - **Listview**: lazy pagination via `IntersectionObserver` sentinel rooted on the scroll container (`?limit=200&offset=…`); row click selects + opens detail.
 - **Detail**: cover image (or grey placeholder for releases with no URL), title/artist/year, optional CTA, then per-source panels (`SourcePanel`) for all registered sources, then tracklist (releases only). Stub sources still render a "not implemented" panel.
@@ -189,7 +191,8 @@ docs/
 
 ### Search
 - **Library / Sources searches** (Library, Sources rail items): the toolbar search input filters the current listview via `?q=` on `/api/library/releases` or `/api/library/tracks`. Server-side `LIKE` over title + artist; pagination resets.
-- **Add → Discogs search**: same toolbar input, but query goes to `/api/discogs/search?q=` (returns `{ results: [...] }` sorted ascending by year, nulls last).
+- **Add → Discogs search**: same toolbar input, but query goes to `/api/discogs/search?q=` (returns `{ results: [...] }` sorted ascending by year, nulls last). **Vinyl-only** (the server keeps results whose format includes "Vinyl", dropping CD/Cassette/File). Each result carries a rich format string assembled from `formats[]` (color/weight, e.g. "Vinyl, LP, Album, Clear, 180g") so the **list rows** show the same detail as the detail pane — no per-release fetch needed.
+- **Master grouping + drill-in** (Add → Discogs, `ReleaseList`/`Explorer`): results are grouped client-side by `masterId` (`$lib/discogs/group.ts`). A master with ≥2 surfaced pressings collapses to one "N versions ›" row; clicking it (or `Enter`) drills the list into that master's versions under a `← N versions of "…"` breadcrumb (`Esc` or the breadcrumb pops back). No-master releases and single-version masters render as normal rows you click straight to detail/add. Drill state (`drillMasterId`) is ephemeral client state — a new search resets it; the versions come from the in-memory hits (no extra API calls), so each keeps its color/weight. `per_page` is 100 so a focused album search surfaces every vinyl version of the relevant masters. A master row's owned dot fills when any of its versions is in the collection.
 - Both modes are live-debounced (250ms) through the shared `SearchBar` component (`focus()` / `blur()` / `clear()` exposed).
 - Owned-by-Discogs releases show the D dot filled in the row's `SourceGrid` — same indicator everywhere in the UI.
 
@@ -225,8 +228,9 @@ docs/
 - **Release-level only** — no tracklist matching. Discogs `.videos[]` aren't mapped to specific tracks, so there are no per-track play buttons here (this is the deliberately-scoped version of the Discogs "Playable" idea).
 
 ### Pressing notes & identifiers (Add → Discogs)
-- **The add-flow release detail surfaces Discogs `notes` + the "Barcode and Other Identifiers" list** so a record can be identified (matrix/runout, barcode, label code) without opening discogs.com. Shown only on Add → Discogs search-hit detail panes — the data rides on the background `/api/discogs/releases/{id}` fetch the add flow already makes (the one that enriches `formatText`), so it costs no extra Discogs request.
-- `ReleaseDetail.svelte` renders a "Barcode & identifiers" block (one `type` / `value` / optional `description` row each, value in mono) and a pre-wrapped "Notes" block, gated on the data being present (`notes` / `identifiers` props default empty, so library/non-Discogs releases show nothing). `Explorer.loadDetail` merges `notes`/`identifiers` from the endpoint into `detailData`. Notes render as-is (no BBCode parsing).
+- **The add-flow release detail surfaces Discogs `notes` + the "Barcode and Other Identifiers" list** so a record can be identified (matrix/runout, barcode, label code) without opening discogs.com. Shown only on Add → Discogs search-hit detail panes — the data rides on the background `/api/discogs/releases/{id}` fetch the add flow makes, so it costs no extra Discogs request. (Format/color is **not** sourced here anymore — it rides on the search hit via `formats[].text`; the background fetch now supplies only `notes` + `identifiers`.)
+- `ReleaseDetail.svelte` renders a "Barcode & identifiers" block (one `type` / `value` / optional `description` row each, value in mono) and a pre-wrapped "Notes" block, gated on the data being present (`notes` / `identifiers` props default empty, so library/non-Discogs releases show nothing). `Explorer.loadDetail` merges `notes`/`identifiers` from the endpoint into `detailData`. Notes render as-is (no BBCode parsing). The `.identify` block has bottom margin so Notes doesn't butt against the next panel.
+- **"View on Discogs ↗" link** in the release-header (`ReleaseDetail.svelte`), gated on a discogs `source_link` with an `external_url` — present for both add-flow hits and library releases. (Distinct from the per-source `SourcePanel` "open in Discogs" link lower in the pane; this is the discoverable one up top.)
 
 ### Vinyl recording
 - **Goal**: record a vinyl release from an audio interface into the library, smart-split each side into per-track regions, review/adjust, save as lossless local files. Entry: "⏺ Record from vinyl" CTA on a Discogs-linked library release's detail pane → full-pane `RecordSession` overlay. Spec/plan: `docs/superpowers/specs/2026-06-10-vinyl-recording-design.md`, `docs/superpowers/plans/2026-06-10-vinyl-recording.md`.
