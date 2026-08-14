@@ -112,10 +112,10 @@ import RecordingPill from './RecordingPill.svelte';
       params.set('limit', '200');
       params.set('offset', String(offset));
       if (explorerState.q) params.set('q', explorerState.q);
+      // Always explicit for releases/tracks rather than relying on the server's
+      // own default, so the toolbar's selected chip and the rows can't disagree.
       // Artists have no date-added concept; the endpoint ignores it anyway.
-      if (explorerState.sort !== 'default' && currentEntity !== 'artists') {
-        params.set('sort', explorerState.sort);
-      }
+      if (currentEntity !== 'artists') params.set('sort', explorerState.sort);
 
       const endpoint =
         currentEntity === 'tracks' ? '/api/library/tracks'

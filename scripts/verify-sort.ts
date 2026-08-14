@@ -8,7 +8,8 @@
 import { Database } from 'bun:sqlite';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { listReleases, listTracks } from '../src/lib/server/library/queries';
+import { listReleases, listTracks, parseSort } from '../src/lib/server/library/queries';
+import { DEFAULT_SORT } from '../src/lib/types';
 
 const MIG = 'src/lib/server/db/migrations';
 
@@ -75,8 +76,16 @@ const titles = (rows: { title: string }[]) => rows.map((r) => r.title);
     `releases oldest-first, undated STILL last (got ${JSON.stringify(titles(asc.items))})`,
   );
 
+  // Omitting `sort` must give the app default (newest-first), not artist order —
+  // if this drifts, a bare API call silently disagrees with the toolbar.
   const def = listReleases(db, { ...page });
-  assert(def.items.length === 4, 'default sort unchanged and still returns everything');
+  assert(
+    JSON.stringify(titles(def.items)) === JSON.stringify(titles(desc.items)),
+    `omitted sort === DEFAULT_SORT (got ${JSON.stringify(titles(def.items))})`,
+  );
+
+  const byArtist = listReleases(db, { ...page, sort: 'artist' });
+  assert(byArtist.items.length === 4, 'artist sort returns everything');
 }
 
 // --- tracks ---------------------------------------------------------------
@@ -143,6 +152,15 @@ const titles = (rows: { title: string }[]) => rows.map((r) => r.title);
     JSON.stringify(p1.items.map((r) => r.id)) === JSON.stringify(p1again.items.map((r) => r.id)),
     'the same page returns the same rows in the same order',
   );
+}
+
+// --- the HTTP boundary agrees with the store ------------------------------
+{
+  assert(parseSort(null) === DEFAULT_SORT, 'absent ?sort= → app default');
+  assert(parseSort('nonsense') === DEFAULT_SORT, 'unrecognised ?sort= → app default');
+  assert(parseSort('artist') === 'artist', 'explicit artist passes through');
+  assert(parseSort('added-asc') === 'added-asc', 'explicit added-asc passes through');
+  assert(DEFAULT_SORT === 'added-desc', 'app default is newest-first');
 }
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) FAILED.`);

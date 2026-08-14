@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite';
 import type { EntityKind } from '../sources/types';
-import type { SortKey } from '$lib/types';
+import { DEFAULT_SORT, type SortKey } from '$lib/types';
 import { listSources } from '../sources/registry';
 import { isPlayable } from '../sources/types';
 
@@ -71,8 +71,9 @@ export interface PagedResult<T> {
 
 export type { SortKey };
 
+/** An absent or unrecognised `?sort=` means the app default, not artist order. */
 export function parseSort(raw: string | null | undefined): SortKey {
-  return raw === 'added-desc' || raw === 'added-asc' ? raw : 'default';
+  return raw === 'added-desc' || raw === 'added-asc' || raw === 'artist' ? raw : DEFAULT_SORT;
 }
 
 /**
@@ -147,9 +148,9 @@ export function listReleases(
   // which is what lines up with a purchase date. A later top-up (bonus track,
   // re-rip) must not move an old record to the top of "recently added".
   // The join is only paid for when actually sorting by it.
-  const sort = args.sort ?? 'default';
+  const sort = args.sort ?? DEFAULT_SORT;
   const addedJoin =
-    sort === 'default'
+    sort === 'artist'
       ? ''
       : `LEFT JOIN (
            SELECT t.release_id AS rid, MIN(sf.value) AS added
@@ -161,7 +162,7 @@ export function listReleases(
             GROUP BY t.release_id
          ) ra ON ra.rid = release.id`;
   const orderSql =
-    sort === 'default'
+    sort === 'artist'
       ? `artist.name COLLATE NOCASE, release.year, release.title COLLATE NOCASE`
       : addedOrderClause(sort, 'ra.added', 'release.id');
 
@@ -252,15 +253,15 @@ export function listTracks(
     .get(...params) as { n: number };
 
   // At most one row per (entity, source, key), so this join can't multiply rows.
-  const sort = args.sort ?? 'default';
+  const sort = args.sort ?? DEFAULT_SORT;
   const addedJoin =
-    sort === 'default'
+    sort === 'artist'
       ? ''
       : `LEFT JOIN source_facets ta
            ON ta.entity_kind='track' AND ta.entity_id = track.id
           AND ta.source='local' AND ta.key='dateAdded'`;
   const orderSql =
-    sort === 'default'
+    sort === 'artist'
       ? `artist.name COLLATE NOCASE, track.album COLLATE NOCASE, track.title COLLATE NOCASE`
       : addedOrderClause(sort, 'ta.value', 'track.id');
 

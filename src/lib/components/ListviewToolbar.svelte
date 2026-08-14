@@ -1,7 +1,7 @@
 <script lang="ts">
   import SearchBar from './SearchBar.svelte';
   import SyncChip from './SyncChip.svelte';
-  import type { SortKey } from '$lib/types';
+  import { DEFAULT_SORT, type SortKey } from '$lib/types';
 
   /**
    * Top bar of the middle pane. Search input is always present.
@@ -32,7 +32,7 @@
     view = 'list' as 'list' | 'grid',
     onViewChange,
     showSort = false,
-    sort = 'default' as SortKey,
+    sort = DEFAULT_SORT as SortKey,
     onSortChange,
   }: {
     query?: string;
@@ -59,10 +59,12 @@
     onSortChange?: (s: SortKey) => void;
   } = $props();
 
+  // Added-first: the order the toolbar opens in, so it reads left-to-right as
+  // newest → oldest → alphabetical.
   const SORT_LABELS: Record<SortKey, string> = {
-    default: 'Default',
     'added-desc': 'Added ↓',
     'added-asc': 'Added ↑',
+    artist: 'Artist',
   };
 
   let searchBar: SearchBar | undefined = $state();

@@ -25,11 +25,20 @@ export interface SessionEntry {
 export type AppMode = 'search' | 'scanner';
 
 /**
- * Listview ordering. `default` keeps each list's natural order; `added-*` sorts
- * by the local source's `dateAdded` facet. Shared so the client store and the
- * server queries agree on the wire value.
+ * Listview ordering. `artist` is the artist-led alphabetical order (artist →
+ * year → title for releases, artist → album → title for tracks); `added-*`
+ * sorts by the local source's `dateAdded` facet. Shared so the client store and
+ * the server queries agree on the wire value.
  */
-export type SortKey = 'default' | 'added-desc' | 'added-asc';
+export type SortKey = 'artist' | 'added-desc' | 'added-asc';
+
+/**
+ * The app-wide default ordering. Defined once so the store's hydrate/serialize,
+ * the query layer and the HTTP boundary can't disagree about what an absent
+ * `?sort=` means — a mismatch there would silently serve a different order than
+ * the toolbar shows as selected.
+ */
+export const DEFAULT_SORT: SortKey = 'added-desc';
 
 // API error response envelope. Server endpoints return this on failure.
 export interface ApiError {
