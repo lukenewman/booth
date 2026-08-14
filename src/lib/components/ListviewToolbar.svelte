@@ -1,6 +1,7 @@
 <script lang="ts">
   import SearchBar from './SearchBar.svelte';
   import SyncChip from './SyncChip.svelte';
+  import type { SortKey } from '$lib/types';
 
   /**
    * Top bar of the middle pane. Search input is always present.
@@ -30,6 +31,9 @@
     showViewToggle = false,
     view = 'list' as 'list' | 'grid',
     onViewChange,
+    showSort = false,
+    sort = 'default' as SortKey,
+    onSortChange,
   }: {
     query?: string;
     placeholder?: string;
@@ -50,7 +54,16 @@
     showViewToggle?: boolean;
     view?: 'list' | 'grid';
     onViewChange?: (v: 'list' | 'grid') => void;
+    showSort?: boolean;
+    sort?: SortKey;
+    onSortChange?: (s: SortKey) => void;
   } = $props();
+
+  const SORT_LABELS: Record<SortKey, string> = {
+    default: 'Default',
+    'added-desc': 'Added ↓',
+    'added-asc': 'Added ↑',
+  };
 
   let searchBar: SearchBar | undefined = $state();
 
@@ -103,6 +116,17 @@
           <rect x="8" y="8" width="5" height="5" rx="0.5" fill="currentColor"/>
         </svg>
       </button>
+    </div>
+  {/if}
+  {#if showSort}
+    <div class="toggle sort" title="Sort by date added to your library">
+      {#each Object.keys(SORT_LABELS) as SortKey[] as choice}
+        <button
+          class:active={sort === choice}
+          onclick={() => onSortChange?.(choice)}
+          type="button"
+        >{SORT_LABELS[choice]}</button>
+      {/each}
     </div>
   {/if}
   <div class="search-wrap">

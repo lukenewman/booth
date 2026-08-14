@@ -24,6 +24,13 @@ export interface SessionEntry {
 // The current visual mode of the app.
 export type AppMode = 'search' | 'scanner';
 
+/**
+ * Listview ordering. `default` keeps each list's natural order; `added-*` sorts
+ * by the local source's `dateAdded` facet. Shared so the client store and the
+ * server queries agree on the wire value.
+ */
+export type SortKey = 'default' | 'added-desc' | 'added-asc';
+
 // API error response envelope. Server endpoints return this on failure.
 export interface ApiError {
   error:

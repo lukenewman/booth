@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
-import { listReleases } from '$lib/server/library/queries';
+import { listReleases, parseSort } from '$lib/server/library/queries';
 
 const MAX_LIMIT = 500;
 const DEFAULT_LIMIT = 200;
@@ -16,6 +16,8 @@ export const GET: RequestHandler = async ({ url }) => {
   const rawOffset = Number(url.searchParams.get('offset') ?? 0);
   const offset = Math.max(0, Number.isFinite(rawOffset) ? rawOffset : 0);
 
-  const result = listReleases(getDb(), { source, q, limit, offset, multiSource });
+  const sort = parseSort(url.searchParams.get('sort'));
+
+  const result = listReleases(getDb(), { source, q, limit, offset, multiSource, sort });
   return json(result);
 };

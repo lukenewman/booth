@@ -112,6 +112,10 @@ import RecordingPill from './RecordingPill.svelte';
       params.set('limit', '200');
       params.set('offset', String(offset));
       if (explorerState.q) params.set('q', explorerState.q);
+      // Artists have no date-added concept; the endpoint ignores it anyway.
+      if (explorerState.sort !== 'default' && currentEntity !== 'artists') {
+        params.set('sort', explorerState.sort);
+      }
 
       const endpoint =
         currentEntity === 'tracks' ? '/api/library/tracks'
@@ -636,7 +640,9 @@ import RecordingPill from './RecordingPill.svelte';
   // ----- Scanner popover -----------------------------------------------------
 
   let scannerOpen = $state(false);
-  let releaseView = $state<'list' | 'grid'>('list');
+  // Grid is the default for releases — cover art is the fastest way to find a
+  // record. Not persisted, so it resets to grid on reload.
+  let releaseView = $state<'list' | 'grid'>('grid');
 
   // ----- Source meta for detail panes ----------------------------------------
 
@@ -730,6 +736,9 @@ import RecordingPill from './RecordingPill.svelte';
       showViewToggle={!isAddView && currentEntity === 'releases'}
       view={releaseView}
       onViewChange={(v) => (releaseView = v)}
+      showSort={!isAddView && currentEntity !== 'artists'}
+      sort={explorerState.sort}
+      onSortChange={(s) => { explorerState.setSort(s); loadList(true); }}
     />
 
     {#if scannerOpen}

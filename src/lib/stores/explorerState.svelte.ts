@@ -8,6 +8,8 @@
  * across rail switches and is toggled by the Tab key.
  */
 
+import type { SortKey } from '$lib/types';
+
 export type NavSection = 'library' | 'sources' | 'add' | 'playlist';
 export interface NavValue { section: NavSection; item: string; }
 
@@ -47,6 +49,8 @@ class ExplorerState {
   id = $state<string | null>(null);
   q = $state<string>('');
   entity = $state<EntityKind>('releases');
+  /** Listview ordering. Like `entity`, an app-wide lens rather than a per-rail attribute. */
+  sort = $state<SortKey>('default');
 
   hydrate(params: URLSearchParams) {
     const parsed = parseNav(params.get('nav'));
@@ -59,6 +63,8 @@ class ExplorerState {
     } else if (parsed.entityHint) {
       this.entity = parsed.entityHint;
     }
+    const sort = params.get('sort');
+    this.sort = sort === 'added-desc' || sort === 'added-asc' ? sort : 'default';
   }
 
   /** Serialize current state to URLSearchParams. Omits empty/default values. */
@@ -70,6 +76,7 @@ class ExplorerState {
     if (this.id) params.set('id', this.id);
     if (this.q) params.set('q', this.q);
     if (this.entity !== 'releases') params.set('entity', this.entity);
+    if (this.sort !== 'default') params.set('sort', this.sort);
     return params;
   }
 
@@ -90,6 +97,10 @@ class ExplorerState {
 
   setQuery(q: string) {
     this.q = q;
+  }
+
+  setSort(sort: SortKey) {
+    this.sort = sort;
   }
 
   setEntityKind(entity: EntityKind) {
