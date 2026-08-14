@@ -29,9 +29,24 @@ export interface SourceRelease {
   externalUrl?: string;
 }
 
+/**
+ * Provenance of the data an adapter read this run. File-backed adapters report
+ * it so a run whose input never changed can be flagged rather than reported as
+ * a clean success — a frozen input otherwise looks identical to "nothing new".
+ */
+export interface SyncInput {
+  /** Absolute path of the file the adapter parsed. */
+  path: string;
+  /** Filesystem mtime of that file, ISO. */
+  mtime: string;
+  /** Timestamp the file stamps on itself, when the format carries one. */
+  generatedAt?: string;
+}
+
 export interface SyncResult {
   tracks: SourceTrack[];
   releases: SourceRelease[];
+  input?: SyncInput;
 }
 
 export interface MusicSource {

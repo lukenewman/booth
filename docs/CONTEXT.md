@@ -27,6 +27,10 @@ DISCOGS_FOLDER_ID=1   # optional; defaults to "Uncategorized"
 # Modern Music.app: enable "Share Library XML with other applications" in
 #   Settings → Advanced; default location is ~/Music/Music/Library.xml
 # Legacy iTunes: ~/Music/iTunes/iTunes Music Library.xml
+# MUST be the auto-maintained export, NOT a one-off File → Library → Export
+# Library… dump — Music.app never rewrites a manual export, so the local source
+# silently re-imports a frozen snapshot forever (see stale-input detection under
+# ## Sources). Music.app rewrites the shared XML on quit.
 ITUNES_XML_PATH=
 
 # Optional: override default DB location (defaults to ~/.booth/booth.db)
@@ -285,6 +289,7 @@ docs/
 - **Manual sync:** `POST /api/sources/:id/sync` invokes `runSync()` — the named adapter's `sync()`, collated into SQLite, with a row written to `sync_run` (start row up front, summary or error captured on completion). Returns the summary `{ rowsIn, releasesUpserted, tracksUpserted, releasesDeleted, tracksDeleted, conflicts }`. Returns 404 for an unknown id, 501 if the adapter's `sync()` throws `NotImplementedError`.
 - **Auto-sync on boot:** `src/hooks.server.ts` fires `runSync()` once per non-stub source on the first request after server start (fire-and-forget; the `local` source additionally requires `ITUNES_XML_PATH` to be set, since its `sync()` is the Apple-Music XML parse). Runs are written to `sync_run` like any other invocation. This means every server restart refreshes the library — so data stays current without the user touching the chip, at the cost of one Discogs API pull + Apple-Music XML parse per restart.
 - **Sync history:** `GET /api/sources/:id/runs?limit=` returns recent `sync_run` rows for a source. The `SyncRunHistory` component renders this in the right pane whenever a Sources rail item is selected without an entity highlighted; an in-flight sync from the toolbar chip shows a "Running…" row on top and the history refetches on completion.
+- **Stale-input detection (file-backed sources):** an adapter may return `input: { path, mtime, generatedAt? }` on its `SyncResult` describing the file it parsed (`SyncInput` in `sources/types.ts`). `runSync` persists that into `sync_run.summary` and compares `mtime` against the most recent prior run of the same source; an unchanged file sets `summary.stale = true`. `SyncRunHistory` renders those runs with a ⚠ and an amber "<file> Nd old — unchanged since the previous sync" line. **Why this exists:** the `local` adapter re-parses whatever `ITUNES_XML_PATH` points at, so a frozen export produces a byte-identical clean summary forever — indistinguishable from a healthy no-op. That failure mode hid a three-month import gap (2026-05-05 → 2026-08-13) behind a green sync history. The flag is a warning, not an error: the run genuinely succeeded, it just can't have imported anything new. Verified by `scripts/verify-stale-input.ts`.
 - **Inspection endpoints:**
   - `GET /api/library/tracks?source=&limit=` — tracks from the unified store, optionally filtered by source.
   - `GET /api/library/releases?source=&limit=` — releases from the unified store.

@@ -15,6 +15,8 @@
       releasesDeleted: number;
       tracksDeleted: number;
       conflicts: number;
+      input?: { path: string; mtime: string; generatedAt?: string };
+      stale?: boolean;
     } | null;
     error: string | null;
   }
@@ -93,6 +95,21 @@
     if (s.conflicts) parts.push(`${s.conflicts} conflicts`);
     return parts.length ? parts.join(' · ') : 'no changes';
   }
+
+  /**
+   * A stale run succeeded but re-read an input file that hadn't changed since
+   * the run before it, so it cannot have picked up anything new. Name the file
+   * and its age — that's what tells you which export went cold.
+   */
+  function staleLabel(run: SyncRun): string | null {
+    if (run.error || !run.summary?.stale) return null;
+    const input = run.summary.input;
+    if (!input) return 'input unchanged since the previous sync';
+    const stamp = input.generatedAt ?? input.mtime;
+    const days = Math.floor((Date.now() - new Date(stamp).getTime()) / 86_400_000);
+    const age = days >= 1 ? `${days}d old` : 'unchanged';
+    return `${input.path.split('/').pop()} ${age} — unchanged since the previous sync`;
+  }
 </script>
 
 <div class="history">
@@ -103,11 +120,17 @@
   </div>
 
   {#snippet runRow(run: SyncRun)}
-    <div class="row" class:errored={!!run.error}>
-      <span class="status" aria-hidden="true">{run.error ? '✗' : run.finished_at ? '✓' : '…'}</span>
+    {@const stale = staleLabel(run)}
+    <div class="row" class:errored={!!run.error} class:stale={!!stale}>
+      <span class="status" aria-hidden="true"
+        >{run.error ? '✗' : stale ? '⚠' : run.finished_at ? '✓' : '…'}</span
+      >
       <span class="when" title={run.started_at}>{relativeTime(run.started_at)}</span>
       <span class="dur">{durationLabel(run.started_at, run.finished_at)}</span>
       <span class="summary" class:err={!!run.error}>{summaryLabel(run)}</span>
+      {#if stale}
+        <span class="warn" title={run.summary?.input?.path}>{stale}</span>
+      {/if}
     </div>
   {/snippet}
 
@@ -166,16 +189,24 @@
   .row {
     display: grid;
     grid-template-columns: 14px 1fr auto;
-    grid-template-rows: auto auto;
+    grid-template-rows: auto auto auto;
     grid-template-areas:
       "status when dur"
-      ".      summary summary";
+      ".      summary summary"
+      ".      warn    warn";
     column-gap: 10px;
     row-gap: 2px;
     padding: 7px 0;
     border-bottom: 1px solid var(--border);
   }
   .row.errored .status { color: var(--accent, #c44); }
+  .row.stale .status { color: var(--warn, #d69a2c); }
+  .warn {
+    grid-area: warn;
+    color: var(--warn, #d69a2c);
+    font-size: 11px;
+    margin-top: 1px;
+  }
   .status { grid-area: status; color: var(--text-subtle); font-size: 11px; }
   .when { grid-area: when; color: var(--text); }
   .dur {

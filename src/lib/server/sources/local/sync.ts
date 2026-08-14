@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { parseFile as parseAudioFile } from 'music-metadata';
 import { env } from '$lib/server/env';
 import { parseITunesLibrary, type ITunesTrack } from './parse';
-import type { SourceRelease, SourceTrack, SyncResult } from '../types';
+import type { SourceRelease, SourceTrack, SyncInput, SyncResult } from '../types';
 
 const artworkDir = join(homedir(), '.booth', 'artwork');
 
@@ -36,6 +36,11 @@ export async function syncITunesLibrary(): Promise<SyncResult> {
   }
 
   const lib = parseITunesLibrary(xmlPath);
+  const input: SyncInput = {
+    path: xmlPath,
+    mtime: statSync(xmlPath).mtime.toISOString(),
+    generatedAt: lib.generatedAt,
+  };
 
   // Group tracks by album.
   const groups = new Map<string, { groupKey: string; tracks: ITunesTrack[] }>();
@@ -101,7 +106,7 @@ export async function syncITunesLibrary(): Promise<SyncResult> {
     };
   });
 
-  return { tracks, releases };
+  return { tracks, releases, input };
 }
 
 function pickDefined<T extends Record<string, unknown>>(o: T): Partial<T> {

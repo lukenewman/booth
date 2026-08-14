@@ -24,12 +24,22 @@ export interface ITunesLibrary {
   tracks: ITunesTrack[];
   /** count of entries skipped because they had no Location (cloud-only / DRM-broken) */
   skipped: number;
+  /**
+   * The `Date` key Music.app stamps into the plist when it writes the export.
+   * This is the export's own idea of when it was generated — the honest signal
+   * for whether the file is a live export or a frozen snapshot.
+   */
+  generatedAt?: string;
 }
 
 export function parseITunesLibrary(xmlPath: string): ITunesLibrary {
   const raw = readFileSync(xmlPath, 'utf8');
-  const parsed = plist.parse(raw) as { Tracks?: Record<string, Record<string, unknown>> };
+  const parsed = plist.parse(raw) as {
+    Tracks?: Record<string, Record<string, unknown>>;
+    Date?: Date;
+  };
   const tracksDict = parsed.Tracks ?? {};
+  const generatedAt = parsed.Date instanceof Date ? parsed.Date.toISOString() : undefined;
 
   const tracks: ITunesTrack[] = [];
   let skipped = 0;
@@ -63,5 +73,5 @@ export function parseITunesLibrary(xmlPath: string): ITunesLibrary {
     });
   }
 
-  return { tracks, skipped };
+  return { tracks, skipped, generatedAt };
 }
