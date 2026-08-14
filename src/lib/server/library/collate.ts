@@ -17,6 +17,12 @@ export interface CollateSummary {
   releasesDeleted: number;
   tracksDeleted: number;
   conflicts: number;
+  /**
+   * Links whose external_id was rewritten in place because an authoritative
+   * match proved the source had renumbered the same entity. Distinct from
+   * `conflicts` — these were repaired, not skipped.
+   */
+  relinked: number;
 }
 
 export type MatchMethod =
@@ -56,6 +62,7 @@ export function collate(
     releasesDeleted: 0,
     tracksDeleted: 0,
     conflicts: 0,
+    relinked: 0,
   };
 
   const tx = db.transaction(() => {
@@ -397,9 +404,20 @@ export function upsertSourceLink(
     return; // leave existing alone in Slice 1
   }
 
-  // Detect UQ conflict: this source already has a link to this entity via a
-  // different external_id (e.g. iTunes contributing two Track IDs whose file
-  // paths normalize to the same value, like a duplicate import).
+  // This source already has a link to this entity via a different external_id.
+  // Two very different situations land here:
+  //
+  //   a) The source renumbered a record we can still identify with certainty —
+  //      a `file_path` match means this is byte-for-byte the same file on disk,
+  //      so the id simply moved. Rewrite the link in place.
+  //   b) Anything weaker (release_position, artist_album_year) is genuinely
+  //      ambiguous — two source records competing for one entity. Leave the
+  //      existing link alone and count it.
+  //
+  // Case (a) used to fall into (b): Music.app renumbers Track IDs on purge or
+  // re-export, the update was skipped, and the following prune then deleted the
+  // now-unreferenced link *and the entity behind it*. That silently destroyed
+  // 924 tracks on 2026-08-14 before local switched to Persistent ID.
   const existingByEntity = db
     .prepare(
       `SELECT external_id FROM source_link
@@ -407,8 +425,19 @@ export function upsertSourceLink(
     )
     .get(kind, entityId, sourceId) as { external_id: string } | undefined;
   if (existingByEntity && existingByEntity.external_id !== externalId) {
-    summary.conflicts++;
-    return; // leave existing alone in Slice 1
+    if (method !== 'file_path') {
+      summary.conflicts++;
+      return;
+    }
+    db.prepare(
+      `UPDATE source_link
+          SET external_id  = ?,
+              external_url = ?,
+              match_method = ?
+        WHERE entity_kind=? AND entity_id=? AND source=?`,
+    ).run(externalId, externalUrl ?? null, method, kind, entityId, sourceId);
+    summary.relinked++;
+    return;
   }
 
   db.prepare(

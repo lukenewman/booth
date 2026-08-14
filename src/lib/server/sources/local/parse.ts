@@ -2,7 +2,17 @@ import { readFileSync } from 'node:fs';
 import * as plist from 'plist';
 
 export interface ITunesTrack {
+  /**
+   * Library-local sequence number. NOT stable — Music.app renumbers these when
+   * the library is purged or re-exported, so it must never key a source_link.
+   * Kept only for diagnostics.
+   */
   trackId: number;
+  /**
+   * Stable per-track identifier that survives re-export, purges and renames.
+   * This is what `source_link.external_id` keys on for the local source.
+   */
+  persistentId?: string;
   name: string;
   artist: string;
   albumArtist?: string;
@@ -55,6 +65,7 @@ export function parseITunesLibrary(xmlPath: string): ITunesLibrary {
     }
     tracks.push({
       trackId: Number(id),
+      persistentId: t['Persistent ID'] as string | undefined,
       name,
       artist,
       albumArtist: t['Album Artist'] as string | undefined,

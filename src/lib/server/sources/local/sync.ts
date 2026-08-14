@@ -86,7 +86,10 @@ export async function syncITunesLibrary(): Promise<SyncResult> {
   const tracks: SourceTrack[] = lib.tracks.map((t) => {
     const groupKey = albumGroupKey(t);
     return {
-      externalId: String(t.trackId),
+      // Persistent ID, not Track ID: Music.app renumbers Track IDs on purge or
+      // re-export, and a changed external_id used to prune the link and delete
+      // the entity behind it. Fall back only if the XML somehow omits it.
+      externalId: t.persistentId ?? String(t.trackId),
       title: t.name,
       artist: t.artist,
       album: t.album,

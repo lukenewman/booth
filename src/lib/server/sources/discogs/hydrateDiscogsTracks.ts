@@ -107,6 +107,7 @@ export async function hydrateDiscogsTracks(
       releasesDeleted: 0,
       tracksDeleted: 0,
       conflicts: 0,
+      relinked: 0,
     };
 
     const tx = db.transaction(() => {
