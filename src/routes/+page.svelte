@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import DesktopShell from '$lib/components/DesktopShell.svelte';
+  import MobileShell from '$lib/components/MobileShell.svelte';
   import ShortcutOverlay from '$lib/components/ShortcutOverlay.svelte';
   import { installKeyboard } from '$lib/keyboard.svelte';
   import { session } from '$lib/stores/session.svelte';
@@ -11,6 +12,11 @@
   import { playlists } from '$lib/stores/playlists.svelte';
   import PlaylistPicker from '$lib/components/PlaylistPicker.svelte';
 
+  // Which shell to mount. Decided from the viewport, which is why SSR is off
+  // for this route (see +page.ts) — the server cannot know it, and rendering
+  // one shell then hydrating into the other would flash and double-fetch.
+  let isMobile = $state(false);
+
   let setupNeeded = $state<null | 'no_token' | 'invalid_token'>(null);
   let probed = $state(false);
   let shortcutOpen = $state(false);
@@ -18,6 +24,11 @@
   let pickerTrackId = $state<string | null>(null);
 
   onMount(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    isMobile = mq.matches;
+    const onShellChange = (e: MediaQueryListEvent) => (isMobile = e.matches);
+    mq.addEventListener('change', onShellChange);
+
     // Fire-and-forget setup probe — kept out of onMount's return path so the
     // teardown below resolves synchronously (Svelte's onMount can't accept
     // an async function that also returns a cleanup).
@@ -196,7 +207,10 @@
       },
     );
 
-    return teardown;
+    return () => {
+      mq.removeEventListener('change', onShellChange);
+      teardown();
+    };
   });
 </script>
 
@@ -217,7 +231,11 @@
     {/if}
   </main>
 {:else}
-  <DesktopShell />
+  {#if isMobile}
+    <MobileShell />
+  {:else}
+    <DesktopShell />
+  {/if}
   <ShortcutOverlay open={shortcutOpen} onClose={() => (shortcutOpen = false)} />
   {#if pickerOpen && pickerTrackId}
     <PlaylistPicker trackId={pickerTrackId} onClose={() => { pickerOpen = false; pickerTrackId = null; }} />
