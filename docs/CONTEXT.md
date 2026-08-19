@@ -13,7 +13,7 @@ Single-user, local-only SvelteKit app for adding records to a personal Discogs c
 - **DB:** SQLite at `~/.booth/booth.db` (user-scoped, not repo-relative), hand-rolled migrations in `src/lib/server/db/migrations/`. Managed via bun's built-in `bun:sqlite` (sync, prepared-statement API). Project is bun-only as a result — no Node fallback.
 - **New deps:** `better-sqlite3`, `plist` (Apple plist parser), `ulid` (entity ID generator). Verification scripts run on bun's native TS execution — no separate runner dep.
 - **No tests, no UI framework.** Session log is in-memory client-side.
-- **Dev:** `bun dev` (binds 5173, falls back upward).
+- **Dev:** `bun dev` (binds 5173, falls back upward). **Production:** `bun run build && bun start` — `adapter-node` output run under Bun (port 3000, override with `PORT`). The Bun runtime is not optional in either mode: the DB layer is `bun:sqlite`.
 
 ## Environment
 
@@ -390,6 +390,19 @@ bun dev
 ```
 
 The DB is auto-initialized on first server boot — it creates `~/.booth/booth.db` (or `$BOOTH_DB_PATH`) and runs migrations automatically. Every server boot triggers a fresh sync for every non-stub source via the boot hook in `src/hooks.server.ts` (fire-and-forget; the `local` source's Apple-Music parse only runs if `ITUNES_XML_PATH` is set). Vinyl rips are written to `$BOOTH_RECORDINGS_PATH` (default `~/.booth/recordings`).
+
+Run the production build (this is what a phone talks to):
+
+```bash
+bun run build
+bun start          # http://localhost:3000, override with PORT
+```
+
+`bun start` is `bun ./build/index.js`. It must be Bun, not Node — `adapter-node` emits a Node-shaped server, but the DB layer imports `bun:sqlite`, which only the Bun runtime provides. Verified end-to-end by `scripts/verify-prod-server.ts`, which boots the built server and asserts `/api/sources` reaches the DB.
+
+**Start it from the repository root.** `runMigrations` resolves `migrations/` next to its own module in dev, but Rollup relocates that module in the build, so the built server falls back to `<cwd>/src/lib/server/db/migrations`. Started from elsewhere it throws a named error on first DB access rather than failing silently.
+
+Unlike `bun dev`, the production server does not restart on file changes — which is exactly why sync has to be scheduled rather than boot-triggered (see **Scheduled sync**).
 
 Run a verification script: `bun verify scripts/<name>.ts` (bun runs TypeScript natively — no separate transpile step).
 
