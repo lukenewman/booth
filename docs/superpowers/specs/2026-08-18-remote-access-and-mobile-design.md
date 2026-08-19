@@ -66,7 +66,7 @@ Three tiers were costed. **All three are $0/month in hosting** — the variable 
 - Public internet exposure, port forwarding, or a reverse proxy.
 - App-level auth, login UI, or user accounts. Tailscale is the authentication boundary.
 - Streaming over cellular (Tier 3: transcoding + cache). Deferred, not designed here.
-- Vinyl recording on mobile — it needs the audio interface. Hidden below the breakpoint rather than shipped broken.
+- Vinyl recording on mobile. Hidden below the breakpoint rather than shipped broken. **Note the stated reason — "it needs the audio interface" — is imprecise:** capture is client-side, so the interface binds to the browser's machine, and a USB-C phone could in principle host it. The exclusion still stands on other grounds (see B6), but not that one.
 - Mac mini migration, LaunchDaemon, FileVault policy. Later phase, sketched at the end.
 - Multi-user / friends. Later phase, sketched at the end.
 
@@ -144,6 +144,15 @@ Drag-a-track-onto-a-rail-playlist has no mobile equivalent (no rail); the existi
 
 "⏺ Record from vinyl" hides below the breakpoint. The scanner stays — on a phone the ergonomics invert from bad to good, since you point the device instead of holding a record in front of the webcam.
 
+**Why recording is excluded is worth stating precisely**, because the obvious reason is wrong. Capture is client-side (`getUserMedia` in the browser), so the interface binds to the machine running the browser — and a USB-C iPhone could physically host one. The real objections are:
+
+- **Screen lock and app switching suspend `AudioContext`.** An LP side is 20+ minutes of uninterrupted capture; a phone that locks mid-side loses the take. This is the blocking one.
+- **iOS input-device selection is limited.** Safari does not honour `deviceId` constraints the way desktop browsers do, so choosing a specific interface — and getting more than a default stereo pair — is unreliable.
+- **Bus power.** Many interfaces need more than a phone supplies, so a powered hub enters the picture.
+- **It buys nothing.** The turntable, the phono stage, and the interface all live at the desk, where the laptop already is.
+
+Untested — this is reasoning from the architecture, not from a trial. If someone wants it later, the screen-lock behaviour is the thing to test first, since it invalidates the rest.
+
 ## Accepted limitations
 
 - **Barcode search does not roll up across pressings.** A barcode is pressing-specific and typically returns a single hit, so no master group forms and the owned dot reflects only that exact pressing — a scan can report "not owned" when a different pressing is owned. Text search is the reliable path. Not worth fixing now.
@@ -171,6 +180,13 @@ Issues 1–4 are Project A; 5–8 are Project B. A is useless without B, but 5 c
 ## Later phases (not designed here)
 
 - **Mac mini migration.** Move the 130 GB library and `ITUNES_XML_PATH` to the host; run Booth as a LaunchDaemon; settle FileVault (with it on, a power cut leaves the disk locked and no daemon runs until someone physically types a password). Storage, not CPU, is the spec that matters — a 256 GB model does not fit the library.
+
+  **Recording survives the move, but its data path splits across two machines.** Capture is client-side: `recorder.svelte.ts:197` calls `getUserMedia` and builds an `AudioContext` + worklet at :206–208, so the interface binds to whichever machine runs the *browser* — the laptop, not the mini. Storage is server-side: float32 chunks POST to `/api/recordings/.../chunk`, which appends them under `BOOTH_RECORDINGS_PATH`. So you keep the interface on the laptop, record as you do today, and rips land on the mini's disk beside the library. Nothing needs re-plugging. Two consequences that do not exist while both halves are the same machine:
+
+  - **The wire format is fatter than the stored one.** Rips are 24-bit WAV (~17 MB/min) *after finalize*; in flight they are float32, so roughly 23 MB/min for 48 kHz stereo crosses the network instead of staying on a local bus. Fine on home wifi, but it is real traffic, and it is upstream from a laptop rather than downstream.
+  - **Recording gains a network dependency it does not have now.** Today a chunk POST is a localhost call that essentially cannot fail. Over the tailnet it can. The known "a hard reload loses an in-progress take" limitation gains a sibling: a wifi blip mid-side may too. `appendFloat32`'s behaviour on a partial or failed chunk has **not** been checked — do that before the migration, not after.
+
+  **A deploy-ordering trap, learned the hard way on 2026-08-19.** Rebuilding `build/` under a running server makes `/` return 500 while `/api/*` keeps returning 200 — the live process holds an in-memory asset manifest pointing at chunks that no longer exist on disk. Rebuild, then restart. This is easier to miss under a LaunchDaemon than under a terminal you can see.
 - **Tier 3, streaming on cellular.** ffmpeg transcode to AAC/Opus plus a cache with eviction. Tailscale already reaches the host over cellular, so this is purely a bitrate problem.
 - **Friends.** Almost certainly "Booth is software they install," not "Booth is a service Luke runs" — their audio is on their disks, and streaming personal rips to other people is distribution rather than personal use. Booth is already scoped by `BOOTH_DB_PATH`, so per-user instances need no schema change; true multi-tenancy would mean an owner column across `release`, `track`, `artist`, `source_link`, `source_facets`, `match_key`, `playlist`, `source_state`, and `sync_run`.
 
