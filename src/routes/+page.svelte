@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Explorer from '$lib/components/Explorer.svelte';
+  import DesktopShell from '$lib/components/DesktopShell.svelte';
   import ShortcutOverlay from '$lib/components/ShortcutOverlay.svelte';
   import { installKeyboard } from '$lib/keyboard.svelte';
   import { session } from '$lib/stores/session.svelte';
@@ -217,7 +217,7 @@
     {/if}
   </main>
 {:else}
-  <Explorer />
+  <DesktopShell />
   <ShortcutOverlay open={shortcutOpen} onClose={() => (shortcutOpen = false)} />
   {#if pickerOpen && pickerTrackId}
     <PlaylistPicker trackId={pickerTrackId} onClose={() => { pickerOpen = false; pickerTrackId = null; }} />
