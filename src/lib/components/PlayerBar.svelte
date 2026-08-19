@@ -59,13 +59,29 @@
     </div>
 
     <div class="transport">
-      <button
-        class="play-pause"
-        onclick={() => (player.isPlaying ? player.pause() : player.resume())}
-        aria-label={player.isPlaying ? 'Pause' : 'Play'}
-      >
-        {player.isPlaying ? '⏸' : '▶'}
-      </button>
+      <div class="buttons">
+        <button
+          class="skip"
+          onclick={() => player.prev()}
+          disabled={!player.hasPrev && player.currentTime <= 3}
+          aria-label="Previous track"
+        >⏮</button>
+
+        <button
+          class="play-pause"
+          onclick={() => (player.isPlaying ? player.pause() : player.resume())}
+          aria-label={player.isPlaying ? 'Pause' : 'Play'}
+        >
+          {player.isPlaying ? '⏸' : '▶'}
+        </button>
+
+        <button
+          class="skip"
+          onclick={() => player.next()}
+          disabled={!player.hasNext}
+          aria-label="Next track"
+        >⏭</button>
+      </div>
 
       <div class="seek-row">
         <span class="time">{formatTime(player.currentTime)}</span>
@@ -184,6 +200,25 @@
     cursor: pointer;
   }
   .play-pause:hover { color: var(--accent-strong); }
+
+  .buttons {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .skip {
+    background: transparent;
+    border: 0;
+    color: var(--text-muted);
+    font-size: 13px;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .skip:hover:not(:disabled) { color: var(--text); }
+  .skip:disabled { opacity: 0.3; cursor: default; }
 
   .time {
     font-size: 11px;

@@ -48,5 +48,5 @@
   onpause={() => { if (!audio.seeking) player._setIsPlaying(false); }}
   onseeked={() => player._onSeeked()}
   onerror={() => player._setError('Could not load audio')}
-  onended={() => player.stop()}
+  onended={() => player.next()}
 ></audio>
