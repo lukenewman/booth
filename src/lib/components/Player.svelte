@@ -37,6 +37,45 @@
       }
     }
   });
+
+  /**
+   * Mirror now-playing into the OS media session, so the lock screen, AirPods,
+   * and Now Playing widget show the track and drive transport. Without this a
+   * phone shows "booth" and a dead pause button.
+   */
+  $effect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+    const np = player.nowPlaying;
+    if (!np) {
+      navigator.mediaSession.metadata = null;
+      navigator.mediaSession.playbackState = 'none';
+      return;
+    }
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: np.title,
+      artist: np.artist,
+      artwork: np.thumbUrl ? [{ src: np.thumbUrl, sizes: '512x512' }] : [],
+    });
+    navigator.mediaSession.playbackState = player.isPlaying ? 'playing' : 'paused';
+  });
+
+  /**
+   * Registered once, not per-track: these delegate to the store, which already
+   * knows the queue. Re-registering on every track change would churn handlers
+   * the OS is holding.
+   */
+  $effect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+    const ms = navigator.mediaSession;
+    const actions = ['play', 'pause', 'nexttrack', 'previoustrack'] as const;
+    ms.setActionHandler('play', () => player.resume());
+    ms.setActionHandler('pause', () => player.pause());
+    ms.setActionHandler('nexttrack', () => void player.next());
+    ms.setActionHandler('previoustrack', () => void player.prev());
+    return () => {
+      for (const a of actions) ms.setActionHandler(a, null);
+    };
+  });
 </script>
 
 <!-- svelte-ignore a11y_media_has_caption -->

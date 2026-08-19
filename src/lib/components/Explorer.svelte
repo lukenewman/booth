@@ -961,10 +961,23 @@ import RecordingPill from './RecordingPill.svelte';
 {/if}
 
 <style>
+  /* Touch targets: rows are mouse-sized by default. 44px is the platform
+     minimum, applied only below the mobile breakpoint. */
+  @media (max-width: 768px) {
+    :global(.row-btn),
+    :global(.rail button),
+    :global(.cols) ~ :global(.body) :global(.row) {
+      min-height: 44px;
+    }
+  }
+
   .shell {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    /* dvh, not vh: iOS Safari's URL bar shrinks the visual viewport as you
+       scroll, and 100vh keeps reporting the *largest* height — which pushes
+       the PlayerBar down under the browser chrome. */
+    height: 100dvh;
   }
   .explorer {
     display: grid;
