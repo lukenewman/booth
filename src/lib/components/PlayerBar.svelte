@@ -1,5 +1,6 @@
 <script lang="ts">
   import { player } from '$lib/stores/player.svelte';
+  import { PREV_RESTART_THRESHOLD_S } from '$lib/queue';
 
   let { onOpenRelease }: { onOpenRelease?: (releaseId: string) => void } = $props();
 
@@ -63,7 +64,7 @@
         <button
           class="skip"
           onclick={() => player.prev()}
-          disabled={!player.hasPrev && player.currentTime <= 3}
+          disabled={!player.hasPrev && player.currentTime <= PREV_RESTART_THRESHOLD_S}
           aria-label="Previous track"
         >⏮</button>
 
