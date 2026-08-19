@@ -58,7 +58,7 @@ Three tiers were costed. **All three are $0/month in hosting** — the variable 
 | D5 | Bottom-tab navigation on mobile | The rail flattens to four top-level sections with nothing lost, and keeps a persistent sense of place that drill-down and drawer patterns both hide. |
 | D6 | Extract the explorer shell *before* building mobile | Avoids a second nav mode inside a 1011-line component, and fixes a file that is already doing too much. |
 | D7 | Fourth tab is **Search**, not Sources | "Do I already own this?" is the primary mobile job and text search is the stated path to it. Two of four sources are stubs. Sources moves behind a header button. |
-| D8 | Disable SSR (`export const ssr = false`) | Shell choice depends on viewport, which the server cannot know; SSR would render one shell and hydrate into the other. Booth is local and single-user — SSR buys no SEO and no cold-load win. Reversible. |
+| D8 | Disable SSR (`export const ssr = false`) | Shell choice depends on viewport, which the server cannot know; SSR would render one shell and hydrate into the other. Booth is local and single-user — SSR buys no SEO and no cold-load win. Reversible. Verified 2026-08-18: `src/routes/` holds only `+layout.svelte` and `+page.svelte` — no load functions anywhere, all data arrives via client-side `/api/*` fetches — so SSR already renders data-less markup. Turning it off costs one blank frame on cold load and nothing else, and does not affect the boot sync hook, which fires on API requests too. |
 | D9 | No barcode backfill | Superseded by the master-group rollup above. |
 
 ## Non-goals
@@ -80,6 +80,8 @@ Replace `@sveltejs/adapter-auto` with `@sveltejs/adapter-node`; run the build ou
 
 **This is the project's only real technical risk and must be spiked first.** `adapter-node` emits a Node server, and `bun:sqlite` importing cleanly from *built* output (as opposed to dev, where it is known to work) is an assumption, not a verified fact. Fallback is the community `svelte-adapter-bun`, accepted reluctantly on maintenance grounds.
 
+The expected failure mode is Rollup trying to *bundle* `bun:sqlite` at build time, not Bun refusing to run the output. If the spike fails that way, the fix is to pin `bun:sqlite` as external in the Vite/Rollup config. Rule that out before concluding `adapter-node` is unworkable — reaching for the fallback adapter on a bundler-config error would be a false negative.
+
 Also verify under the production build: `$lib/server/env` still resolves `.env` (CONTEXT.md documents `$env/dynamic/private` coming back empty under Bun, with `process.env` as the working fallback).
 
 ### A2. Tailscale + HTTPS
@@ -93,6 +95,7 @@ Fixes the always-on defect. In-process scheduler calling the existing `runSync`,
 - `BOOTH_SYNC_INTERVAL_MINUTES`, default `360`, `0` disables.
 - In-process rather than a launchd plist: identical behaviour on the laptop now and the mini later, no external config, and `sync_run` already records history and errors.
 - Must not stack runs — skip a tick if the previous run for that source is still in flight.
+- Set a SQLite `busy_timeout`. WAL is on (`src/lib/server/db/index.ts:17`) but no busy timeout is configured, so it defaults to 0. This is invisible today because exactly one process ever touches the DB. A scheduled sync inside an always-on server changes that: a `bun dev` session running alongside the production server makes two writers, and under WAL the loser of a write collision gets an immediate `SQLITE_BUSY` instead of waiting.
 
 Note: because `ITUNES_XML_PATH` points at a **manual** export, scheduling `local` re-reads a frozen file — correctly flagged `stale = true` by the stale-input detection shipped 2026-08-13. Scheduled sync therefore benefits `discogs`, which is the source that actually drifts. That is expected, not a bug.
 
@@ -154,10 +157,10 @@ Sequenced; each row is a candidate Linear issue under one project.
 
 | # | Issue | Depends on | Notes |
 |---|---|---|---|
-| 1 | Spike: `bun:sqlite` under `adapter-node` production build | — | **Do first.** Invalidates A1 if it fails. |
+| 1 | Spike: `bun:sqlite` under `adapter-node` production build | — | **Do first.** Invalidates A1 if it fails — but rule out Rollup bundling `bun:sqlite` before concluding that. |
 | 2 | Swap adapter; document the production start command | 1 | |
 | 3 | Serve Booth over Tailscale with HTTPS | 2 | Verify scanner + recorder still work off-localhost. |
-| 4 | Scheduled sync via `BOOTH_SYNC_INTERVAL_MINUTES` | — | Independent; can run in parallel. |
+| 4 | Scheduled sync via `BOOTH_SYNC_INTERVAL_MINUTES` | — | Independent; can run in parallel. Carries the `busy_timeout` fix. |
 | 5 | Extract explorer controller; reduce `Explorer` to `DesktopShell` | — | Pure refactor. Desktop must be observably unchanged. |
 | 6 | `MobileShell`: bottom tabs, push nav, Search tab, entity control | 5 | The bulk of the work. |
 | 7 | PWA manifest, `100dvh`, MediaSession, touch targets | 5 | |
