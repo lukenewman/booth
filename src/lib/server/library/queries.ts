@@ -205,19 +205,24 @@ export function listReleases(
   };
 }
 
-interface ListTracksArgs {
+export interface TrackFilterArgs {
   source?: string;
   q?: string;
-  limit: number;
-  offset: number;
   multiSource?: boolean;
   sort?: SortKey;
 }
 
-export function listTracks(
-  db: Database,
-  args: ListTracksArgs,
-): PagedResult<TrackRow & { sources: string[]; canPlay: boolean }> {
+/**
+ * The WHERE/JOIN/ORDER for a track listing. Shared verbatim by `listTracks` and
+ * `listTrackIds` — the queue depends on the two producing identical ordering,
+ * so this must never be duplicated into two drifting copies.
+ */
+function buildTrackQuery(args: TrackFilterArgs): {
+  whereSql: string;
+  params: string[];
+  addedJoin: string;
+  orderSql: string;
+} {
   const where: string[] = [];
   const params: string[] = [];
 
@@ -242,17 +247,6 @@ export function listTracks(
     params.push(`%${args.q}%`, `%${args.q}%`, `%${args.q}%`);
   }
 
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-
-  const totalRow = db
-    .prepare(
-      `SELECT COUNT(*) as n FROM track
-         JOIN artist ON artist.id = track.artist_id
-         ${whereSql}`,
-    )
-    .get(...params) as { n: number };
-
-  // At most one row per (entity, source, key), so this join can't multiply rows.
   const sort = args.sort ?? DEFAULT_SORT;
   const addedJoin =
     sort === 'artist'
@@ -265,6 +259,38 @@ export function listTracks(
       ? `artist.name COLLATE NOCASE, track.album COLLATE NOCASE, track.title COLLATE NOCASE`
       : addedOrderClause(sort, 'ta.value', 'track.id');
 
+  return {
+    whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '',
+    params,
+    addedJoin,
+    orderSql,
+  };
+}
+
+interface ListTracksArgs {
+  source?: string;
+  q?: string;
+  limit: number;
+  offset: number;
+  multiSource?: boolean;
+  sort?: SortKey;
+}
+
+export function listTracks(
+  db: Database,
+  args: ListTracksArgs,
+): PagedResult<TrackRow & { sources: string[]; canPlay: boolean }> {
+  const { whereSql, params, addedJoin, orderSql } = buildTrackQuery(args);
+
+  const totalRow = db
+    .prepare(
+      `SELECT COUNT(*) as n FROM track
+         JOIN artist ON artist.id = track.artist_id
+         ${whereSql}`,
+    )
+    .get(...params) as { n: number };
+
+  // At most one row per (entity, source, key), so the added-join can't multiply rows.
   const rows = db
     .prepare(
       `SELECT track.id, track.title, artist.name AS artist,
@@ -439,6 +465,37 @@ export function getTrackDetail(
 export interface ArtistRow {
   id: string;
   name: string;
+}
+
+/**
+ * Every track id matching these filters, in listview order, restricted to
+ * tracks that can actually play. Unpaginated by design: the queue's whole
+ * purpose is to run past the 200 rows the client has loaded.
+ */
+export function listTrackIds(db: Database, args: TrackFilterArgs): string[] {
+  const { whereSql, params, addedJoin, orderSql } = buildTrackQuery(args);
+
+  const playable = [...playableSources];
+  if (playable.length === 0) return [];
+  const playableClause = `track.id IN (
+      SELECT entity_id FROM source_link
+       WHERE entity_kind='track' AND source IN (${playable.map(() => '?').join(',')})
+    )`;
+  const combinedWhere = whereSql
+    ? `${whereSql} AND ${playableClause}`
+    : `WHERE ${playableClause}`;
+
+  const rows = db
+    .prepare(
+      `SELECT track.id
+         FROM track
+         JOIN artist ON artist.id = track.artist_id
+         ${addedJoin}
+         ${combinedWhere}
+         ORDER BY ${orderSql}`,
+    )
+    .all(...params, ...playable) as { id: string }[];
+  return rows.map((r) => r.id);
 }
 
 interface ListArtistsArgs {
