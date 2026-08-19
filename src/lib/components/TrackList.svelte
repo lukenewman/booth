@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { DEFAULT_SORT } from '$lib/types';
+  import type { LibraryQuery, PlaybackContext } from '$lib/queue';
   import Listview from './Listview.svelte';
   import SourceGrid from './SourceGrid.svelte';
   import EmptyState from './EmptyState.svelte';
@@ -25,6 +27,7 @@
     loadMore,
     emptyTitle = 'No tracks',
     emptyDetail = '',
+    query,
   }: {
     items: TrackItem[];
     total: number;
@@ -32,9 +35,17 @@
     selectedId?: string | null;
     onSelect?: (id: string) => void;
     loadMore?: () => void;
+    query?: LibraryQuery;
     emptyTitle?: string;
     emptyDetail?: string;
   } = $props();
+
+  // The library queue is resolved server-side from these filters, because the
+  // loaded rows are only a 200-row window of a much longer list.
+  const libraryCtx = $derived({
+    kind: 'library',
+    query: query ?? { sort: DEFAULT_SORT },
+  } as PlaybackContext);
 
   function formatDuration(ms: number | null): string {
     if (!ms) return '—';
@@ -71,9 +82,9 @@
       role="listitem"
       draggable="true"
       ondragstart={(e) => { e.dataTransfer?.setData('application/x-booth-track', item.id); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; if (e.currentTarget instanceof HTMLElement) translucentDragImage(e, e.currentTarget); }}
-      onkeydown={(e) => { if (e.key === 'Enter' && item.canPlay) player.play({ trackId: item.id, title: item.title, artist: item.artist, thumbUrl: item.thumb_url, releaseId: item.release_id }); }}
+      onkeydown={(e) => { if (e.key === 'Enter' && item.canPlay) player.playFrom(libraryCtx, item.id, { trackId: item.id, title: item.title, artist: item.artist, thumbUrl: item.thumb_url, releaseId: item.release_id }); }}
       onclick={(e) => { if (e.detail > 0) e.stopPropagation(); }}
-      ondblclick={() => { if (item.canPlay) player.play({ trackId: item.id, title: item.title, artist: item.artist, thumbUrl: item.thumb_url, releaseId: item.release_id }); }}
+      ondblclick={() => { if (item.canPlay) player.playFrom(libraryCtx, item.id, { trackId: item.id, title: item.title, artist: item.artist, thumbUrl: item.thumb_url, releaseId: item.release_id }); }}
     >
       <span
         class="info-icon"

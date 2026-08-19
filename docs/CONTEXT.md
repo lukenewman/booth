@@ -52,6 +52,8 @@ src/
   lib/
     types.ts                                  DiscogsRelease, SessionEntry, ApiError, AddResponse
     keyboard.svelte.ts                        installKeyboard(actions, guards) — global keydown handler dispatching DOM-driven actions
+    queue.ts                                  pure queue arithmetic + PlaybackContext/LibraryQuery types (nextIndex, prevTarget, PREV_RESTART_THRESHOLD_S)
+    playback.ts                               pure track-vs-player state (trackPlayState / transportGlyph / transportLabel)
     discogs/group.ts                          groupByMaster(hits) — pure: collapse Add → Discogs search hits into master groups (multi-version) + singletons (no-master / single-version); SearchHit = DiscogsRelease & {masterId}
     components/
       Explorer.svelte                         three-pane shell (rail / listview / detail); owns URL ↔ store sync, data fetching, add/remove handlers; mounts <Player /> + <PlayerBar />
@@ -145,6 +147,7 @@ src/
         discogs/releases/[id]/videos/+server.ts  GET → { videos: [{url,title,youtubeId}] } for a release ULID; resolves ULID→Discogs external_id, fetches /releases/{id}.videos[]; empty when no discogs link/videos
       library/
         tracks/+server.ts                     GET ?source=&q=&multiSource=&limit=&offset=  paginated tracks
+        tracks/ids/+server.ts                 GET ?source=&q=&sort= → { ids } — every matching playable track id in listview order, unpaginated; the library playback queue
         tracks/[id]/+server.ts                GET → { track, sources, facets, release, sourceMeta } for TrackDetail
         releases/+server.ts                   GET ?source=&q=&multiSource=&limit=&offset=  paginated releases
         releases/[id]/+server.ts              GET → { release, sources, facets, tracks, sourceMeta } for ReleaseDetail
@@ -230,6 +233,26 @@ docs/
 - **`ReleaseDetail` tracklist has a real transport control** on `canPlay` rows: ⏸ when that track is loaded *and* playing, ▶ when loaded-and-paused (resume) or not loaded (play). Non-playable rows keep the `›` detail chevron; row click still opens track detail either way. **Why this changed:** that slot used to be `.info-icon` — the detail chevron — which merely swapped its glyph to ▶ whenever the track was loaded. So the icon read as a play button but opened track detail, and because the check was `player.nowPlaying?.trackId === t.id` ("is loaded", not "is playing") a **paused** track was indistinguishable from a playing one. The three-state resolution lives in `src/lib/playback.ts` (`trackPlayState` / `transportGlyph` / `transportLabel`) as pure functions, covered by `scripts/verify-playback-state.ts`.
 - **`{ kind: 'redirect' }` caveat**: only suits direct-audio URLs the `<audio>` element can load — not YouTube watch pages, which need an iframe. No source emits redirect streams yet.
 
+### Playback queue
+
+- **The queue is a snapshot of where you pressed play.** `player.playFrom(context, trackId, meta, seed?)` captures a `PlaybackContext` (`src/lib/queue.ts`) and resolves it to `ids[] + index`. It is **not** rebuilt as you browse: playing from a playlist then navigating to a release keeps the playlist queue, and re-sorting the library doesn't reshuffle something already in flight. Only pressing play again replaces it.
+- **Three contexts.** `release` and `playlist` carry their ids inline because both already hold their complete ordered list client-side (playlists aren't paginated; `ReleaseDetail` gets a full `tracks` array). Only `library` resolves server-side, because that listview pages at 200 rows. All three converge on `ids[] + index` so prev/next/advance have one code path.
+- **`GET /api/library/tracks/ids`** takes the same params as `/api/library/tracks` and returns `{ ids }` in identical order, **playable tracks only** (5,671 tracks in the library, 4,343 playable — an unfiltered queue would be ~1,300 dead ends). Both it and `listTracks` build their WHERE/JOIN/ORDER from the shared `buildTrackQuery` helper; **they must never become two copies**, because if the ordering diverges `next` plays something other than the row below the one you clicked. `scripts/verify-track-ids.ts` asserts they agree across six parameter combinations.
+- **Explorer's `libraryQuery`** must likewise mirror exactly what `loadList` sends to `/api/library/tracks`. It deliberately omits `multi_source`: `loadList` never sends it (the rail has no multi-source item today), so including it would be that same divergence. Nothing automated catches this one — it's a client-side duplication.
+- **Metadata cache.** The queue holds ids, but the bar renders title/artist/artwork, and advancing past the loaded 200 rows yields an id with no metadata. The store keeps a `Map` seeded by the call site (it's rendering those rows anyway) and fetches a single track on a miss. Audio never waits — `/api/stream/{id}` needs only the id — so the cost is the bar's text arriving a beat late, versus ~1MB instead of ~113KB to prefetch it all.
+- **Semantics:**
+
+| Action | Behaviour |
+|---|---|
+| `next()` | advance one; at the last item stop, keeping it loaded+paused (no wrap) |
+| `prev()`, `currentTime > 3s` | restart the current track |
+| `prev()`, `<= 3s` | step back one; at index 0, restart instead |
+| track ends | `next()` — `Player.svelte`'s `onended`, which used to call `stop()` |
+| no queue | prev/next are no-ops and render disabled |
+
+- **Stale ids** (a track deleted since capture) are skipped in the direction of travel, bounded by queue length so a run of them terminates rather than spinning.
+- Spec/plan: `docs/superpowers/specs/2026-08-18-playback-queue-design.md`, `docs/superpowers/plans/2026-08-18-playback-queue.md`.
+
 ### Release videos
 - **Discogs release detail lazy-loads YouTube videos.** `ReleaseDetail.svelte` fetches `/api/sources/discogs/releases/{id}/videos` when a release with a Discogs `source_link` opens, and renders a list of `<iframe>` embeds (`loading="lazy"`, `youtube-nocookie.com`), each captioned with the Discogs video title. A `$effect` keyed on `release.id` cancels stale fetches when the user switches releases.
 - **Server**: `fetchReleaseVideos(externalId)` (`discogs/videos.ts`) calls the full `/releases/{id}` Discogs endpoint and returns its `.videos[]`, deduped by uri (Discogs sometimes repeats one); `parseYouTubeId` (`discogs/youtube.ts`, pure) resolves the embeddable id. A non-YouTube uri renders as a plain link instead of an embed.
@@ -252,7 +275,7 @@ docs/
 - **Verify scripts**: `verify-wav.ts` (round-trip + region extraction), `verify-splitter.ts` (gap/region/matcher cases), `verify-local-merge.ts` (migration + prune scoping), `verify-commit.ts` (commit path: files + DB rows + conflict/replace).
 
 ### Playlists
-- **Booth-native organizational layer over the unified `track` table** — *not* a source. `playlist` + `playlist_track` tables (migration `007`); a track appears at most once per playlist (`PRIMARY KEY (playlist_id, track_id)`), `ON DELETE CASCADE` on both FKs. Playlists never touch `source_link`/`match_key`/`source_facets`. Playback is unchanged — double-click plays a single track; no queue/auto-advance yet (fast-follow).
+- **Booth-native organizational layer over the unified `track` table** — *not* a source. `playlist` + `playlist_track` tables (migration `007`); a track appears at most once per playlist (`PRIMARY KEY (playlist_id, track_id)`), `ON DELETE CASCADE` on both FKs. Playlists never touch `source_link`/`match_key`/`source_facets`. Playback runs through the shared queue (see **Playback queue**): playing a playlist track queues that playlist and auto-advances.
 - **Rail Playlists section** (after Library): lists playlists (name + track count) with a ＋ New playlist inline input. Selecting one sets `?nav=playlist:<id>`. Items are drop targets for drag-to-add (`application/x-booth-track` dataTransfer).
 - **`PlaylistView`** (middle pane) renders the open playlist's tracks as a tabular list — `cover · Track · Artist · Release · Length · ×` with a column-header strip. Rows mirror the `.body button.row-btn[data-id]` shape so the global arrow-nav / `a` / `Delete` keyboard wiring works unchanged. Cover thumbnail (grey placeholder + ▶ badge when playing), inline rename, playlist delete-with-confirm, double-click play, native HTML5 drag-to-reorder. Non-playable (e.g. Discogs-only) tracks render dimmed. The entity lens (`Tab`) is irrelevant here — playlists are tracks-only.
 - **Detail in playlist view.** Track-row clicks show no detail — only highlight, for arrow-key nav (`loadDetail` early-returns for the `playlist` section). The track list fills the width (`.explorer.no-detail` → `220px 1fr`) **until** you click the **Artist** or **Release** column, which opens a dedicated right pane reusing `ReleaseDetail`/`ArtistDetail`. State is `plDetail` + `openPlaylistEntity(kind, id)` in Explorer (separate from the main `detailKind`/`detailData`); the two link-details cross-link to each other, `← Close` dismisses, and it clears on rail change. `getTracksByIds` returns `artist_id` (added) so the artist column can link; the release column links via the existing `release_id`.
@@ -351,6 +374,9 @@ Limitations of code that's currently in production. For deferred features and no
 - **`Cmd+Z` is intercepted by the browser** when the search input is focused (it'll undo typed text first). The on-screen button and `u` key still work.
 - **Source-grid on listview rows doesn't refresh after a Discogs-remove** for other rows of the same release still on screen. Only the currently-detail-open row updates. Likely benign until duplicate-release scenarios appear.
 - **Playback affordance is on list/tracklist rows only.** `TrackDetail` (the track right-pane) has no play control; only `TrackList` rows and the `ReleaseDetail` tracklist support double-click-to-play.
+- **The playback queue is in-memory only** — a reload loses it, exactly as the loaded track is already lost.
+- **Re-sorting or re-filtering mid-playback does not rebuild an in-flight queue.** Intentional (the queue is a snapshot), but it means the queue can hold an order no longer visible on screen.
+- **Playlist reordering isn't reflected in an already-captured queue.**
 - **Only `local`-backed tracks are playable.** A track with no `file_path` match key (e.g. a Discogs release with no Apple-import or vinyl-rip file) has `canPlay = false` and no play affordance.
 
 ## Local development

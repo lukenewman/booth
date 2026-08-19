@@ -317,6 +317,19 @@ import RecordingPill from './RecordingPill.svelte';
   const isSourcesView = $derived(explorerState.nav.section === 'sources');
   const isPlaylistView = $derived(explorerState.nav.section === 'playlist');
 
+  /**
+   * The filters the library queue is built from. These MUST mirror exactly what
+   * `loadList` sends to /api/library/tracks — if they diverge, the queue's order
+   * stops matching the visible list and `next` plays the wrong track.
+   * Deliberately omits multi_source: `loadList` never sends it (the rail has no
+   * multi-source item), so including it here would be such a divergence.
+   */
+  const libraryQuery = $derived({
+    source: explorerState.nav.section === 'sources' ? explorerState.nav.item : undefined,
+    q: explorerState.q || undefined,
+    sort: explorerState.sort,
+  });
+
   // ----- Add → Discogs master grouping ---------------------------------------
 
   // One shape for both row kinds: master rows carry the version-only fields as
@@ -816,6 +829,7 @@ import RecordingPill from './RecordingPill.svelte';
         selectedId={explorerState.id}
         onSelect={(id) => explorerState.setEntity(id)}
         loadMore={() => loadList(false)}
+        query={libraryQuery}
       />
     {:else}
       <ArtistList

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { playlists } from '$lib/stores/playlists.svelte';
+  import type { PlaybackContext } from '$lib/queue';
   import { player } from '$lib/stores/player.svelte';
   import { translucentDragImage } from '$lib/dnd';
   import EmptyState from './EmptyState.svelte';
@@ -20,6 +21,24 @@
   } = $props();
 
   const open = $derived(playlists.openPlaylist);
+
+  // Playing from a playlist queues that playlist, and keeps queueing it even
+  // after you navigate away — the context is captured at play time.
+  const playablePl = $derived((open?.tracks ?? []).filter((t: { canPlay?: boolean }) => t.canPlay));
+  const playlistCtx = $derived({
+    kind: 'playlist',
+    playlistId: open?.id ?? '',
+    ids: playablePl.map((t: { id: string }) => t.id),
+  } as PlaybackContext);
+  const playlistSeed = $derived(
+    playablePl.map((t: any) => ({
+      trackId: t.id,
+      title: t.title,
+      artist: t.artist,
+      thumbUrl: t.thumb_url,
+      releaseId: t.release_id,
+    })),
+  );
 
   let renaming = $state(false);
   let nameDraft = $state('');
@@ -178,7 +197,7 @@
             ondragleave={() => { if (overId === t.id) overId = null; }}
             ondrop={(e) => onDrop(e, t.id)}
             onclick={(e) => { if (e.detail > 0) e.stopPropagation(); else onTrackSelect?.(t.id); }}
-            ondblclick={() => { if (t.canPlay) player.play({ trackId: t.id, title: t.title, artist: t.artist, thumbUrl: t.thumb_url, releaseId: t.release_id }); }}
+            ondblclick={() => { if (t.canPlay) player.playFrom(playlistCtx, t.id, { trackId: t.id, title: t.title, artist: t.artist, thumbUrl: t.thumb_url, releaseId: t.release_id }, playlistSeed); }}
           >
             <span class="row">
               <span class="thumb" class:playing={isPlaying}>

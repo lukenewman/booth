@@ -4,6 +4,7 @@
   import { player } from '$lib/stores/player.svelte';
   import { translucentDragImage } from '$lib/dnd';
   import { trackPlayState, transportGlyph, transportLabel } from '$lib/playback';
+  import type { PlaybackContext } from '$lib/queue';
 
   interface SourceLink { source: string; external_id: string; external_url: string | null; match_method: string; }
   interface Facet { source: string; key: string; value: string; }
@@ -63,6 +64,24 @@
     onRecord?: () => void;
     recordDisabled?: boolean;
   } = $props();
+
+  // Playing from a tracklist queues the rest of the release. Filtered to
+  // playable tracks so `next` can never land on something with no audio.
+  const playableTracks = $derived(tracks.filter((t) => t.canPlay));
+  const releaseCtx = $derived({
+    kind: 'release',
+    releaseId: release.id,
+    ids: playableTracks.map((t) => t.id),
+  } as PlaybackContext);
+  const releaseSeed = $derived(
+    playableTracks.map((t) => ({
+      trackId: t.id,
+      title: t.title,
+      artist: release.artist,
+      thumbUrl: release.thumb_url,
+      releaseId: release.id,
+    })),
+  );
 
   const hasDiscogs = $derived(sources.some((s) => s.source === 'discogs'));
   const hasIdentifyingInfo = $derived(!!notes || identifiers.length > 0);
@@ -162,7 +181,7 @@
           draggable="true"
           ondragstart={(e) => { e.dataTransfer?.setData('application/x-booth-track', t.id); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; if (e.currentTarget instanceof HTMLElement) translucentDragImage(e, e.currentTarget); }}
           onclick={(e) => { if (e.detail > 0) e.stopPropagation(); else onTrackSelect?.(t.id); }}
-          ondblclick={() => { if (t.canPlay) player.play({ trackId: t.id, title: t.title, artist: release.artist, thumbUrl: release.thumb_url, releaseId: release.id }); }}
+          ondblclick={() => { if (t.canPlay) player.playFrom(releaseCtx, t.id, { trackId: t.id, title: t.title, artist: release.artist, thumbUrl: release.thumb_url, releaseId: release.id }, releaseSeed); }}
         >
           <span class="position">{t.position ?? ''}</span>
           <span class="track-title">{t.title}</span>
@@ -183,7 +202,7 @@
                 e.stopPropagation();
                 if (playState === 'playing') player.pause();
                 else if (playState === 'paused') player.resume();
-                else player.play({ trackId: t.id, title: t.title, artist: release.artist, thumbUrl: release.thumb_url, releaseId: release.id });
+                else player.playFrom(releaseCtx, t.id, { trackId: t.id, title: t.title, artist: release.artist, thumbUrl: release.thumb_url, releaseId: release.id }, releaseSeed);
               }}
               onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.currentTarget.click(); } }}
               ondblclick={(e) => e.stopPropagation()}
