@@ -2,7 +2,8 @@
   import { playlists } from '$lib/stores/playlists.svelte';
   import type { PlaybackContext } from '$lib/queue';
   import { player } from '$lib/stores/player.svelte';
-  import { translucentDragImage } from '$lib/dnd';
+  import { translucentDragImage, startPointerDrag } from '$lib/dnd';
+  import { reorderTo, moveByDelta } from '$lib/playlistOrder';
   import EmptyState from './EmptyState.svelte';
   import PlaylistCover from './PlaylistCover.svelte';
 
@@ -46,6 +47,7 @@
   let dragId = $state<string | null>(null);
   let overId = $state<string | null>(null);
   let confirmPanel = $state<HTMLDivElement>();
+  let listEl = $state<HTMLElement | null>(null);
 
   // Focus the confirm modal when it opens so Enter/Esc work immediately.
   $effect(() => {
@@ -98,18 +100,47 @@
     if (e.currentTarget instanceof HTMLElement) translucentDragImage(e, e.currentTarget);
   }
 
-  function onDrop(e: DragEvent, targetId: string) {
-    e.preventDefault();
-    overId = null;
-    const moved = e.dataTransfer?.getData('application/x-booth-track') || dragId;
+  /**
+   * Move `dragId` to sit where `targetId` currently is, then persist.
+   * Shared by every reorder path so the arithmetic cannot drift.
+   */
+  function applyReorder(targetId: string) {
+    const moved = dragId;
     dragId = null;
-    if (!open || !moved || moved === targetId) return;
-    const ids = open.tracks.map((t) => t.id);
-    if (!ids.includes(moved)) return; // dragged in from elsewhere — ignore (add happens via rail)
-    const without = ids.filter((id) => id !== moved);
-    const at = without.indexOf(targetId);
-    without.splice(at, 0, moved);
-    playlists.reorder(open.id, without);
+    if (!open || !moved) return;
+    // reorderTo declines a no-op move, and declines ids that aren't both in
+    // this playlist — a track dragged in from elsewhere is added via the rail,
+    // not reordered here.
+    const next = reorderTo(open.tracks.map((t) => t.id), moved, targetId);
+    if (next) playlists.reorder(open.id, next);
+  }
+
+  /**
+   * Reorder is driven from the grab handle via pointer events rather than
+   * HTML5 DnD, because `dragstart` never fires from a finger. Mouse and touch
+   * therefore share one path instead of needing two implementations.
+   *
+   * The row keeps `draggable` + `ondragstart` for a different gesture: dragging
+   * a track OUT onto a rail playlist, which is desktop-only and unchanged.
+   */
+  /** Keyboard equivalent of the drag: nudge a track one slot up or down. */
+  function moveBy(trackId: string, delta: number) {
+    if (!open) return;
+    const next = moveByDelta(open.tracks.map((t) => t.id), trackId, delta);
+    if (next) playlists.reorder(open.id, next);
+  }
+
+  function onGripPointerDown(e: PointerEvent, trackId: string) {
+    const rowEl = (e.currentTarget as HTMLElement).closest('[data-id]');
+    if (!(rowEl instanceof HTMLElement) || !listEl) return;
+    dragId = trackId;
+    startPointerDrag({
+      event: e,
+      row: rowEl,
+      list: listEl,
+      onOver: (id) => (overId = id),
+      onDrop: (id) => { if (id) applyReorder(id); else dragId = null; },
+    });
   }
 </script>
 
@@ -177,8 +208,9 @@
       <span>Release</span>
       <span class="right">Length</span>
       <span></span>
+      <span></span>
     </div>
-    <div class="body">
+    <div class="body" bind:this={listEl}>
       {#if open.tracks.length === 0}
         <EmptyState title="No tracks yet" detail="Drag tracks here, or press a on a track to add it." />
       {:else}
@@ -193,9 +225,6 @@
             type="button"
             draggable="true"
             ondragstart={(e) => onDragStart(e, t.id)}
-            ondragover={(e) => { e.preventDefault(); overId = t.id; }}
-            ondragleave={() => { if (overId === t.id) overId = null; }}
-            ondrop={(e) => onDrop(e, t.id)}
             onclick={(e) => { if (e.detail > 0) e.stopPropagation(); else onTrackSelect?.(t.id); }}
             ondblclick={() => { if (t.canPlay) player.playFrom(playlistCtx, t.id, { trackId: t.id, title: t.title, artist: t.artist, thumbUrl: t.thumb_url, releaseId: t.release_id }, playlistSeed); }}
           >
@@ -233,6 +262,21 @@
                 onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); if (open) playlists.requestRemove(open.id, t.id, t.title); } }}
                 ondblclick={(e) => e.stopPropagation()}
               >×</span>
+              <span
+                class="grip"
+                role="button"
+                tabindex="-1"
+                aria-label="Reorder {t.title}"
+                onpointerdown={(e) => onGripPointerDown(e, t.id)}
+                onclick={(e) => e.stopPropagation()}
+                ondblclick={(e) => e.stopPropagation()}
+                onkeydown={(e) => {
+                  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  moveBy(t.id, e.key === 'ArrowUp' ? -1 : 1);
+                }}
+              >⠿</span>
             </span>
           </button>
         {/each}
@@ -364,7 +408,7 @@
   .row-btn.drop-over { box-shadow: inset 0 2px 0 var(--accent); }
   .cols, .row {
     display: grid;
-    grid-template-columns: 28px minmax(0, 2.2fr) minmax(0, 1.5fr) minmax(0, 1.5fr) 56px 20px;
+    grid-template-columns: 28px minmax(0, 2.2fr) minmax(0, 1.5fr) minmax(0, 1.5fr) 56px 20px 28px;
     gap: 12px;
     align-items: center;
   }
@@ -399,6 +443,24 @@
   .row-btn.playing .title { color: var(--accent); }
   .dur { color: var(--text-subtle); font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 11.5px; text-align: right; }
   .remove { color: transparent; text-align: center; cursor: pointer; font-size: 14px; user-select: none; }
+
+  .grip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    /* 44px is the touch-target floor; the grid cell stays 28px wide and the
+       extra height is absorbed by the row, so desktop density is unchanged. */
+    min-width: 28px;
+    min-height: 44px;
+    cursor: grab;
+    color: var(--text-dim);
+    /* Load-bearing: without this the browser claims the gesture for scrolling
+       and no pointermove ever reaches the drag handler. */
+    touch-action: none;
+    user-select: none;
+  }
+  .grip:hover { color: var(--text); }
+  .grip:active { cursor: grabbing; }
   .row-btn:hover .remove { color: var(--text-subtle); }
   .remove:hover { color: var(--danger) !important; }
 
