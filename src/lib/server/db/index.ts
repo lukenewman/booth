@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { runMigrations } from './migrate';
+import { applyPragmas } from './pragmas';
 
 const DEFAULT_PATH = join(homedir(), '.booth', 'booth.db');
 
@@ -14,8 +15,7 @@ export function getDb(): Database {
   const path = env.BOOTH_DB_PATH ?? DEFAULT_PATH;
   mkdirSync(dirname(resolve(path)), { recursive: true });
   const db = new Database(path);
-  db.exec('PRAGMA journal_mode = WAL');
-  db.exec('PRAGMA foreign_keys = ON');
+  applyPragmas(db);
   runMigrations(db);
   _db = db;
   return db;

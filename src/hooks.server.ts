@@ -3,6 +3,7 @@ import { env } from '$lib/server/env';
 import { getDb } from '$lib/server/db';
 import { runSync } from '$lib/server/library/sync_run';
 import { listSources } from '$lib/server/sources/registry';
+import { createScheduler, parseIntervalMinutes } from '$lib/server/library/scheduler';
 
 const triggered = new Set<string>();
 
@@ -25,20 +26,64 @@ function autoSyncOnce(sourceId: string) {
 }
 
 /**
+ * Sources worth syncing: skip stubs, and skip `local` unless ITUNES_XML_PATH
+ * is set, since its sync (Apple Music XML parse) would just throw.
+ */
+function eligibleSourceIds(): string[] {
+  return listSources()
+    .filter((s) => !s.isStub)
+    .filter((s) => !(s.id === 'local' && !env.ITUNES_XML_PATH))
+    .map((s) => s.id);
+}
+
+/**
  * On the first request after server start, kick off a background sync for
- * every non-stub source. Skips the local source if ITUNES_XML_PATH isn't set,
- * since its sync (Apple Music XML parse) would just throw. Each source fires
- * at most once per process.
+ * every eligible source. Each source fires at most once per process.
  */
 function autoSyncAll() {
-  for (const source of listSources()) {
-    if (source.isStub) continue;
-    if (source.id === 'local' && !env.ITUNES_XML_PATH) continue;
-    autoSyncOnce(source.id);
+  for (const id of eligibleSourceIds()) autoSyncOnce(id);
+}
+
+/**
+ * The boot hook above fires once per process, which is invisible under
+ * `bun dev` (it restarts constantly) but means an always-on production server
+ * stops syncing forever. This adds the recurring pass, alongside the boot
+ * hook rather than replacing it, so a restart still syncs immediately.
+ */
+let schedulerStarted = false;
+function startScheduledSync() {
+  if (schedulerStarted) return;
+  schedulerStarted = true;
+
+  const minutes = parseIntervalMinutes(env.BOOTH_SYNC_INTERVAL_MINUTES);
+  if (minutes === 0) {
+    console.log('[sync] scheduler disabled (BOOTH_SYNC_INTERVAL_MINUTES=0)');
+    return;
   }
+
+  const scheduler = createScheduler({
+    sourceIds: eligibleSourceIds,
+    // Log successes too: runSync is silent on success, so without this a
+    // scheduled tick leaves no trace and an always-on server gives you no way
+    // to tell "syncing fine" from "scheduler died months ago".
+    sync: async (id) => {
+      const run = await runSync(getDb(), id);
+      console.log(`[sync] ${id}`, run.summary);
+      return run;
+    },
+    onError: (id, err) => console.warn(`[sync] ${id} scheduled sync failed:`, err),
+  });
+
+  const timer = setInterval(() => void scheduler.tick(), minutes * 60_000);
+  // Cast rather than call directly: `setInterval` resolves to the DOM overload
+  // (returning `number`) in some type configurations, and `unref` is Bun/Node
+  // only. The timer must not be what keeps the process alive.
+  (timer as unknown as { unref?: () => void }).unref?.();
+  console.log(`[sync] scheduler running every ${minutes}m`);
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
   autoSyncAll();
+  startScheduledSync();
   return resolve(event);
 };
