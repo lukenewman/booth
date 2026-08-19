@@ -178,7 +178,7 @@
             ondragleave={() => { if (overId === t.id) overId = null; }}
             ondrop={(e) => onDrop(e, t.id)}
             onclick={(e) => { if (e.detail > 0) e.stopPropagation(); else onTrackSelect?.(t.id); }}
-            ondblclick={() => { if (t.canPlay) player.play({ trackId: t.id, title: t.title, artist: t.artist, thumbUrl: t.thumb_url }); }}
+            ondblclick={() => { if (t.canPlay) player.play({ trackId: t.id, title: t.title, artist: t.artist, thumbUrl: t.thumb_url, releaseId: t.release_id }); }}
           >
             <span class="row">
               <span class="thumb" class:playing={isPlaying}>

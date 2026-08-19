@@ -58,9 +58,10 @@
     cursor: pointer;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   }
-  /* Lift above the 48px PlayerBar when a track is loaded. */
+  /* Lift above the PlayerBar when a track is loaded. Derived from the bar's
+     own height token so growing the bar can't leave the pill overlapping it. */
   .pill.with-player {
-    bottom: 64px;
+    bottom: calc(var(--player-bar-h) + 16px);
   }
   .pill:hover {
     border-color: #c0392b;

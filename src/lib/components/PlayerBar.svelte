@@ -1,6 +1,8 @@
 <script lang="ts">
   import { player } from '$lib/stores/player.svelte';
 
+  let { onOpenRelease }: { onOpenRelease?: (releaseId: string) => void } = $props();
+
   function formatTime(s: number): string {
     if (!isFinite(s) || s < 0) return '0:00';
     const m = Math.floor(s / 60);
@@ -22,45 +24,65 @@
     player.seekTo(Number((e.target as HTMLInputElement).value));
     scrubbing = false;
   }
+
+  // Artwork is only a control when there's somewhere to go: a track with no
+  // parent release (or no handler wired) keeps the plain, non-interactive image.
+  const releaseId = $derived(player.nowPlaying?.releaseId ?? null);
+  const artIsLink = $derived(!!releaseId && !!onOpenRelease);
 </script>
 
 {#if player.nowPlaying}
   <div class="bar">
-    {#if player.nowPlaying.thumbUrl}
-      <img class="thumb" src={player.nowPlaying.thumbUrl} alt="" aria-hidden="true" />
+    {#if artIsLink}
+      <button
+        class="art art-btn"
+        type="button"
+        onclick={() => releaseId && onOpenRelease?.(releaseId)}
+        title="Open release"
+        aria-label="Open release detail"
+      >
+        {#if player.nowPlaying.thumbUrl}
+          <img src={player.nowPlaying.thumbUrl} alt="" aria-hidden="true" />
+        {:else}
+          <span class="art-placeholder"></span>
+        {/if}
+      </button>
+    {:else if player.nowPlaying.thumbUrl}
+      <img class="art" src={player.nowPlaying.thumbUrl} alt="" aria-hidden="true" />
     {:else}
-      <div class="thumb thumb-placeholder"></div>
+      <div class="art art-placeholder"></div>
     {/if}
+
     <div class="info">
       <span class="title">{player.nowPlaying.title}</span>
       <span class="artist">{player.nowPlaying.artist}</span>
     </div>
 
-    <div class="controls">
+    <div class="transport">
       <button
         class="play-pause"
-        onclick={() => player.isPlaying ? player.pause() : player.resume()}
+        onclick={() => (player.isPlaying ? player.pause() : player.resume())}
         aria-label={player.isPlaying ? 'Pause' : 'Play'}
       >
         {player.isPlaying ? '⏸' : '▶'}
       </button>
 
-      <span class="time">{formatTime(player.currentTime)}</span>
-
-      <input
-        class="scrubber"
-        type="range"
-        min="0"
-        max={player.duration || 1}
-        step="0.5"
-        value={scrubbing ? scrubValue : player.currentTime}
-        onmousedown={onScrubStart}
-        oninput={onScrubMove}
-        onchange={onScrubEnd}
-        aria-label="Seek"
-      />
-
-      <span class="time">{formatTime(player.duration)}</span>
+      <div class="seek-row">
+        <span class="time">{formatTime(player.currentTime)}</span>
+        <input
+          class="scrubber"
+          type="range"
+          min="0"
+          max={player.duration || 1}
+          step="0.5"
+          value={scrubbing ? scrubValue : player.currentTime}
+          onmousedown={onScrubStart}
+          oninput={onScrubMove}
+          onchange={onScrubEnd}
+          aria-label="Seek"
+        />
+        <span class="time">{formatTime(player.duration)}</span>
+      </div>
     </div>
 
     <div class="right-spacer"></div>
@@ -73,23 +95,44 @@
     align-items: center;
     gap: 16px;
     padding: 0 16px;
-    height: 48px;
+    height: var(--player-bar-h);
     background: var(--bg-raised);
     border-top: 1px solid var(--border-strong);
     flex-shrink: 0;
   }
 
-  .thumb {
-    width: 36px;
-    height: 36px;
-    border-radius: 2px;
+  .art {
+    width: 56px;
+    height: 56px;
+    border-radius: 3px;
     object-fit: cover;
     flex-shrink: 0;
   }
-  .thumb-placeholder {
+  .art-placeholder {
     background: var(--bg-raised);
     border: 1px solid var(--border);
+    display: block;
   }
+
+  /* Artwork-as-button: no chrome, just the image plus an affordance on hover. */
+  .art-btn {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    overflow: hidden;
+    display: block;
+  }
+  .art-btn img,
+  .art-btn .art-placeholder {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: 3px;
+  }
+  .art-btn:hover { outline: 1px solid var(--accent); outline-offset: 1px; }
+  .art-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
   .info {
     display: flex;
@@ -98,7 +141,7 @@
     flex: 1;
   }
   .title {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--text);
     overflow: hidden;
@@ -113,22 +156,32 @@
     white-space: nowrap;
   }
 
-  .controls {
+  /* Play/pause sits above the seek row, centred over it. */
+  .transport {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .seek-row {
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-shrink: 0;
   }
 
   .play-pause {
     background: transparent;
     border: 0;
     color: var(--accent);
-    font-size: 16px;
+    font-size: 18px;
     padding: 0;
-    width: 24px;
+    width: 28px;
+    height: 20px;
     text-align: center;
     line-height: 1;
+    cursor: pointer;
   }
   .play-pause:hover { color: var(--accent-strong); }
 
@@ -143,7 +196,7 @@
   .time:last-of-type { text-align: left; }
 
   .scrubber {
-    width: 200px;
+    width: 260px;
     height: 3px;
     cursor: pointer;
     accent-color: var(--accent);

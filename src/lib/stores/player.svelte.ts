@@ -3,6 +3,8 @@ export interface NowPlaying {
   title: string;
   artist: string;
   thumbUrl?: string | null;
+  /** Parent release, so the PlayerBar artwork can open its detail pane. Null for a track with no release. */
+  releaseId?: string | null;
 }
 
 let nowPlaying = $state<NowPlaying | null>(null);

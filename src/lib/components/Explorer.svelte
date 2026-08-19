@@ -177,6 +177,23 @@ import RecordingPill from './RecordingPill.svelte';
     const res = await fetch(url);
     if (res.ok) plDetail = { kind, data: await res.json() };
   }
+
+  /**
+   * PlayerBar artwork click. Both surfaces already have a right-hand detail
+   * pane, they just reach it differently: the playlist view keeps its own
+   * `plDetail` (track rows there deliberately open no detail), everything else
+   * goes through the normal `?id` selection. No-op when it is already open, so
+   * clicking the art repeatedly does not refetch or steal focus.
+   */
+  function openReleaseFromPlayer(releaseId: string) {
+    if (isPlaylistView) {
+      if (plDetail?.kind === 'release' && plDetail.data?.release?.id === releaseId) return;
+      openPlaylistEntity('release', releaseId);
+      return;
+    }
+    if (explorerState.id === releaseId) return;
+    explorerState.setEntity(releaseId);
+  }
   let recordingRelease = $state<{ id: string; title: string; artist: string } | null>(null);
   // While a session is open it can be minimized to a floating pill so the user
   // can keep browsing; the recorder store keeps capturing regardless.
@@ -908,7 +925,7 @@ import RecordingPill from './RecordingPill.svelte';
   </section>
   {/if}
   </div>
-  <PlayerBar />
+  <PlayerBar onOpenRelease={openReleaseFromPlayer} />
 </div>
 
 {#if recordingRelease && !recordingMinimized}

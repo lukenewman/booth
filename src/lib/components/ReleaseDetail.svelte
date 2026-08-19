@@ -3,6 +3,7 @@
   import SourceGrid from './SourceGrid.svelte';
   import { player } from '$lib/stores/player.svelte';
   import { translucentDragImage } from '$lib/dnd';
+  import { trackPlayState, transportGlyph, transportLabel } from '$lib/playback';
 
   interface SourceLink { source: string; external_id: string; external_url: string | null; match_method: string; }
   interface Facet { source: string; key: string; value: string; }
@@ -152,30 +153,52 @@
     <div class="tracklist">
       <div class="tracklist-header">Tracks ({tracks.length})</div>
       {#each tracks as t}
-        {@const isPlaying = player.nowPlaying?.trackId === t.id}
+        {@const playState = trackPlayState(t.id, player.nowPlaying?.trackId, player.isPlaying)}
+        {@const isLoaded = playState !== 'idle'}
         <button
           class="track-row"
-          class:playing={isPlaying}
+          class:playing={isLoaded}
           type="button"
           draggable="true"
           ondragstart={(e) => { e.dataTransfer?.setData('application/x-booth-track', t.id); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; if (e.currentTarget instanceof HTMLElement) translucentDragImage(e, e.currentTarget); }}
           onclick={(e) => { if (e.detail > 0) e.stopPropagation(); else onTrackSelect?.(t.id); }}
-          ondblclick={() => { if (t.canPlay) player.play({ trackId: t.id, title: t.title, artist: release.artist, thumbUrl: release.thumb_url }); }}
+          ondblclick={() => { if (t.canPlay) player.play({ trackId: t.id, title: t.title, artist: release.artist, thumbUrl: release.thumb_url, releaseId: release.id }); }}
         >
           <span class="position">{t.position ?? ''}</span>
           <span class="track-title">{t.title}</span>
           <span class="track-dur">{durationLabel(t.duration_ms)}</span>
           <SourceGrid present={t.sources} />
-          <span
-            class="info-icon"
-            class:playing={isPlaying}
-            role="button"
-            tabindex="-1"
-            aria-label="View details for {t.title}"
-            onclick={(e) => { e.stopPropagation(); onTrackSelect?.(t.id); }}
-            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onTrackSelect?.(t.id); } }}
-            ondblclick={(e) => e.stopPropagation()}
-          >{isPlaying ? '▶' : '›'}</span>
+          {#if t.canPlay}
+            <!-- Real transport control. This slot used to be the detail chevron
+                 wearing a ▶ whenever the track was merely loaded, so clicking it
+                 opened track detail and a paused track looked like a playing one.
+                 Row click still opens detail, so nothing is lost. -->
+            <span
+              class="transport-icon"
+              class:loaded={isLoaded}
+              role="button"
+              tabindex="-1"
+              aria-label={transportLabel(playState, t.title)}
+              onclick={(e) => {
+                e.stopPropagation();
+                if (playState === 'playing') player.pause();
+                else if (playState === 'paused') player.resume();
+                else player.play({ trackId: t.id, title: t.title, artist: release.artist, thumbUrl: release.thumb_url, releaseId: release.id });
+              }}
+              onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.currentTarget.click(); } }}
+              ondblclick={(e) => e.stopPropagation()}
+            >{transportGlyph(playState)}</span>
+          {:else}
+            <span
+              class="info-icon"
+              role="button"
+              tabindex="-1"
+              aria-label="View details for {t.title}"
+              onclick={(e) => { e.stopPropagation(); onTrackSelect?.(t.id); }}
+              onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onTrackSelect?.(t.id); } }}
+              ondblclick={(e) => e.stopPropagation()}
+            >›</span>
+          {/if}
         </button>
       {/each}
     </div>
@@ -455,8 +478,20 @@
     user-select: none;
   }
   .track-row:hover .info-icon { color: var(--text-muted); }
-  .track-row .info-icon.playing { color: var(--accent) !important; }
   .track-row.playing .track-title { color: var(--accent); }
+
+  /* Transport stays visible once the track is loaded (you need to be able to
+     pause without hunting for it); otherwise it appears on row hover. */
+  .track-row .transport-icon {
+    color: transparent;
+    font-size: 12px;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+  }
+  .track-row:hover .transport-icon { color: var(--text-muted); }
+  .track-row .transport-icon.loaded { color: var(--accent); }
+  .track-row .transport-icon:hover { color: var(--accent-strong); }
 
   .identify {
     margin-top: 18px;

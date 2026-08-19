@@ -71,9 +71,9 @@
       role="listitem"
       draggable="true"
       ondragstart={(e) => { e.dataTransfer?.setData('application/x-booth-track', item.id); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; if (e.currentTarget instanceof HTMLElement) translucentDragImage(e, e.currentTarget); }}
-      onkeydown={(e) => { if (e.key === 'Enter' && item.canPlay) player.play({ trackId: item.id, title: item.title, artist: item.artist, thumbUrl: item.thumb_url }); }}
+      onkeydown={(e) => { if (e.key === 'Enter' && item.canPlay) player.play({ trackId: item.id, title: item.title, artist: item.artist, thumbUrl: item.thumb_url, releaseId: item.release_id }); }}
       onclick={(e) => { if (e.detail > 0) e.stopPropagation(); }}
-      ondblclick={() => { if (item.canPlay) player.play({ trackId: item.id, title: item.title, artist: item.artist, thumbUrl: item.thumb_url }); }}
+      ondblclick={() => { if (item.canPlay) player.play({ trackId: item.id, title: item.title, artist: item.artist, thumbUrl: item.thumb_url, releaseId: item.release_id }); }}
     >
       <span
         class="info-icon"
