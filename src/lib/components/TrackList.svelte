@@ -16,6 +16,7 @@
     sources: string[];
     canPlay: boolean;
     thumb_url: string | null;
+    release_id: string | null;
   }
 
   let {
