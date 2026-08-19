@@ -102,8 +102,8 @@
   }
 
   .art {
-    width: 56px;
-    height: 56px;
+    width: var(--player-art);
+    height: var(--player-art);
     border-radius: 3px;
     object-fit: cover;
     flex-shrink: 0;

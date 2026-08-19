@@ -21,9 +21,11 @@
   --danger: #db5a5a;
   --warn: #d69a2c;
 
-  /* PlayerBar height. RecordingPill derives its offset from this — keep them
-     coupled here rather than by matching magic numbers in two files. */
-  --player-bar-h: 72px;
+  /* PlayerBar artwork is the one number to tune; the bar height and
+     RecordingPill's lifted offset both derive from it, so they can't drift out
+     of step when the art is resized. 8px of breathing room above and below. */
+  --player-art: 72px;
+  --player-bar-h: calc(var(--player-art) + 16px);
 
   --space-1: 4px;
   --space-2: 8px;
