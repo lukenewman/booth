@@ -1,5 +1,6 @@
 <script lang="ts">
   import { playlists } from '$lib/stores/playlists.svelte';
+  import StarButton from './StarButton.svelte';
   import type { PlaybackContext } from '$lib/queue';
   import { player } from '$lib/stores/player.svelte';
   import { translucentDragImage, startPointerDrag } from '$lib/dnd';
@@ -253,6 +254,7 @@
                 <span class="cell release">{t.album ?? '—'}</span>
               {/if}
               <span class="dur">{formatDuration(t.duration_ms)}</span>
+              <StarButton trackId={t.id} />
               <span
                 class="remove"
                 role="button"
@@ -408,7 +410,7 @@
   .row-btn.drop-over { box-shadow: inset 0 2px 0 var(--accent); }
   .cols, .row {
     display: grid;
-    grid-template-columns: 28px minmax(0, 2.2fr) minmax(0, 1.5fr) minmax(0, 1.5fr) 56px 20px 28px;
+    grid-template-columns: 28px minmax(0, 2.2fr) minmax(0, 1.5fr) minmax(0, 1.5fr) 56px 20px 20px 28px;
     gap: 12px;
     align-items: center;
   }

@@ -3,6 +3,7 @@
   import type { LibraryQuery, PlaybackContext } from '$lib/queue';
   import Listview from './Listview.svelte';
   import SourceGrid from './SourceGrid.svelte';
+  import StarButton from './StarButton.svelte';
   import EmptyState from './EmptyState.svelte';
   import { player } from '$lib/stores/player.svelte';
   import { translucentDragImage } from '$lib/dnd';
@@ -17,6 +18,7 @@
     canPlay: boolean;
     thumb_url: string | null;
     release_id: string | null;
+    starred_at?: string | null;
   }
 
   let {
@@ -69,6 +71,7 @@
       <span>Track</span>
       <span>Album</span>
       <span class="right">Length</span>
+      <span></span>
       <span class="src-label">
         <span>D</span><span>i</span><span>R</span><span>P</span>
       </span>
@@ -103,6 +106,7 @@
       </div>
       <span class="album">{item.album ?? '—'}</span>
       <span class="dur">{formatDuration(item.duration_ms)}</span>
+      <StarButton trackId={item.id} />
       <SourceGrid present={item.sources} />
     </div>
   {/snippet}
@@ -114,7 +118,7 @@
 <style>
   .cols, .row {
     display: grid;
-    grid-template-columns: 20px 1fr 100px 60px 56px;
+    grid-template-columns: 20px 1fr 100px 60px 20px 56px;
     gap: 14px;
     padding: 6px 14px;
     align-items: center;

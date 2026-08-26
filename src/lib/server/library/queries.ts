@@ -364,7 +364,7 @@ export function getReleaseDetail(
       `SELECT release.id, release.title, artist.name AS artist,
               release.artist_id,
               release.year, release.country, release.label, release.catno,
-              release.thumb_url, release.cover_url
+              release.thumb_url, release.cover_url, release.vetted_at
          FROM release
          JOIN artist ON artist.id = release.artist_id
          WHERE release.id = ?`,
@@ -389,7 +389,8 @@ export function getReleaseDetail(
   const tracks = db
     .prepare(
       `SELECT track.id, track.title, artist.name AS artist,
-              track.album, track.duration_ms, track.release_id, track.position
+              track.album, track.duration_ms, track.release_id, track.position,
+              track.starred_at
          FROM track
          JOIN artist ON artist.id = track.artist_id
          WHERE track.release_id = ?

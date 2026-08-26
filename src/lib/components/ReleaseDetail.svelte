@@ -1,6 +1,8 @@
 <script lang="ts">
   import SourcePanel from './SourcePanel.svelte';
   import SourceGrid from './SourceGrid.svelte';
+  import StarButton from './StarButton.svelte';
+  import { annotations } from '$lib/stores/annotations.svelte';
   import { player } from '$lib/stores/player.svelte';
   import { translucentDragImage } from '$lib/dnd';
   import { trackPlayState, transportGlyph, transportLabel } from '$lib/playback';
@@ -12,6 +14,7 @@
     id: string;
     title: string;
     position: string | null;
+    starred_at?: string | null;
     duration_ms: number | null;
     sources: string[];
     canPlay: boolean;
@@ -28,6 +31,7 @@
     label?: string | null;
     catno?: string | null;
     format?: string | null;
+    vetted_at?: string | null;
   }
   interface SourceMeta { id: string; name: string; isStub: boolean; }
   interface Identifier { type: string; value: string; description: string | null; }
@@ -68,6 +72,13 @@
   // Playing from a tracklist queues the rest of the release. Filtered to
   // playable tracks so `next` can never land on something with no audio.
   const playableTracks = $derived(tracks.filter((t) => t.canPlay));
+
+  // Detail can be reached by deep link with no list page behind it, so the
+  // tracklist payload is its own hydration source for the star state.
+  $effect(() => {
+    annotations.hydrateTracks(tracks);
+    annotations.hydrateReleases([release]);
+  });
   const releaseCtx = $derived({
     kind: 'release',
     releaseId: release.id,
@@ -186,6 +197,7 @@
           <span class="position">{t.position ?? ''}</span>
           <span class="track-title">{t.title}</span>
           <span class="track-dur">{durationLabel(t.duration_ms)}</span>
+          <StarButton trackId={t.id} />
           <SourceGrid present={t.sources} />
           {#if t.canPlay}
             <!-- Real transport control. This slot used to be the detail chevron
@@ -460,7 +472,7 @@
   }
   .track-row {
     display: grid;
-    grid-template-columns: 28px 1fr 48px 56px 20px;
+    grid-template-columns: 28px 1fr 48px 20px 56px 20px;
     gap: 10px;
     padding: 4px 0;
     align-items: center;

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { player } from '$lib/stores/player.svelte';
+  import StarButton from './StarButton.svelte';
   import { PREV_RESTART_THRESHOLD_S } from '$lib/queue';
 
   let { onOpenRelease }: { onOpenRelease?: (releaseId: string) => void } = $props();
@@ -59,6 +60,13 @@
       <span class="artist">{player.nowPlaying.artist}</span>
     </div>
 
+    <!-- Always visible, unlike the row stars: this is the affordance for when
+         playback has advanced past whatever row is selected, so hover-gating
+         it would defeat the purpose. -->
+    <div class="now-star">
+      <StarButton trackId={player.nowPlaying.trackId} size={16} />
+    </div>
+
     <div class="transport">
       <div class="buttons">
         <button
@@ -107,6 +115,9 @@
 {/if}
 
 <style>
+  .now-star { display: flex; align-items: center; flex: 0 0 auto; }
+  .now-star :global(.star) { opacity: 1; }
+
   .bar {
     display: flex;
     align-items: center;
