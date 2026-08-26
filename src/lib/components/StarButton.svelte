@@ -58,4 +58,17 @@
   }
   .star.on { color: var(--star); }
   .star:hover { color: var(--text); }
+
+  /* Touch: there is no hover, so an opacity-0 star would simply never appear,
+     and a 20px target is unhittable with a thumb. Grow the target, not the
+     glyph, so desktop keeps its row density. Matches the app's shell
+     breakpoint. */
+  @media (max-width: 768px) {
+    .star {
+      opacity: 1;
+      min-width: 44px;
+      min-height: 44px;
+      justify-content: center;
+    }
+  }
 </style>

@@ -42,6 +42,12 @@
 
   let tab = $state<MobileTab>('library');
   let scannerOpen = $state(false);
+
+  const LIBRARY_FILTERS = [
+    { item: 'all', label: 'All' },
+    { item: 'starred', label: 'Starred' },
+    { item: 'unvetted', label: 'Unvetted' },
+  ] as const;
   let sourcesOpen = $state(false);
 
   // Detail is a pushed view, not a pane: derived from the same ?id= the desktop
@@ -120,6 +126,22 @@
       </div>
       <span class="meta">{toolbarMeta}</span>
     </div>
+    {#if tab === 'library'}
+      <!-- The rail's Starred/Unvetted items have no home in a four-tab shell,
+           so they become a filter strip under the Library toolbar. These write
+           the same ?nav values the desktop rail does, and navEntityHint puts
+           each on its correct lens. -->
+      <div class="mtoolbar sub">
+        <div class="seg" role="group" aria-label="Library filter">
+          {#each LIBRARY_FILTERS as f (f.item)}
+            <button
+              class:active={explorerState.nav.section === 'library' && explorerState.nav.item === f.item}
+              onclick={() => explorerState.setNav({ section: 'library', item: f.item })}
+            >{f.label}</button>
+          {/each}
+        </div>
+      </div>
+    {/if}
   {/if}
 
   {#if tab === 'add' && !detailOpen}
@@ -253,6 +275,8 @@
 </div>
 
 <style>
+  .mtoolbar.sub { padding-top: 0; }
+
   .mshell {
     display: flex;
     flex-direction: column;
