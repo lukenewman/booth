@@ -9,6 +9,8 @@ const playableSources = new Set(
   listSources().filter(isPlayable).map((s) => s.id),
 );
 
+import { countStarredByRelease } from './annotations';
+
 export function getMembershipExternalIds(
   db: Database,
   source: string,
@@ -35,6 +37,7 @@ export interface ReleaseRow {
   catno: string | null;
   thumb_url: string | null;
   cover_url: string | null;
+  vetted_at: string | null;
 }
 
 export interface TrackRow {
@@ -46,6 +49,7 @@ export interface TrackRow {
   release_id: string | null;
   position: string | null;
   thumb_url: string | null;
+  starred_at: string | null;
 }
 
 export interface SourceLinkRow {
@@ -103,12 +107,13 @@ interface ListReleasesArgs {
   offset: number;
   multiSource?: boolean;
   sort?: SortKey;
+  vetted?: boolean;
 }
 
 export function listReleases(
   db: Database,
   args: ListReleasesArgs,
-): PagedResult<ReleaseRow & { sources: string[] }> {
+): PagedResult<ReleaseRow & { sources: string[]; starredCount: number }> {
   const where: string[] = [];
   const params: string[] = [];
 
@@ -127,6 +132,9 @@ export function listReleases(
          HAVING COUNT(DISTINCT source) >= 2
        )`,
     );
+  }
+  if (args.vetted !== undefined) {
+    where.push(args.vetted ? `release.vetted_at IS NOT NULL` : `release.vetted_at IS NULL`);
   }
   if (args.q) {
     where.push(`(release.title LIKE ? OR artist.name LIKE ?)`);
@@ -170,7 +178,7 @@ export function listReleases(
     .prepare(
       `SELECT release.id, release.title, artist.name AS artist,
               release.year, release.country, release.label, release.catno,
-              release.thumb_url, release.cover_url
+              release.thumb_url, release.cover_url, release.vetted_at
          FROM release
          JOIN artist ON artist.id = release.artist_id
          ${addedJoin}
@@ -198,8 +206,17 @@ export function listReleases(
     sourceMap.set(entity_id, list);
   }
 
+  // Batched like sourcesByEntity above: one extra round-trip per page rather
+  // than a correlated subquery per row, and it leaves the ORDER BY … LIMIT
+  // query untouched.
+  const starCounts = countStarredByRelease(db, ids);
+
   return {
-    items: rows.map((r) => ({ ...r, sources: sourceMap.get(r.id) ?? [] })),
+    items: rows.map((r) => ({
+      ...r,
+      sources: sourceMap.get(r.id) ?? [],
+      starredCount: starCounts.get(r.id) ?? 0,
+    })),
     total: totalRow.n,
     hasMore: args.offset + rows.length < totalRow.n,
   };
@@ -210,6 +227,7 @@ export interface TrackFilterArgs {
   q?: string;
   multiSource?: boolean;
   sort?: SortKey;
+  starred?: boolean;
 }
 
 /**
@@ -242,6 +260,9 @@ function buildTrackQuery(args: TrackFilterArgs): {
        )`,
     );
   }
+  if (args.starred !== undefined) {
+    where.push(args.starred ? `track.starred_at IS NOT NULL` : `track.starred_at IS NULL`);
+  }
   if (args.q) {
     where.push(`(track.title LIKE ? OR artist.name LIKE ? OR track.album LIKE ?)`);
     params.push(`%${args.q}%`, `%${args.q}%`, `%${args.q}%`);
@@ -267,13 +288,9 @@ function buildTrackQuery(args: TrackFilterArgs): {
   };
 }
 
-interface ListTracksArgs {
-  source?: string;
-  q?: string;
+interface ListTracksArgs extends TrackFilterArgs {
   limit: number;
   offset: number;
-  multiSource?: boolean;
-  sort?: SortKey;
 }
 
 export function listTracks(
@@ -295,7 +312,7 @@ export function listTracks(
     .prepare(
       `SELECT track.id, track.title, artist.name AS artist,
               track.album, track.duration_ms, track.release_id, track.position,
-              release.thumb_url
+              release.thumb_url, track.starred_at
          FROM track
          JOIN artist ON artist.id = track.artist_id
          LEFT JOIN release ON release.id = track.release_id

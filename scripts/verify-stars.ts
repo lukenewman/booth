@@ -102,4 +102,65 @@ assert(unknown.size === 0, 'unknown release id should not appear in the map');
 db.prepare(`DELETE FROM track WHERE id = ?`).run(t2);
 assert(countStarredByRelease(db, [relId]).get(relId) === 1, 'deleting a track drops its star');
 
+// --- query filters ----------------------------------------------------------
+const { listReleases, listTracks, listTrackIds } = await import(
+  '../src/lib/server/library/queries'
+);
+
+// Seed a second release so the filters have something to exclude.
+const rel2 = ulid();
+db.prepare(`INSERT INTO release (id, title, artist_id, year) VALUES (?, ?, ?, ?)`).run(
+  rel2,
+  'Second Release',
+  artistId,
+  2001,
+);
+const t3 = ulid();
+db.prepare(
+  `INSERT INTO track (id, title, artist_id, album, duration_ms, release_id, position)
+     VALUES (?, 'Track Three', ?, 'Second Release', 60000, ?, 'A1')`,
+).run(t3, artistId, rel2);
+
+// Both releases need a playable link, or listTrackIds filters them out.
+for (const [tid, path] of [[t1, '/music/one.wav'], [t3, '/music/three.wav']] as const) {
+  db.prepare(
+    `INSERT INTO source_link (entity_kind, entity_id, source, external_id, external_url, match_method)
+       VALUES ('track', ?, 'local', ?, NULL, 'file_path')`,
+  ).run(tid, path);
+}
+
+// starred filter on tracks: t1 is starred, t3 is not.
+const starredTracks = listTracks(db, { starred: true, limit: 50, offset: 0 });
+assert(starredTracks.total === 1, `expected 1 starred track, got ${starredTracks.total}`);
+assert(starredTracks.items[0].id === t1, 'starred filter returned the wrong track');
+assert(
+  starredTracks.items[0].starred_at !== null,
+  'starred track row should carry starred_at',
+);
+
+const allTracks = listTracks(db, { limit: 50, offset: 0 });
+assert(allTracks.total === 2, `unfiltered should see 2 tracks, got ${allTracks.total}`);
+
+// listTrackIds must agree with listTracks under the same filter — the playback
+// queue depends on the two producing identical ordering and membership.
+const starredIds = listTrackIds(db, { starred: true });
+assert(starredIds.length === 1, `expected 1 starred id, got ${starredIds.length}`);
+assert(starredIds[0] === t1, 'listTrackIds disagrees with listTracks on the starred filter');
+
+// vetted filter on releases: relId is vetted, rel2 is not.
+const unvetted = listReleases(db, { vetted: false, limit: 50, offset: 0 });
+assert(unvetted.total === 1, `expected 1 unvetted release, got ${unvetted.total}`);
+assert(unvetted.items[0].id === rel2, 'unvetted filter returned the wrong release');
+
+const vettedOnly = listReleases(db, { vetted: true, limit: 50, offset: 0 });
+assert(vettedOnly.total === 1, `expected 1 vetted release, got ${vettedOnly.total}`);
+assert(vettedOnly.items[0].id === relId, 'vetted filter returned the wrong release');
+
+// starredCount rides along on release rows.
+const allRels = listReleases(db, { limit: 50, offset: 0 });
+const byId = new Map(allRels.items.map((r) => [r.id, r]));
+assert(byId.get(relId)!.starredCount === 1, 'relId should report 1 starred track');
+assert(byId.get(rel2)!.starredCount === 0, 'rel2 should report 0 starred tracks');
+assert(byId.get(relId)!.vetted_at !== null, 'release row should carry vetted_at');
+
 console.log('OK: verify-stars');
