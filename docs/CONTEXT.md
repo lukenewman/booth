@@ -178,12 +178,16 @@ src/
 docs/
   CONTEXT.md                                  ← this file (deferred work lives in Linear; see ## Backlog below)
   superpowers/
-    specs/2026-04-29-discogs-collection-adder-design.md   original product spec
-    specs/2026-05-05-multi-source-architecture-design.md  multi-source architecture design (Slice 1)
-    specs/2026-05-06-library-explorer-design.md           library explorer design (Slice 2)
-    plans/2026-04-29-discogs-collection-adder.md          original implementation plan (all checked off)
-    plans/2026-05-05-multi-source-architecture.md         Slice 1 implementation plan
-    plans/2026-05-06-library-explorer.md                  Slice 2 implementation plan
+    specs/YYYY-MM-DD-<topic>-design.md         approved design per feature slice (14 as of 2026-08-26)
+    plans/YYYY-MM-DD-<topic>.md                implementation plan per slice (14). Mostly pairs 1:1 with a
+                                               spec, but not always: remote-access-and-mobile split into two
+                                               plans (project-a / project-b), artist-album-strip has a spec
+                                               and no plan, stars-and-vetting is spec-only until planned.
+                                               Deliberately NOT enumerated file-by-file — this list rotted
+                                               once (it named 3 of the 13 specs that existed, making features
+                                               that shipped fully specced read as undocumented). Each shipped
+                                               feature links its own spec + plan from its section below; `ls`
+                                               the dirs for the authoritative set.
 ```
 
 ## Feature inventory
