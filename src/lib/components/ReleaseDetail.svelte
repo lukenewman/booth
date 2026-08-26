@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import SourcePanel from './SourcePanel.svelte';
   import SourceGrid from './SourceGrid.svelte';
   import StarButton from './StarButton.svelte';
@@ -78,9 +79,20 @@
 
   // Detail can be reached by deep link with no list page behind it, so the
   // tracklist payload is its own hydration source for the star state.
+  //
+  // Depend on the payload and nothing else. `seed()` reads the annotation Sets
+  // to diff against, so without `untrack` this effect lists its own output as
+  // a dependency: an optimistic star retriggers it, the stale payload (whose
+  // starred_at is still null) is re-applied, and the toggle silently reverts —
+  // the star only appears after a reload. The list path has never had this bug
+  // because the controller hydrates from `loadList`, outside any effect.
   $effect(() => {
-    annotations.hydrateTracks(tracks);
-    annotations.hydrateReleases([release]);
+    const payloadTracks = tracks;
+    const payloadRelease = release;
+    untrack(() => {
+      annotations.hydrateTracks(payloadTracks);
+      annotations.hydrateReleases([payloadRelease]);
+    });
   });
   const releaseCtx = $derived({
     kind: 'release',
