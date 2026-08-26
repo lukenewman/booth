@@ -722,6 +722,52 @@ export function createExplorerController() {
     return null;
   });
 
+
+  /**
+   * Mark a release vetted (or un-vetted) and, when working the Unvetted queue,
+   * open the next release automatically.
+   *
+   * The advance is scoped to the queue on purpose: doing it everywhere would
+   * hijack navigation mid-browse. Inside the queue it is what makes a
+   * ~1,400-release grind survivable — without it you pay an extra navigation
+   * gesture a thousand-odd times.
+   */
+  async function vetAndAdvance(releaseId: string, next = true) {
+    const inQueue =
+      explorerState.nav.section === 'library' && explorerState.nav.item === 'unvetted';
+    const advancing = inQueue && next;
+
+    // Everything that touches reactive state happens synchronously, before the
+    // await. State mutated in the async continuation does not reach the
+    // URL-sync effect — the list and `?id` update internally but the URL and
+    // the rendered rows stay on the previous value. Doing it up front is also
+    // the right UX: the store is already optimistic, so the release should
+    // leave the queue on click, not one round-trip later.
+    let successor: { id: string } | null = null;
+    if (advancing) {
+      const idx = listItems.findIndex((it) => it.id === releaseId);
+      successor = idx >= 0 ? (listItems[idx + 1] ?? listItems[idx - 1] ?? null) : null;
+
+      // Drop it from the queue in place rather than refetching — a refetch
+      // would reset scroll position after every single release.
+      listItems = listItems.filter((it) => it.id !== releaseId);
+      listTotal = Math.max(0, listTotal - 1);
+      explorerState.setEntity(successor ? successor.id : null);
+    }
+
+    // The progress meter is exact without a round-trip: vetting moves exactly
+    // one release out of the unvetted set.
+    counts = {
+      ...counts,
+      unvettedReleases: Math.max(0, counts.unvettedReleases + (next ? -1 : 1)),
+    };
+
+    await annotations.toggleVetted(releaseId, next);
+
+    // Top up if removals have drained the buffer below a screenful.
+    if (advancing && listItems.length < 20 && listHasMore) void loadList(false);
+  }
+
   return {
     get sources() { return sources; },
     get counts() { return counts; },
@@ -759,5 +805,6 @@ export function createExplorerController() {
     popDrill,
     handleUndo,
     handleSync,
+    vetAndAdvance,
   };
 }

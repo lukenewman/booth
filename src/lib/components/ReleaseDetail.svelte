@@ -48,6 +48,7 @@
     onTrackSelect,
     onArtistSelect,
     onRecord,
+    onVet,
     recordDisabled = false,
   }: {
     release: Release;
@@ -66,12 +67,14 @@
     onTrackSelect?: (trackId: string) => void;
     onArtistSelect?: (artistId: string) => void;
     onRecord?: () => void;
+    onVet?: (releaseId: string, next: boolean) => void;
     recordDisabled?: boolean;
   } = $props();
 
   // Playing from a tracklist queues the rest of the release. Filtered to
   // playable tracks so `next` can never land on something with no audio.
   const playableTracks = $derived(tracks.filter((t) => t.canPlay));
+  const isVetted = $derived(annotations.isVetted(release.id));
 
   // Detail can be reached by deep link with no list page behind it, so the
   // tracklist payload is its own hydration source for the star state.
@@ -251,6 +254,20 @@
     </div>
   {/if}
 
+  {#if onVet}
+    <div class="cta-row vet-row">
+      {#if isVetted}
+        <button class="cta-btn vet-btn done" onclick={() => onVet?.(release.id, false)}>
+          Vetted ✓<span class="kbd-hint quiet">undo</span>
+        </button>
+      {:else}
+        <button class="cta-btn vet-btn" onclick={() => onVet?.(release.id, true)}>
+          Mark vetted<span class="kbd-hint">v</span>
+        </button>
+      {/if}
+    </div>
+  {/if}
+
   {#if hasIdentifyingInfo}
     <div class="identify">
       {#if identifiers.length > 0}
@@ -337,6 +354,17 @@
 </div>
 
 <style>
+  .vet-row { margin-top: 6px; }
+  .vet-btn {
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    color: var(--text-muted);
+  }
+  .vet-btn:hover { color: var(--text); border-color: var(--text-subtle); }
+  /* Toggling back is deliberate: mis-vetting must be undoable without a
+     database edit. */
+  .vet-btn.done { color: var(--text-muted); border-color: var(--border); }
+
   .detail { padding: 18px 20px 24px; overflow-y: auto; height: 100%; }
   .breadcrumb {
     background: transparent; border: 0; color: var(--text-muted);

@@ -1,5 +1,6 @@
 <script lang="ts">
   import SourceGrid from './SourceGrid.svelte';
+  import { annotations } from '$lib/stores/annotations.svelte';
   import EmptyState from './EmptyState.svelte';
 
   interface ReleaseItem {
@@ -9,6 +10,8 @@
     year: number | null;
     sources: string[];
     thumbUrl?: string | null;
+    starredCount?: number;
+    vetted_at?: string | null;
   }
 
   let {
@@ -75,6 +78,13 @@
               <div class="artist">{item.artist}</div>
               <div class="bottom">
                 <span class="year">{item.year ?? '—'}</span>
+                <!-- Gold star count vs grey check: see ReleaseList. -->
+                {#if item.starredCount}
+                  <span class="star-count" title="{item.starredCount} starred">★ {item.starredCount}</span>
+                {/if}
+                {#if annotations.isVetted(item.id)}
+                  <span class="vetted" title="Vetted">✓</span>
+                {/if}
                 <SourceGrid present={item.sources} />
               </div>
             </div>
@@ -89,6 +99,14 @@
 </div>
 
 <style>
+  .star-count {
+    color: var(--star);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .vetted { color: var(--text-muted); font-size: 11px; }
+
   .release-grid {
     display: flex;
     flex-direction: column;

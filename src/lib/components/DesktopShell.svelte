@@ -260,6 +260,7 @@ import RecordingPill from './RecordingPill.svelte';
         addCta={releaseDetailCta}
         onTrackSelect={(id) => explorerState.setEntity(id)}
         onArtistSelect={(id) => explorerState.setEntity(id)}
+        onVet={detailData._isDiscogsSearchHit ? undefined : c.vetAndAdvance}
         recordDisabled={recordingRelease !== null}
         onRecord={detailData._isDiscogsSearchHit
           ? undefined

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Listview from './Listview.svelte';
+  import { annotations } from '$lib/stores/annotations.svelte';
   import SourceGrid from './SourceGrid.svelte';
   import EmptyState from './EmptyState.svelte';
 
@@ -19,6 +20,8 @@
     isMaster?: boolean;
     versionCount?: number;
     yearLabel?: string | null;
+    starredCount?: number;
+    vetted_at?: string | null;
   }
 
   let {
@@ -90,6 +93,17 @@
         </div>
         <span class="year">{item.year ?? '—'}</span>
       {/if}
+      <!-- Two facts that must not read alike: a gold star count is "this
+           release has keepers", a grey check is "you have been through it".
+           Starred-but-unvetted is a real, correct state (you started and
+           stopped), and it appears in the Unvetted queue — it only looks like
+           a bug if the two indicators share a colour. -->
+      {#if item.starredCount}
+        <span class="star-count" title="{item.starredCount} starred track{item.starredCount === 1 ? '' : 's'}">★ {item.starredCount}</span>
+      {/if}
+      {#if annotations.isVetted(item.id)}
+        <span class="vetted" title="Vetted">✓</span>
+      {/if}
       <SourceGrid present={item.sources} />
     </div>
   {/snippet}
@@ -99,9 +113,17 @@
 </Listview>
 
 <style>
+  .star-count {
+    color: var(--star);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .vetted { color: var(--text-muted); font-size: 11px; }
+
   .cols, .row {
     display: grid;
-    grid-template-columns: 56px 1fr 56px 56px;
+    grid-template-columns: 56px 1fr 56px auto auto 56px;
     gap: 14px;
     padding: 6px 14px;
     align-items: center;
