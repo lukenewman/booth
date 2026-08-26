@@ -2,7 +2,8 @@
  * Global keyboard dispatcher for the explorer.
  *
  *   /          focus search
- *   s          open scanner overlay (when in add:discogs)
+ *   s          star selected track (opens the scanner in add:discogs)
+ *   v          mark open release vetted, advance in the Unvetted queue
  *   Tab        toggle tracks ↔ releases lens (app-wide)
  *   ↑/↓        move highlight in listview
  *   ⏎          add CTA in detail (when present)
@@ -21,6 +22,8 @@ export interface KeyboardActions {
   undoLast: () => void;
   toggleEntity: () => void;
   toggleShortcuts: () => void;
+  toggleStar: () => void;
+  markVetted: () => void;
   navRailNext: () => void;
   navRailPrev: () => void;
   togglePlay: () => void;
@@ -30,6 +33,12 @@ export interface KeyboardActions {
 
 export interface KeyboardGuards {
   isScannerOpen: () => boolean;
+  /**
+   * True when a scan button is mounted — i.e. we are in Add → Discogs, the
+   * only view that renders one. Element presence is the signal, the same way
+   * `isEntityToggleSuppressed` reads the toolbar toggle.
+   */
+  isScannerAvailable: () => boolean;
   /** True when the toolbar toggle is hidden (e.g. Add → Discogs is release-only). */
   isEntityToggleSuppressed: () => boolean;
 }
@@ -89,8 +98,24 @@ export function installKeyboard(actions: KeyboardActions, guards: KeyboardGuards
     if (e.key === '[')                                      { e.preventDefault(); actions.navRailPrev();    return; }
     if (e.key === ']')                                      { e.preventDefault(); actions.navRailNext();    return; }
     if (e.key === '/')                                     { e.preventDefault(); actions.focusSearch();    return; }
-    if ((e.key === 's' || e.key === 'S') && !guards.isScannerOpen())
-                                                            { e.preventDefault(); actions.openScanner();    return; }
+    // `s` is context-split: the scanner in Add → Discogs, starring everywhere
+    // else. Nothing is taken away — openScanner is DOM-driven (it clicks the
+    // scan button) and that button only renders in the add view, so `s` was
+    // already inert outside it. The split is keyed to which page you are on:
+    // a stable, visually unmistakable context, unlike player state. And it is
+    // total, not overlapping — Add → Discogs lists search hits, which are not
+    // library entities and cannot be starred.
+    if (e.key === 's' || e.key === 'S') {
+      e.preventDefault();
+      if (guards.isScannerAvailable()) {
+        // Already open: stay inert rather than falling through to starring.
+        if (!guards.isScannerOpen()) actions.openScanner();
+      } else {
+        actions.toggleStar();
+      }
+      return;
+    }
+    if (e.key === 'v' || e.key === 'V')                     { e.preventDefault(); actions.markVetted();     return; }
     if (e.key === 'ArrowDown')                              { e.preventDefault(); actions.moveDown();       return; }
     if (e.key === 'ArrowUp')                                { e.preventDefault(); actions.moveUp();         return; }
     if (e.key === 'Enter')                                  { e.preventDefault(); actions.commit();         return; }

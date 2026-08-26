@@ -158,6 +158,18 @@
           buttons[(activeIdx + 1) % buttons.length]?.click();
         },
         toggleShortcuts: () => { shortcutOpen = !shortcutOpen; },
+        // DOM-driven like the actions around it: clicking the row's own star
+        // reuses the exact path a mouse click takes, so there is no second
+        // copy of the toggle logic to drift. Covers both row shapes — listview
+        // rows (.row-btn) and the release tracklist (.track-row).
+        toggleStar: () => {
+          const el = document.activeElement as HTMLElement | null;
+          const row = el?.closest<HTMLElement>('.row-btn, .track-row');
+          row?.querySelector<HTMLButtonElement>('button.star')?.click();
+        },
+        markVetted: () => {
+          document.querySelector<HTMLButtonElement>('.vet-btn')?.click();
+        },
         navRailNext: () => {
           const items = Array.from(document.querySelectorAll<HTMLButtonElement>('.rail button.item'));
           if (items.length === 0) return;
@@ -199,6 +211,9 @@
       },
       {
         isScannerOpen: () => !!document.querySelector('.scanner-overlay'),
+        // The scan button only renders in Add → Discogs, so its presence is
+        // what tells `s` which of its two meanings applies.
+        isScannerAvailable: () => !!document.querySelector('button[title^="Scan barcode"]'),
         // The toolbar omits the toggle for rail items that have no
         // tracks-side concept (Add → Discogs today). The toolbar's `.toggle`
         // element going missing is the DOM-driven signal — Tab becomes a

@@ -10,7 +10,8 @@
   const shortcuts: { key: string; label: string }[] = [
     { key: '[  ]', label: 'Previous / next rail item' },
     { key: '/', label: 'Focus search' },
-    { key: 's', label: 'Toggle scanner mode' },
+    { key: 's', label: 'Star selected track  •  scan barcode in Add → Discogs' },
+    { key: 'v', label: 'Mark release vetted (advances in Unvetted)' },
     { key: 'tab', label: 'Toggle tracks / releases' },
     { key: '↑ ↓', label: 'Move selection in results' },
     { key: '↵', label: 'Open confirm / confirm add' },
