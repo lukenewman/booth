@@ -3,6 +3,14 @@ import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { listTracks, parseSort } from '$lib/server/library/queries';
 
+/**
+ * Tri-state: absent means "no filter", so it must not collapse to a boolean —
+ * `=== '1'` would turn every unfiltered list request into "starred: false".
+ */
+function triState(raw: string | null): boolean | undefined {
+  return raw === null ? undefined : raw === '1';
+}
+
 const MAX_LIMIT = 500;
 const DEFAULT_LIMIT = 200;
 
@@ -17,7 +25,8 @@ export const GET: RequestHandler = async ({ url }) => {
   const offset = Math.max(0, Number.isFinite(rawOffset) ? rawOffset : 0);
 
   const sort = parseSort(url.searchParams.get('sort'));
+  const starred = triState(url.searchParams.get('starred'));
 
-  const result = listTracks(getDb(), { source, q, limit, offset, multiSource, sort });
+  const result = listTracks(getDb(), { source, q, limit, offset, multiSource, sort, starred });
   return json(result);
 };
