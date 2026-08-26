@@ -15,6 +15,8 @@
     allReleases: number;
     allTracks: number;
     allArtists: number;
+    starredTracks: number;
+    unvettedReleases: number;
   }
 
   let {
@@ -89,6 +91,24 @@
     >
       <span>All</span>
       <span class="count">{allCount.toLocaleString()}</span>
+    </button>
+    <button
+      class="item"
+      class:active={isActive('library', 'starred')}
+      onclick={() => onSelect?.({ section: 'library', item: 'starred' })}
+    >
+      <span>Starred</span>
+      <span class="count">{counts.starredTracks.toLocaleString()}</span>
+    </button>
+    <!-- The Unvetted count is the progress meter for working through the
+         collection — it is the number that says how much is left. -->
+    <button
+      class="item"
+      class:active={isActive('library', 'unvetted')}
+      onclick={() => onSelect?.({ section: 'library', item: 'unvetted' })}
+    >
+      <span>Unvetted</span>
+      <span class="count">{counts.unvettedReleases.toLocaleString()}</span>
     </button>
   </div>
 

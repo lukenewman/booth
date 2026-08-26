@@ -37,7 +37,22 @@ export function parseNav(raw: string | null): { nav: NavValue; entityHint: Entit
   if (section === 'library' && item === 'all-tracks') {
     return { nav: { section: 'library', item: 'all' }, entityHint: 'tracks' };
   }
-  return { nav: { section, item }, entityHint: null };
+  const nav: NavValue = { section, item };
+  return { nav, entityHint: navEntityHint(nav) };
+}
+
+/**
+ * Rail items that only make sense under one entity lens. `library:starred` is
+ * a tracks concept and `library:unvetted` a releases concept, so landing on
+ * either with the wrong lens active shows an empty or nonsensical list.
+ *
+ * This only sets the lens on arrival — `Tab` still switches it afterward.
+ */
+export function navEntityHint(nav: NavValue): EntityKind | null {
+  if (nav.section !== 'library') return null;
+  if (nav.item === 'starred') return 'tracks';
+  if (nav.item === 'unvetted') return 'releases';
+  return null;
 }
 
 export function navToString(nav: NavValue): string {
@@ -90,6 +105,9 @@ class ExplorerState {
   setNav(nav: NavValue) {
     this.nav = nav;
     this.id = null;
+    // parseNav's hint covers deep links and reloads; this covers rail clicks.
+    const hint = navEntityHint(nav);
+    if (hint) this.entity = hint;
   }
 
   setEntity(id: string | null) {

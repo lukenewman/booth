@@ -17,6 +17,7 @@
   import { playlists } from '$lib/stores/playlists.svelte';
   import { session } from '$lib/stores/session.svelte';
   import { toast } from '$lib/stores/toast.svelte';
+  import { annotations } from '$lib/stores/annotations.svelte';
 
 export function createExplorerController() {
 
@@ -38,21 +39,27 @@ export function createExplorerController() {
     allReleases: 0,
     allTracks: 0,
     allArtists: 0,
+    starredTracks: 0,
+    unvettedReleases: 0,
   });
   let syncing = $state<string | null>(null); // source id being synced
 
   async function loadSourcesAndCounts() {
-    const [srcRes, allRel, allTrk, allArt] = await Promise.all([
+    const [srcRes, allRel, allTrk, allArt, starTrk, unvetRel] = await Promise.all([
       fetch('/api/sources').then((r) => r.json()),
       fetch('/api/library/releases?limit=1').then((r) => r.json()),
       fetch('/api/library/tracks?limit=1').then((r) => r.json()),
       fetch('/api/library/artists?limit=1').then((r) => r.json()),
+      fetch('/api/library/tracks?starred=1&limit=1').then((r) => r.json()),
+      fetch('/api/library/releases?vetted=0&limit=1').then((r) => r.json()),
     ]);
     sources = srcRes;
     counts = {
       allReleases: allRel.total ?? 0,
       allTracks: allTrk.total ?? 0,
       allArtists: allArt.total ?? 0,
+      starredTracks: starTrk.total ?? 0,
+      unvettedReleases: unvetRel.total ?? 0,
     };
   }
 
@@ -123,6 +130,11 @@ export function createExplorerController() {
         params.set('source', explorerState.nav.item);
       }
 
+      if (explorerState.nav.section === 'library') {
+        if (explorerState.nav.item === 'starred') params.set('starred', '1');
+        else if (explorerState.nav.item === 'unvetted') params.set('vetted', '0');
+      }
+
       // Release-only sources (e.g. Discogs) in tracks-mode: short-circuit to an
       // empty list — the explicit empty-state below explains "no tracks
       // indexed for this source" rather than pretending we hit the server.
@@ -149,6 +161,11 @@ export function createExplorerController() {
           coverUrl: it.cover_url ?? null,
         }));
       }
+      // Seed the annotation store from every page so stars and vetted checks
+      // render on first paint rather than after a second round-trip.
+      if (currentEntity === 'tracks') annotations.hydrateTracks(items);
+      if (currentEntity === 'releases') annotations.hydrateReleases(items);
+
       listItems = reset ? items : [...listItems, ...items];
       listTotal = res.total ?? listItems.length;
       listHasMore = !!res.hasMore;
