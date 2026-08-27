@@ -137,7 +137,11 @@
 <style>
   .cols, .row {
     display: grid;
-    grid-template-columns: 20px 34px minmax(0, 1fr) minmax(0, 1.2fr) 60px 20px 56px;
+    /* Cover column is sized to the meta v-stack's natural height (title 18 +
+       artist 17 + album 17), and the cover itself stretches to the row, so the
+       two stay square against each other. If the stack ever grows, the cover
+       grows with it and object-fit crops rather than distorting. */
+    grid-template-columns: 20px 52px minmax(0, 1fr) minmax(0, 1.2fr) 60px 20px 56px;
     gap: 12px;
     padding: 6px 14px;
     align-items: center;
@@ -206,8 +210,8 @@
 
   .cover {
     position: relative;
-    width: 34px;
-    height: 34px;
+    width: 100%;
+    align-self: stretch;
     border-radius: 3px;
     overflow: hidden;
     background: var(--bg-raised);
