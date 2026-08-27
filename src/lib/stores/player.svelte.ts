@@ -22,9 +22,14 @@ let error = $state<string | null>(null);
 /**
  * Turntable pitch, as a percentage. 0 is the centre detent.
  *
- * Kept across track changes on purpose: a fader on a deck does not spring back
- * when the next record goes on, and someone matching tempo across a set wants
- * the adjustment to persist. `resetPitch` is the way back to centre.
+ * Reset whenever a track loads. This shipped the other way — a fader on a deck
+ * does not spring back when the next record goes on — but Booth is a library
+ * you listen to far more often than a deck you beatmatch on, and a pitch left
+ * from three tracks ago silently altering the next one is a worse default than
+ * losing an adjustment you can re-make in a second.
+ *
+ * The *range* is not reset: ±8 vs ±16 is a standing preference, not a per-track
+ * setting.
  */
 let pitchPercent = $state(0);
 /** Fader travel each way. ±8 is the Technics 1200 default; ±16 is the wide setting. */
@@ -91,6 +96,11 @@ export const player = {
     isPlaying = true;
     currentTime = 0;
     error = null;
+    // Every entry into a new track goes through here — playFrom, and the
+    // queue's own advance — so this is the single place the fader has to
+    // recentre. `resume()` deliberately does not, or unpausing would drop
+    // whatever pitch you were holding.
+    pitchPercent = 0;
   },
 
   /**
@@ -200,6 +210,7 @@ export const player = {
 
   stop() {
     nowPlaying = null;
+    pitchPercent = 0;
     isPlaying = false;
     currentTime = 0;
     duration = 0;
