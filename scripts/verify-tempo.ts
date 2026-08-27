@@ -80,6 +80,16 @@ for (const bpm of [90, 120, 128, 140, 174]) {
   }
 }
 
+// --- Estimates are whole numbers ------------------------------------
+// The decimals this used to emit were the 0.25 BPM search grid showing
+// through, not resolution the estimator actually has.
+{
+  for (const bpm of [90, 128, 174]) {
+    const est = estimateTempo(clickTrack(bpm, 30));
+    assert(est !== null && Number.isInteger(est.bpm), `${bpm} BPM estimate is a whole number`);
+  }
+}
+
 // --- The octave trap -----------------------------------------------
 // A track with alternating strong/weak beats is genuinely periodic at both the
 // beat and half of it. The comb filter plus the prior should keep the beat.

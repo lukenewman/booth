@@ -44,7 +44,24 @@ const PRIOR_CENTRE_BPM = 124;
 const PRIOR_WIDTH_OCTAVES = 0.6;
 
 export interface TempoEstimate {
-  /** Best estimate, one decimal. */
+  /**
+   * Best estimate, rounded to a whole BPM.
+   *
+   * The decimals this used to report were an artifact of the candidate grid,
+   * not measured precision: across 3,639 analysed tracks the fractional part
+   * only ever took four values — .0, .3, .5, .8 — which is exactly the 0.25 BPM
+   * search step. Nothing physical was being resolved. Autocorrelation lags are
+   * whole frames too, so near 128 BPM one frame of lag is worth about 2 BPM;
+   * there is no sub-integer resolution here to report.
+   *
+   * Rounding also matches how the music is made and catalogued. Rounding the
+   * stored estimates lifted exact agreement with the Music.app tags from 364 to
+   * 492 of 570 while leaving ±2 agreement untouched — the decimals were pure
+   * noise around the right answer.
+   *
+   * `formatBpm` still renders decimals, because rekordbox beat-grids over whole
+   * tracks and its fractional BPMs are real.
+   */
   bpm: number;
   /**
    * How well a pulse at `bpm` actually explains the onset envelope: the
@@ -222,7 +239,7 @@ export function tempoFromEnvelope(env: Float32Array): TempoEstimate | null {
   }
 
   return {
-    bpm: Math.round(best.bpm * 10) / 10,
+    bpm: Math.round(best.bpm),
     confidence: Math.round(confidence * 100) / 100,
     candidates: candidates.map((c) => ({ bpm: c.bpm, score: c.score })),
   };
