@@ -1,5 +1,7 @@
 <script lang="ts">
   import SourcePanel from './SourcePanel.svelte';
+  import { PITCH_RANGES } from '$lib/pitch';
+  import { bpmProviderLabel, formatBpm, formatBpmRange, type ResolvedBpm } from '$lib/bpm';
 
   interface SourceLink { source: string; external_id: string; external_url: string | null; match_method: string; }
   interface Facet { source: string; key: string; value: string; }
@@ -21,6 +23,7 @@
     sources,
     facets,
     release,
+    bpm = null,
     sourceMeta,
     onReleaseSelect,
   }: {
@@ -28,6 +31,7 @@
     sources: SourceLink[];
     facets: Facet[];
     release: ParentRelease | null;
+    bpm?: ResolvedBpm | null;
     sourceMeta: SourceMeta[];
     onReleaseSelect?: (releaseId: string) => void;
   } = $props();
@@ -64,6 +68,25 @@
 
   <div class="title">{track.title}</div>
   <div class="artist">{track.artist} · {durationLabel(track.duration_ms)}</div>
+
+  {#if bpm}
+    <!-- The detail pane is the one surface with room to answer "what can I mix
+         this with" in full, so both fader ranges are spelled out rather than
+         only the one the player happens to be set to. -->
+    <div class="tempo">
+      <div class="tempo-head">
+        <span class="tempo-value">{formatBpm(bpm.value)}</span>
+        <span class="tempo-unit">BPM</span>
+        <span class="tempo-src">{bpmProviderLabel(bpm.provider)}</span>
+      </div>
+      {#each PITCH_RANGES as range}
+        <div class="tempo-row">
+          <span class="tempo-range">±{range}%</span>
+          <span class="tempo-span">{formatBpmRange(bpm.value, range)}</span>
+        </div>
+      {/each}
+    </div>
+  {/if}
 
   {#if release}
     <button class="parent-card" onclick={() => onReleaseSelect?.(release.id)}>
@@ -117,6 +140,34 @@
     line-height: 1.3;
   }
   .artist { color: var(--text-muted); font-size: 13px; margin-bottom: 14px; }
+  .tempo {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+  }
+  .tempo-head { display: flex; align-items: baseline; gap: 5px; }
+  .tempo-value {
+    font-size: 18px;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    line-height: 1;
+  }
+  .tempo-unit { font-size: 10px; color: var(--text-muted); letter-spacing: 0.05em; }
+  .tempo-src { margin-left: auto; font-size: 10px; color: var(--text-subtle); }
+  .tempo-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-subtle);
+    margin-top: 3px;
+  }
+  .tempo-span { color: var(--text-muted); }
+
   .parent-card {
     display: flex;
     gap: 10px;

@@ -1,4 +1,6 @@
 import { nextIndex, prevTarget, type PlaybackContext } from '$lib/queue';
+import { clampPitch, nextPitchRange, pitchToRate, type PitchRange } from '$lib/pitch';
+import type { ResolvedBpm } from '$lib/bpm';
 
 export interface NowPlaying {
   trackId: string;
@@ -7,6 +9,8 @@ export interface NowPlaying {
   thumbUrl?: string | null;
   /** Parent release, so the PlayerBar artwork can open its detail pane. Null for a track with no release. */
   releaseId?: string | null;
+  /** Resting tempo, before pitch. Absent for the ~85% of tracks with no source for one. */
+  bpm?: ResolvedBpm | null;
 }
 
 let nowPlaying = $state<NowPlaying | null>(null);
@@ -14,6 +18,17 @@ let isPlaying = $state(false);
 let currentTime = $state(0);
 let duration = $state(0);
 let error = $state<string | null>(null);
+
+/**
+ * Turntable pitch, as a percentage. 0 is the centre detent.
+ *
+ * Kept across track changes on purpose: a fader on a deck does not spring back
+ * when the next record goes on, and someone matching tempo across a set wants
+ * the adjustment to persist. `resetPitch` is the way back to centre.
+ */
+let pitchPercent = $state(0);
+/** Fader travel each way. ±8 is the Technics 1200 default; ±16 is the wide setting. */
+let pitchRange = $state<PitchRange>(8);
 
 let queue = $state<string[]>([]);
 let queueIndex = $state(-1);
@@ -46,6 +61,7 @@ async function resolveMeta(trackId: string): Promise<NowPlaying | null> {
       artist: t.artist,
       thumbUrl: t.thumb_url ?? null,
       releaseId: t.release_id ?? null,
+      bpm: data.bpm ?? null,
     };
     metaCache.set(trackId, meta);
     return meta;
@@ -63,6 +79,10 @@ export const player = {
   get queue() { return queue; },
   get queueIndex() { return queueIndex; },
   get context() { return context; },
+  get pitchPercent() { return pitchPercent; },
+  get pitchRange() { return pitchRange; },
+  /** What the audio element's playbackRate should be for the current pitch. */
+  get playbackRate() { return pitchToRate(pitchPercent); },
   get hasNext() { return nextIndex(queueIndex, queue.length) !== null; },
   get hasPrev() { return queueIndex > 0; },
 
@@ -150,6 +170,27 @@ export const player = {
 
   pause() { isPlaying = false; },
   resume() { isPlaying = true; },
+
+  setPitch(percent: number) {
+    pitchPercent = clampPitch(percent, pitchRange);
+  },
+
+  resetPitch() {
+    pitchPercent = 0;
+  },
+
+  /**
+   * Widen or narrow the fader. Narrowing re-clamps a pitch that no longer fits,
+   * rather than leaving the audio at a rate the fader can no longer express.
+   */
+  setPitchRange(range: PitchRange) {
+    pitchRange = range;
+    this.setPitch(pitchPercent);
+  },
+
+  cyclePitchRange() {
+    this.setPitchRange(nextPitchRange(pitchRange));
+  },
 
   seekTo(t: number) {
     _seeking = true;

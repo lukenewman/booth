@@ -9,6 +9,7 @@
   import EmptyState from './EmptyState.svelte';
   import { player } from '$lib/stores/player.svelte';
   import { translucentDragImage } from '$lib/dnd';
+  import { formatBpm, type ResolvedBpm } from '$lib/bpm';
 
   interface TrackItem {
     id: string;
@@ -22,6 +23,8 @@
     release_id: string | null;
     starred_at?: string | null;
     note?: string | null;
+    /** Resting tempo. Null for the majority of tracks until more BPM sources land. */
+    bpm?: ResolvedBpm | null;
   }
 
   let {
@@ -53,7 +56,42 @@
    * entirely when nothing does — a fixed share for it was stealing width from
    * titles on every row, including the ones with nothing to show there.
    */
+  /**
+   * Below this the row has no width to spare — titles are already ellipsised to
+   * a few characters, and a 46px column plus its gap is a sixth of the viewport.
+   * Matches the shell breakpoint in `+page.svelte`.
+   */
+  const NARROW = 768;
+  let innerWidth = $state(0);
+
   const anyNotes = $derived(items.some((i) => annotations.noteFor(i.id) !== null));
+
+  /**
+   * Same treatment as notes, and for a stronger reason: only about 15% of the
+   * library has a BPM today, so a permanent column would be mostly blank and
+   * would take width from titles on every row that has nothing to put in it.
+   */
+  const anyBpm = $derived(innerWidth > NARROW && items.some((i) => i.bpm != null));
+
+  /**
+   * Built rather than declared because notes and BPM are independent, and four
+   * hardcoded grid templates for the four combinations is how that gets out of
+   * hand. Values match what the two CSS templates used to hold.
+   */
+  const gridTemplate = $derived(
+    [
+      '20px',
+      '52px',
+      anyNotes ? 'minmax(0, 1.7fr)' : 'minmax(0, 1fr)',
+      anyNotes ? 'minmax(0, 1fr)' : null,
+      anyBpm ? '46px' : null,
+      '60px',
+      '20px',
+      '56px',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  );
 
   const libraryCtx = $derived({
     kind: 'library',
@@ -67,6 +105,8 @@
   }
 </script>
 
+<svelte:window bind:innerWidth />
+
 <Listview
   {items}
   {total}
@@ -76,11 +116,12 @@
   {loadMore}
 >
   {#snippet headers()}
-    <div class="cols" class:has-notes={anyNotes}>
+    <div class="cols" class:has-notes={anyNotes} style="grid-template-columns: {gridTemplate}">
       <span></span>
       <span></span>
       <span>Track</span>
       {#if anyNotes}<span>Note</span>{/if}
+      {#if anyBpm}<span class="right">BPM</span>{/if}
       <span class="right">Length</span>
       <span></span>
       <span class="src-label">
@@ -94,13 +135,14 @@
     <div
       class="row"
       class:has-notes={anyNotes}
+      style="grid-template-columns: {gridTemplate}"
       class:playing={isPlaying}
       role="listitem"
       draggable="true"
       ondragstart={(e) => { e.dataTransfer?.setData('application/x-booth-track', item.id); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; if (e.currentTarget instanceof HTMLElement) translucentDragImage(e, e.currentTarget); }}
-      onkeydown={(e) => { if (e.key === 'Enter' && item.canPlay) player.playFrom(libraryCtx, item.id, { trackId: item.id, title: item.title, artist: item.artist, thumbUrl: item.thumb_url, releaseId: item.release_id }); }}
+      onkeydown={(e) => { if (e.key === 'Enter' && item.canPlay) player.playFrom(libraryCtx, item.id, { trackId: item.id, title: item.title, artist: item.artist, thumbUrl: item.thumb_url, releaseId: item.release_id, bpm: item.bpm ?? null }); }}
       onclick={(e) => { if (e.detail > 0) e.stopPropagation(); }}
-      ondblclick={() => { if (item.canPlay) player.playFrom(libraryCtx, item.id, { trackId: item.id, title: item.title, artist: item.artist, thumbUrl: item.thumb_url, releaseId: item.release_id }); }}
+      ondblclick={() => { if (item.canPlay) player.playFrom(libraryCtx, item.id, { trackId: item.id, title: item.title, artist: item.artist, thumbUrl: item.thumb_url, releaseId: item.release_id, bpm: item.bpm ?? null }); }}
     >
       <span
         class="info-icon"
@@ -135,6 +177,9 @@
       {#if anyNotes}
         <div class="note-cell"><TrackNote trackId={item.id} readonly /></div>
       {/if}
+      {#if anyBpm}
+        <span class="bpm">{item.bpm ? formatBpm(item.bpm.value) : ''}</span>
+      {/if}
       <span class="dur">{formatDuration(item.duration_ms)}</span>
       <StarButton trackId={item.id} />
       <SourceGrid present={item.sources} />
@@ -146,20 +191,20 @@
 </Listview>
 
 <style>
+  /* Column widths come from `gridTemplate` inline, because which columns exist
+     depends on what the loaded rows actually carry. Cover column is sized to
+     the meta v-stack's natural height (title 18 + artist 17 + album 17), and
+     the cover itself stretches to the row, so the two stay square against each
+     other. If the stack ever grows, the cover grows with it and object-fit
+     crops rather than distorting. */
   .cols, .row {
     display: grid;
-    /* Cover column is sized to the meta v-stack's natural height (title 18 +
-       artist 17 + album 17), and the cover itself stretches to the row, so the
-       two stay square against each other. If the stack ever grows, the cover
-       grows with it and object-fit crops rather than distorting. */
-    grid-template-columns: 20px 52px minmax(0, 1fr) 60px 20px 56px;
     gap: 12px;
   }
   /* Titles get the larger share when the note column is present: notes are
      supporting detail, and the first version had them 1.2fr against the
      title's 1fr — wider than the thing they annotate. */
   .cols.has-notes, .row.has-notes {
-    grid-template-columns: 20px 52px minmax(0, 1.7fr) minmax(0, 1fr) 60px 20px 56px;
     padding: 6px 14px;
     align-items: center;
   }
@@ -171,6 +216,14 @@
   }
   .row { padding: 7px 14px; }
   .right { text-align: right; }
+  .bpm {
+    text-align: right;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    align-self: center;
+  }
   .src-label {
     display: grid;
     grid-template-columns: repeat(4, 8px);

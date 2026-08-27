@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatBpm, type ResolvedBpm } from '$lib/bpm';
   import { untrack } from 'svelte';
   import SourceGrid from './SourceGrid.svelte';
   import StarButton from './StarButton.svelte';
@@ -18,6 +19,8 @@
     duration_ms: number | null;
     sources: string[];
     canPlay: boolean;
+    /** Resting tempo. Null for the majority of tracks until more BPM sources land. */
+    bpm?: ResolvedBpm | null;
   }
   interface Release {
     id: string;
@@ -92,6 +95,15 @@
       annotations.hydrateReleases([payloadRelease]);
     });
   });
+  /**
+   * Only shown when this record's tracks actually carry tempi — most releases
+   * have none, and an always-on column would narrow every title for nothing.
+   */
+  const anyBpm = $derived(tracks.some((t) => t.bpm != null));
+  const trackGrid = $derived(
+    ['14px', '22px', 'minmax(0, 1fr)', anyBpm ? '40px' : null, '44px'].filter(Boolean).join(' '),
+  );
+
   const releaseCtx = $derived({
     kind: 'release',
     releaseId: release.id,
@@ -190,6 +202,7 @@
         <button
           class="track-row"
           class:playing={isLoaded}
+          style="grid-template-columns: {trackGrid}"
           type="button"
           draggable="true"
           ondragstart={(e) => { e.dataTransfer?.setData('application/x-booth-track', t.id); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; if (e.currentTarget instanceof HTMLElement) translucentDragImage(e, e.currentTarget); }}
@@ -235,7 +248,7 @@
                   e.stopPropagation();
                   if (playState === 'playing') player.pause();
                   else if (playState === 'paused') player.resume();
-                  else player.playFrom(releaseCtx, t.id, { trackId: t.id, title: t.title, artist: release.artist, thumbUrl: release.thumb_url, releaseId: release.id }, releaseSeed);
+                  else player.playFrom(releaseCtx, t.id, { trackId: t.id, title: t.title, artist: release.artist, thumbUrl: release.thumb_url, releaseId: release.id, bpm: t.bpm ?? null }, releaseSeed);
                 }
               : undefined}
             onkeydown={t.canPlay
@@ -249,6 +262,9 @@
             {/if}
           </span>
           <span class="track-title" title={t.title}>{t.title}</span>
+          {#if anyBpm}
+            <span class="track-bpm">{t.bpm ? formatBpm(t.bpm.value) : ''}</span>
+          {/if}
           <span class="track-dur">{durationLabel(t.duration_ms)}</span>
         </button>
         <TrackNote
@@ -521,7 +537,6 @@
   }
   .track-row {
     display: grid;
-    grid-template-columns: 14px 22px minmax(0, 1fr) 44px;
     gap: 8px;
     padding: 4px 0;
     align-items: center;
@@ -588,6 +603,13 @@
   .track-dur {
     color: var(--text-subtle);
     font-family: var(--font-mono);
+    font-size: 11px;
+    text-align: right;
+  }
+  .track-bpm {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
     font-size: 11px;
     text-align: right;
   }

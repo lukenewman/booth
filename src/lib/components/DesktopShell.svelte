@@ -275,6 +275,7 @@ import RecordingPill from './RecordingPill.svelte';
         sources={detailData.sources}
         facets={detailData.facets}
         release={detailData.release}
+        bpm={detailData.bpm}
         sourceMeta={sourceMetaForDetail}
         onReleaseSelect={(id) => explorerState.setEntity(id)}
       />

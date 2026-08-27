@@ -26,6 +26,9 @@
       loadedTrackId = np.trackId;
       audio.src = `/api/stream/${np.trackId}`;
       audio.currentTime = 0;
+      audio.preservesPitch = false;
+      audio.defaultPlaybackRate = player.playbackRate;
+      audio.playbackRate = player.playbackRate;
       if (shouldPlay) {
         audio.play().catch((e: unknown) => player._setError(String(e)));
       }
@@ -36,6 +39,27 @@
         audio.pause();
       }
     }
+  });
+
+  /**
+   * Drive the element's rate from the pitch fader.
+   *
+   * `preservesPitch = false` is the whole point: the default is to time-stretch,
+   * holding pitch constant while tempo moves, which is the opposite of what a
+   * turntable does. Turning it off makes the fader drag pitch along with speed.
+   *
+   * `defaultPlaybackRate` is set alongside `playbackRate` because the former is
+   * what a freshly-loaded source adopts -- without it the first moments of each
+   * new track play back at 1.0 before this effect catches up.
+   */
+  $effect(() => {
+    const rate = player.playbackRate;
+    // Read so the effect re-runs on track change, not only on fader movement.
+    void player.nowPlaying?.trackId;
+    if (!audio) return;
+    audio.preservesPitch = false;
+    audio.defaultPlaybackRate = rate;
+    audio.playbackRate = rate;
   });
 
   /**

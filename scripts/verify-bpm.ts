@@ -4,10 +4,10 @@ import { collate } from '../src/lib/server/library/collate';
 import {
   BPM_KEY_ANALYZED,
   BPM_KEY_TAG,
-  formatBpm,
   resolveBpm,
   resolveBpmForTracks,
 } from '../src/lib/server/library/bpm';
+import { bpmRange, formatBpm, formatBpmRange, pitchedBpm } from '../src/lib/bpm';
 import { getTrackDetail, listTracks } from '../src/lib/server/library/queries';
 
 function fail(msg: string): never {
@@ -60,6 +60,22 @@ assert(resolveBpm(junkOverGood)?.value === 128, 'junk at high precedence falls t
 assert(formatBpm(120) === '120', 'integer formats bare');
 assert(formatBpm(121.5) === '121.5', 'fraction keeps one decimal');
 assert(formatBpm(121.47) === '121.5', 'fraction rounds to one decimal');
+
+// --- Pitched tempo and reachable range ----------------------------
+// This is what the readout exists to answer: what can I mix this with.
+
+assert(pitchedBpm(128, 0) === 128, 'centre leaves the tempo alone');
+assert(Math.abs(pitchedBpm(128, 8) - 138.24) < 1e-9, '+8% on 128 is 138.24');
+assert(Math.abs(pitchedBpm(128, -8) - 117.76) < 1e-9, '-8% on 128 is 117.76');
+
+const r8 = bpmRange(128, 8);
+assert(Math.abs(r8.min - 117.76) < 1e-9, 'range floor matches full negative pitch');
+assert(Math.abs(r8.max - 138.24) < 1e-9, 'range ceiling matches full positive pitch');
+
+const r16 = bpmRange(128, 16);
+assert(r16.min < r8.min && r16.max > r8.max, 'the wide range strictly contains the narrow one');
+
+assert(formatBpmRange(128, 8) === '117.8–138.2', 'range renders to one decimal with an en dash');
 
 // --- Through the DB and the query layer ---------------------------
 

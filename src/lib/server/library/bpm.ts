@@ -1,4 +1,7 @@
 import type { Database } from 'bun:sqlite';
+import type { BpmProvider, ResolvedBpm } from '$lib/bpm';
+
+export type { BpmProvider, ResolvedBpm };
 
 /**
  * BPM is multi-source: several adapters can each hold an opinion about the same
@@ -15,8 +18,6 @@ import type { Database } from 'bun:sqlite';
 export const BPM_KEY_TAG = 'bpm';
 /** Facet key holding a BPM this app computed from the audio itself. */
 export const BPM_KEY_ANALYZED = 'bpmAnalyzed';
-
-export type BpmProvider = 'rekordbox' | 'analysis' | 'tag';
 
 /**
  * Which opinion wins, best first.
@@ -35,11 +36,6 @@ const PRECEDENCE: { provider: BpmProvider; source: string; key: string }[] = [
   { provider: 'analysis', source: 'local', key: BPM_KEY_ANALYZED },
   { provider: 'tag', source: 'local', key: BPM_KEY_TAG },
 ];
-
-export interface ResolvedBpm {
-  value: number;
-  provider: BpmProvider;
-}
 
 interface FacetLike {
   source: string;
@@ -103,12 +99,4 @@ export function resolveBpmForTracks(
     if (resolved) out.set(trackId, resolved);
   }
   return out;
-}
-
-/**
- * Display form. Analysis produces fractional tempi and DJs read the tenth;
- * tags are whole numbers and a trailing ".0" on them is noise.
- */
-export function formatBpm(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }

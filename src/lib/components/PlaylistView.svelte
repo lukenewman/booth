@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatBpm } from '$lib/bpm';
   import { playlists } from '$lib/stores/playlists.svelte';
   import StarButton from './StarButton.svelte';
   import TrackNote from './TrackNote.svelte';
@@ -28,6 +29,30 @@
   // Playing from a playlist queues that playlist, and keeps queueing it even
   // after you navigate away — the context is captured at play time.
   const playablePl = $derived((open?.tracks ?? []).filter((t: { canPlay?: boolean }) => t.canPlay));
+  /**
+   * Set prep is the case BPM matters most for, but only ~15% of the library has
+   * one today, so the column earns its width only when something in this
+   * playlist can fill it.
+   */
+  const NARROW = 768;
+  let innerWidth = $state(0);
+  const anyBpm = $derived(innerWidth > NARROW && (open?.tracks ?? []).some((t) => t.bpm != null));
+  const gridTemplate = $derived(
+    [
+      '28px',
+      'minmax(0, 2.2fr)',
+      'minmax(0, 1.5fr)',
+      'minmax(0, 1.5fr)',
+      anyBpm ? '46px' : null,
+      '56px',
+      '20px',
+      '20px',
+      '28px',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  );
+
   const playlistCtx = $derived({
     kind: 'playlist',
     playlistId: open?.id ?? '',
@@ -146,6 +171,8 @@
   }
 </script>
 
+<svelte:window bind:innerWidth />
+
 {#if !open}
   <EmptyState title="Loading…" />
 {:else}
@@ -203,11 +230,12 @@
   </div>
 
   <div class="listview">
-    <div class="cols">
+    <div class="cols" style="grid-template-columns: {gridTemplate}">
       <span></span>
       <span>Track</span>
       <span>Artist</span>
       <span>Release</span>
+      {#if anyBpm}<span class="right">BPM</span>{/if}
       <span class="right">Length</span>
       <span></span>
       <span></span>
@@ -228,9 +256,9 @@
             draggable="true"
             ondragstart={(e) => onDragStart(e, t.id)}
             onclick={(e) => { if (e.detail > 0) e.stopPropagation(); else onTrackSelect?.(t.id); }}
-            ondblclick={() => { if (t.canPlay) player.playFrom(playlistCtx, t.id, { trackId: t.id, title: t.title, artist: t.artist, thumbUrl: t.thumb_url, releaseId: t.release_id }, playlistSeed); }}
+            ondblclick={() => { if (t.canPlay) player.playFrom(playlistCtx, t.id, { trackId: t.id, title: t.title, artist: t.artist, thumbUrl: t.thumb_url, releaseId: t.release_id, bpm: t.bpm ?? null }, playlistSeed); }}
           >
-            <span class="row">
+            <span class="row" style="grid-template-columns: {gridTemplate}">
               <span class="thumb" class:playing={isPlaying}>
                 {#if t.thumb_url}<img src={t.thumb_url} alt="" loading="lazy" />{/if}
                 {#if isPlaying}<span class="play-badge">▶</span>{/if}
@@ -256,6 +284,9 @@
                 >{t.album ?? '—'}</span>
               {:else}
                 <span class="cell release">{t.album ?? '—'}</span>
+              {/if}
+              {#if anyBpm}
+                <span class="bpm">{t.bpm ? formatBpm(t.bpm.value) : ''}</span>
               {/if}
               <span class="dur">{formatDuration(t.duration_ms)}</span>
               <StarButton trackId={t.id} />
@@ -412,9 +443,10 @@
   .row-btn:hover { background: var(--bg-row-hover); }
   .row-btn.selected { background: var(--accent-bg); }
   .row-btn.drop-over { box-shadow: inset 0 2px 0 var(--accent); }
+  /* Columns come from `gridTemplate` inline: whether BPM is present depends on
+     what this playlist's tracks actually carry. */
   .cols, .row {
     display: grid;
-    grid-template-columns: 28px minmax(0, 2.2fr) minmax(0, 1.5fr) minmax(0, 1.5fr) 56px 20px 20px 28px;
     gap: 12px;
     align-items: center;
   }
@@ -447,6 +479,7 @@
   .cell.link { cursor: pointer; }
   .cell.link:hover { color: var(--text); text-decoration: underline; }
   .row-btn.playing .title { color: var(--accent); }
+  .bpm { color: var(--text-muted); font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 11.5px; text-align: right; }
   .dur { color: var(--text-subtle); font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 11.5px; text-align: right; }
   .remove { color: transparent; text-align: center; cursor: pointer; font-size: 14px; user-select: none; }
 

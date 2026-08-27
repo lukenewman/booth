@@ -2,6 +2,8 @@
   import { player } from '$lib/stores/player.svelte';
   import StarButton from './StarButton.svelte';
   import { PREV_RESTART_THRESHOLD_S } from '$lib/queue';
+  import { formatPitch } from '$lib/pitch';
+  import { formatBpm, formatBpmRange, pitchedBpm } from '$lib/bpm';
 
   let { onOpenRelease }: { onOpenRelease?: (releaseId: string) => void } = $props();
 
@@ -31,6 +33,13 @@
   // parent release (or no handler wired) keeps the plain, non-interactive image.
   const releaseId = $derived(player.nowPlaying?.releaseId ?? null);
   const artIsLink = $derived(!!releaseId && !!onOpenRelease);
+
+  const pitchLabel = $derived(formatPitch(player.pitchPercent));
+
+  // Resting tempo. Absent for most tracks until more BPM sources land, so every
+  // readout below is gated on it rather than rendering a dash.
+  const baseBpm = $derived(player.nowPlaying?.bpm?.value ?? null);
+  const liveBpm = $derived(baseBpm === null ? null : pitchedBpm(baseBpm, player.pitchPercent));
 </script>
 
 {#if player.nowPlaying}
@@ -110,7 +119,40 @@
       </div>
     </div>
 
-    <div class="right-spacer"></div>
+    <div class="right-spacer">
+      {#if baseBpm !== null && liveBpm !== null}
+        <!-- Live tempo on top, because that is the number being mixed against;
+             the resting value and the range the fader can reach sit under it. -->
+        <div class="bpm" title="{formatBpm(baseBpm)} BPM {player.nowPlaying?.bpm?.provider === 'tag' ? 'from file tag' : player.nowPlaying?.bpm?.provider === 'rekordbox' ? 'from rekordbox' : 'analysed'}">
+          <span class="bpm-live" class:pitched={player.pitchPercent !== 0}>{formatBpm(Math.round(liveBpm * 10) / 10)}</span>
+          <span class="bpm-sub">
+            {formatBpm(baseBpm)} · {formatBpmRange(baseBpm, player.pitchRange)}
+          </span>
+        </div>
+      {/if}
+      <div class="pitch">
+        <span class="pitch-value" class:active={player.pitchPercent !== 0}>{pitchLabel}</span>
+        <input
+          class="fader"
+          type="range"
+          min={-player.pitchRange}
+          max={player.pitchRange}
+          step="0.1"
+          value={player.pitchPercent}
+          oninput={(e) => player.setPitch(Number((e.target as HTMLInputElement).value))}
+          ondblclick={() => player.resetPitch()}
+          aria-label="Pitch adjustment"
+          title="Pitch — double-click to reset"
+        />
+        <button
+          class="pitch-range"
+          type="button"
+          onclick={() => player.cyclePitchRange()}
+          title="Toggle fader range"
+          aria-label={`Fader range plus or minus ${player.pitchRange} percent`}
+        >±{player.pitchRange}</button>
+      </div>
+    </div>
   </div>
 {/if}
 
@@ -249,5 +291,86 @@
     accent-color: var(--accent);
   }
 
-  .right-spacer { flex: 1; }
+  /* Balances the info column on the left so the transport stays centred, and
+     hosts the pitch fader at its right edge. */
+  .right-spacer {
+    flex: 1;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .bpm {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+  .bpm-live {
+    font-size: 15px;
+    color: var(--text);
+  }
+  /* Off-centre, the big number is no longer the track's own tempo. */
+  .bpm-live.pitched { color: var(--accent); }
+  .bpm-sub {
+    font-size: 9.5px;
+    color: var(--text-subtle);
+  }
+
+  .pitch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .pitch-value {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-subtle);
+    min-width: 44px;
+    text-align: center;
+    line-height: 1;
+  }
+  /* Off-centre is a state worth noticing -- it survives track changes. */
+  .pitch-value.active { color: var(--accent); }
+
+  /* Vertical fader: a pitch control reads as a fader, not a scrubber. + is at
+     the top, which is the software convention; a real 1200 has it at the
+     bottom. Flip by swapping `direction` if that ever matters more. */
+  .fader {
+    writing-mode: vertical-lr;
+    direction: rtl;
+    width: 3px;
+    height: 44px;
+    cursor: pointer;
+    accent-color: var(--accent);
+  }
+
+  .pitch-range {
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-subtle);
+    font-size: 9px;
+    font-family: var(--font-mono);
+    line-height: 1;
+    padding: 2px 4px;
+    cursor: pointer;
+  }
+  .pitch-range:hover { color: var(--text); border-color: var(--text-subtle); }
+
+  /* The bar already runs out of room on a phone — the title and the end of the
+     scrubber are cut off before any of this is added. Rather than push more
+     content off the right edge, drop the tempo readout and the fader there and
+     keep the spacer, so the transport stays where it was. A phone-sized player
+     bar needs its own layout; this is not that. */
+  @media (max-width: 768px) {
+    .bpm, .pitch { display: none; }
+  }
 </style>

@@ -1,3 +1,4 @@
+import type { ResolvedBpm } from '$lib/bpm';
 export interface PlaylistSummary {
   id: string;
   name: string;
@@ -18,6 +19,8 @@ export interface PlaylistTrack {
   thumb_url: string | null;
   sources: string[];
   canPlay: boolean;
+  /** Resting tempo. Null for the majority of tracks until more BPM sources land. */
+  bpm?: ResolvedBpm | null;
 }
 
 export interface PlaylistDetail {
