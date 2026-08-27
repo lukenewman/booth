@@ -98,6 +98,7 @@ export async function syncITunesLibrary(): Promise<SyncResult> {
       filePath: t.location,
       releaseExternalId: groupKey ? syntheticReleaseId(groupKey) : undefined,
       facets: pickDefined({
+        bpm: t.bpm,
         rating: t.rating,
         playCount: t.playCount,
         dateAdded: t.dateAdded,

@@ -20,6 +20,8 @@ export interface ITunesTrack {
   year?: number;
   totalTimeMs?: number;
   trackNumber?: number;
+  /** Music.app's own BPM field. Sparse — only ~15% of a typical library carries one. */
+  bpm?: number;
   rating?: number;       // 0..100 in iTunes; 100 = 5 stars
   playCount?: number;
   genre?: string;
@@ -73,6 +75,7 @@ export function parseITunesLibrary(xmlPath: string): ITunesLibrary {
       year: t['Year'] as number | undefined,
       totalTimeMs: t['Total Time'] as number | undefined,
       trackNumber: t['Track Number'] as number | undefined,
+      bpm: t['BPM'] as number | undefined,
       rating: t['Rating'] as number | undefined,
       playCount: t['Play Count'] as number | undefined,
       genre: t['Genre'] as string | undefined,

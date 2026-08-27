@@ -10,6 +10,7 @@ const playableSources = new Set(
 );
 
 import { countStarredByRelease } from './annotations';
+import { resolveBpm, resolveBpmForTracks, type ResolvedBpm } from './bpm';
 
 export function getMembershipExternalIds(
   db: Database,
@@ -354,10 +355,17 @@ export function listTracks(
     sourceMap.set(entity_id, list);
   }
 
+  const bpmMap = resolveBpmForTracks(db, ids);
+
   return {
     items: rows.map((r) => {
       const sources = sourceMap.get(r.id) ?? [];
-      return { ...r, sources, canPlay: sources.some((s) => playableSources.has(s)) };
+      return {
+        ...r,
+        sources,
+        canPlay: sources.some((s) => playableSources.has(s)),
+        bpm: bpmMap.get(r.id) ?? null,
+      };
     }),
     total: totalRow.n,
     hasMore: args.offset + rows.length < totalRow.n,
@@ -429,13 +437,20 @@ export function getReleaseDetail(
     trackSourceMap.set(entity_id, list);
   }
 
+  const trackBpm = resolveBpmForTracks(db, trackIds);
+
   return {
     release,
     sources,
     facets,
     tracks: tracks.map((t) => {
       const sources = trackSourceMap.get(t.id) ?? [];
-      return { ...t, sources, canPlay: sources.some((s) => playableSources.has(s)) };
+      return {
+        ...t,
+        sources,
+        canPlay: sources.some((s) => playableSources.has(s)),
+        bpm: trackBpm.get(t.id) ?? null,
+      };
     }),
   };
 }
@@ -448,6 +463,7 @@ export function getTrackDetail(
   sources: SourceLinkRow[];
   facets: SourceFacetRow[];
   release: ReleaseRow | null;
+  bpm: ResolvedBpm | null;
 } | null {
   const track = db
     .prepare(
@@ -489,7 +505,7 @@ export function getTrackDetail(
         .get(track.release_id) as ReleaseRow | undefined) ?? null;
   }
 
-  return { track, sources, facets, release };
+  return { track, sources, facets, release, bpm: resolveBpm(facets) };
 }
 
 // ---- Artists -----------------------------------------------------
@@ -687,7 +703,12 @@ export interface ArtistDetail {
  * Returned as a Map keyed by track id so callers can re-order as they like
  * (e.g. playlists order by their own `position`). Unknown ids are absent.
  */
-export type TrackRowWithRefs = TrackRow & { sources: string[]; canPlay: boolean; artist_id: string };
+export type TrackRowWithRefs = TrackRow & {
+  sources: string[];
+  canPlay: boolean;
+  artist_id: string;
+  bpm: ResolvedBpm | null;
+};
 
 export function getTracksByIds(
   db: Database,
@@ -723,9 +744,16 @@ export function getTracksByIds(
     sourceMap.set(entity_id, list);
   }
 
+  const bpmMap = resolveBpmForTracks(db, ids);
+
   for (const r of rows) {
     const sources = sourceMap.get(r.id) ?? [];
-    out.set(r.id, { ...r, sources, canPlay: sources.some((s) => playableSources.has(s)) });
+    out.set(r.id, {
+      ...r,
+      sources,
+      canPlay: sources.some((s) => playableSources.has(s)),
+      bpm: bpmMap.get(r.id) ?? null,
+    });
   }
   return out;
 }
