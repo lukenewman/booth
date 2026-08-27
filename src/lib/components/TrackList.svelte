@@ -80,7 +80,6 @@
    */
   const gridTemplate = $derived(
     [
-      '20px',
       '52px',
       anyNotes ? 'minmax(0, 1.7fr)' : 'minmax(0, 1fr)',
       anyNotes ? 'minmax(0, 1fr)' : null,
@@ -88,6 +87,7 @@
       '60px',
       '20px',
       '56px',
+      '20px',
     ]
       .filter(Boolean)
       .join(' '),
@@ -118,7 +118,6 @@
   {#snippet headers()}
     <div class="cols" class:has-notes={anyNotes} style="grid-template-columns: {gridTemplate}">
       <span></span>
-      <span></span>
       <span>Track</span>
       {#if anyNotes}<span>Note</span>{/if}
       {#if anyBpm}<span class="right">BPM</span>{/if}
@@ -127,6 +126,7 @@
       <span class="src-label">
         <span>D</span><span>i</span><span>R</span><span>P</span>
       </span>
+      <span></span>
     </div>
   {/snippet}
   {#snippet row(item)}
@@ -144,25 +144,13 @@
       onclick={(e) => { if (e.detail > 0) e.stopPropagation(); }}
       ondblclick={() => { if (item.canPlay) player.playFrom(libraryCtx, item.id, { trackId: item.id, title: item.title, artist: item.artist, thumbUrl: item.thumb_url, releaseId: item.release_id, bpm: item.bpm ?? null }); }}
     >
-      <span
-        class="info-icon"
-        role="button"
-        tabindex="-1"
-        aria-label="View details for {item.title}"
-        onclick={(e) => { e.stopPropagation(); onSelect?.(item.id); }}
-        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onSelect?.(item.id); } }}
-        ondblclick={(e) => e.stopPropagation()}
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <circle cx="12" cy="12" r="9.25" stroke="currentColor" stroke-width="1.6"/>
-          <path d="M12 10.6v6.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-          <circle cx="12" cy="7.4" r="1.1" fill="currentColor"/>
-        </svg>
-      </span>
       <!-- The ▶ used to ride on the info icon, which meant that slot changed
            meaning depending on player state. Now that rows have art, the
            playing badge lives on the cover — the same pattern PlaylistView
-           already uses — and the info icon only ever means "open details". -->
+           already uses — and the info icon only ever means "open details".
+           The icon itself sits at the end of the row: it opens the detail
+           pane, so it belongs on the edge nearest that pane, and leading with
+           an empty 20px slot left an odd gap in front of the cover art. -->
       <div class="cover" class:playing={isPlaying}>
         {#if item.thumb_url}
           <img src={item.thumb_url} alt="" loading="lazy">
@@ -183,6 +171,21 @@
       <span class="dur">{formatDuration(item.duration_ms)}</span>
       <StarButton trackId={item.id} />
       <SourceGrid present={item.sources} />
+      <span
+        class="info-icon"
+        role="button"
+        tabindex="-1"
+        aria-label="View details for {item.title}"
+        onclick={(e) => { e.stopPropagation(); onSelect?.(item.id); }}
+        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onSelect?.(item.id); } }}
+        ondblclick={(e) => e.stopPropagation()}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="9.25" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M12 10.6v6.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <circle cx="12" cy="7.4" r="1.1" fill="currentColor"/>
+        </svg>
+      </span>
     </div>
   {/snippet}
   {#snippet empty()}
@@ -267,6 +270,7 @@
   .info-icon {
     display: flex;
     align-items: center;
+    align-self: center;
     justify-content: center;
     color: var(--text-muted);
     opacity: 0;
