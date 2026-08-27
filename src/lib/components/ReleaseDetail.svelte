@@ -195,6 +195,15 @@
           ondragstart={(e) => { e.dataTransfer?.setData('application/x-booth-track', t.id); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; if (e.currentTarget instanceof HTMLElement) translucentDragImage(e, e.currentTarget); }}
           onclick={(e) => {
             if (e.detail === 0) { onTrackSelect?.(t.id); return; }
+            // A click that started on a control inside the row belongs to that
+            // control, not to the row. The children already call
+            // stopPropagation(), but that is not enough: Svelte 5 delegates
+            // `click` to the root and the row's handler can run before the
+            // child's, so on a real mouse click the transport and star were
+            // being swallowed and the note editor opened instead. (Synthetic
+            // dispatchEvent bubbles natively and hid this in testing.)
+            const origin = e.target as HTMLElement | null;
+            if (origin?.closest('.index.playable, .star')) return;
             // Real click opens the note editor. Double-click-to-play is gone —
             // the transport in the index cell covers playback, which frees this
             // gesture without the click/dblclick race a delayed handler needs.
@@ -208,24 +217,36 @@
                track is playing or paused, so a loaded track is identifiable
                without hovering. Both sit in the same grid cell, so the swap
                costs no layout shift. -->
-          <span class="index" class:loaded={isLoaded}>
+          <!-- The cell is the control, not the glyph inside it. The number and
+               the transport are stacked in one grid area, and `opacity: 0` does
+               not remove an element from hit-testing — so clicks aimed at the
+               ▶ were landing on the hidden number, which has no handler, and
+               falling through to the row. Making the cell the target also turns
+               a 10×15px hit area into the full cell. -->
+          <span
+            class="index"
+            class:loaded={isLoaded}
+            class:playable={t.canPlay}
+            role={t.canPlay ? 'button' : undefined}
+            tabindex="-1"
+            aria-label={t.canPlay ? transportLabel(playState, t.title) : undefined}
+            onclick={t.canPlay
+              ? (e) => {
+                  e.stopPropagation();
+                  if (playState === 'playing') player.pause();
+                  else if (playState === 'paused') player.resume();
+                  else player.playFrom(releaseCtx, t.id, { trackId: t.id, title: t.title, artist: release.artist, thumbUrl: release.thumb_url, releaseId: release.id }, releaseSeed);
+                }
+              : undefined}
+            onkeydown={t.canPlay
+              ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.currentTarget.click(); } }
+              : undefined}
+            ondblclick={(e) => e.stopPropagation()}
+          >
             <span class="idx-num">{t.position ?? ''}</span>
-          {#if t.canPlay}
-            <span
-              class="idx-transport"
-              role="button"
-              tabindex="-1"
-              aria-label={transportLabel(playState, t.title)}
-              onclick={(e) => {
-                e.stopPropagation();
-                if (playState === 'playing') player.pause();
-                else if (playState === 'paused') player.resume();
-                else player.playFrom(releaseCtx, t.id, { trackId: t.id, title: t.title, artist: release.artist, thumbUrl: release.thumb_url, releaseId: release.id }, releaseSeed);
-              }}
-              onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.currentTarget.click(); } }}
-              ondblclick={(e) => e.stopPropagation()}
-            >{transportGlyph(playState)}</span>
-          {/if}
+            {#if t.canPlay}
+              <span class="idx-transport">{transportGlyph(playState)}</span>
+            {/if}
           </span>
           <span class="track-title" title={t.title}>{t.title}</span>
           <span class="track-dur">{durationLabel(t.duration_ms)}</span>
@@ -532,8 +553,11 @@
     place-items: center;
     font-size: 11px;
   }
+  /* Purely visual: the cell handles the click, so these must not be hit
+     targets competing with each other inside it. */
   .idx-num, .idx-transport {
     grid-area: 1 / 1;
+    pointer-events: none;
     user-select: none;
     transition: opacity 0.1s;
   }
@@ -541,6 +565,7 @@
     color: var(--text-subtle);
     font-family: var(--font-mono);
   }
+  .index.playable { cursor: pointer; }
   .idx-transport {
     color: var(--text-muted);
     font-size: 12px;
@@ -553,7 +578,7 @@
   .track-row:hover .idx-num,
   .index.loaded .idx-num { opacity: 0; }
   .index.loaded .idx-transport { color: var(--accent); }
-  .idx-transport:hover { color: var(--accent-strong); }
+  .index.playable:hover .idx-transport { color: var(--accent-strong); }
 
   .track-title {
     color: var(--text);
