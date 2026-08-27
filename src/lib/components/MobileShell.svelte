@@ -184,9 +184,7 @@
         <ReleaseDetail
           release={detailData.release}
           sources={detailData.sources}
-          facets={detailData.facets}
           tracks={detailData.tracks ?? []}
-          sourceMeta={sourceMetaForDetail}
           notes={detailData.notes ?? null}
           identifiers={detailData.identifiers ?? []}
           addCta={releaseDetailCta}

@@ -108,6 +108,7 @@ interface ListReleasesArgs {
   multiSource?: boolean;
   sort?: SortKey;
   vetted?: boolean;
+  hasStarred?: boolean;
 }
 
 export function listReleases(
@@ -130,6 +131,18 @@ export function listReleases(
          WHERE entity_kind='release'
          GROUP BY entity_id
          HAVING COUNT(DISTINCT source) >= 2
+       )`,
+    );
+  }
+  // "Starred" under the releases lens means "records I pulled keepers from".
+  // A release has no star of its own (see the spec: a release-level star is
+  // ambiguous between "front-to-back keeper" and "contains starred tracks"),
+  // so this is the derived reading of the same idea.
+  if (args.hasStarred) {
+    where.push(
+      `release.id IN (
+         SELECT release_id FROM track
+          WHERE starred_at IS NOT NULL AND release_id IS NOT NULL
        )`,
     );
   }
@@ -522,6 +535,7 @@ interface ListArtistsArgs {
   limit: number;
   offset: number;
   multiSource?: boolean;
+  hasStarred?: boolean;
 }
 
 export interface ArtistListItem extends ArtistRow {
@@ -540,6 +554,11 @@ export function listArtists(
   // whether any release- or track-side source_link with this source exists
   // for the artist's child entities.
   const where: string[] = [];
+  // Same derived reading as releases: artists I pulled keepers from.
+  if (args.hasStarred) {
+    where.push(`artist.id IN (SELECT artist_id FROM track WHERE starred_at IS NOT NULL)`);
+  }
+
   const params: string[] = [];
 
   if (args.source) {

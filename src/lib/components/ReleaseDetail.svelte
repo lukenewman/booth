@@ -1,6 +1,5 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import SourcePanel from './SourcePanel.svelte';
   import SourceGrid from './SourceGrid.svelte';
   import StarButton from './StarButton.svelte';
   import { annotations } from '$lib/stores/annotations.svelte';
@@ -10,7 +9,6 @@
   import type { PlaybackContext } from '$lib/queue';
 
   interface SourceLink { source: string; external_id: string; external_url: string | null; match_method: string; }
-  interface Facet { source: string; key: string; value: string; }
   interface Track {
     id: string;
     title: string;
@@ -34,15 +32,12 @@
     format?: string | null;
     vetted_at?: string | null;
   }
-  interface SourceMeta { id: string; name: string; isStub: boolean; }
   interface Identifier { type: string; value: string; description: string | null; }
 
   let {
     release,
     sources,
-    facets,
     tracks,
-    sourceMeta,
     notes = null,
     identifiers = [],
     addCta = null,
@@ -54,9 +49,7 @@
   }: {
     release: Release;
     sources: SourceLink[];
-    facets: Facet[];
     tracks: Track[];
-    sourceMeta: SourceMeta[];
     notes?: string | null;
     identifiers?: Identifier[];
     addCta?: {
@@ -115,31 +108,13 @@
     sources.find((s) => s.source === 'discogs')?.external_url ?? null,
   );
 
-  /** Group facets by source id, deciding which keys to show as mono. */
-  function facetRowsFor(sourceId: string) {
-    const monoKeys = new Set(['catno', 'release id', 'external id', 'file', 'file path']);
-    return facets
-      .filter((f) => f.source === sourceId)
-      .map((f) => ({
-        key: f.key.toLowerCase(),
-        value: f.value,
-        mono: monoKeys.has(f.key.toLowerCase()),
-      }));
-  }
-
   function durationLabel(ms: number | null): string {
     if (!ms) return '—';
     const s = Math.round(ms / 1000);
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }
 
-  // Sources we want to *always* render a panel for (in registry order),
-  // regardless of whether the release has a link. Lets stub sources show
-  // their "not implemented" placeholder.
-  const ALL_SOURCE_IDS = ['discogs', 'local', 'rekordbox', 'plex'];
-
   const sourcesById = $derived(new Map(sources.map((s) => [s.source, s])));
-  const metaById = $derived(new Map(sourceMeta.map((m) => [m.id, m])));
 
   interface ReleaseVideo { url: string; title: string; youtubeId: string | null; }
   let videos = $state<ReleaseVideo[]>([]);
@@ -178,7 +153,13 @@
     <div class="cover"></div>
   {/if}
   <div class="release-header">
-    <div class="title">{release.title}</div>
+    <div class="title-row">
+      <div class="title">{release.title}</div>
+      <!-- Inline with the title rather than stacked under the header: which
+           sources contribute is an attribute of the release, and it reads as
+           one fact alongside the name instead of a separate block. -->
+      <SourceGrid present={sources.map((src) => src.source)} />
+    </div>
     <div class="artist">{release.artist}{release.year ? ` · ${release.year}` : ''}</div>
     {#if release.label || release.catno || release.country || release.format}
       <div class="release-meta">
@@ -209,19 +190,17 @@
           onclick={(e) => { if (e.detail > 0) e.stopPropagation(); else onTrackSelect?.(t.id); }}
           ondblclick={() => { if (t.canPlay) player.playFrom(releaseCtx, t.id, { trackId: t.id, title: t.title, artist: release.artist, thumbUrl: release.thumb_url, releaseId: release.id }, releaseSeed); }}
         >
-          <span class="position">{t.position ?? ''}</span>
-          <span class="track-title">{t.title}</span>
-          <span class="track-dur">{durationLabel(t.duration_ms)}</span>
           <StarButton trackId={t.id} />
-          <SourceGrid present={t.sources} />
+          <!-- Index and transport share one cell. The number is the resting
+               state; the transport takes over on hover and stays put while the
+               track is playing or paused, so a loaded track is identifiable
+               without hovering. Both sit in the same grid cell, so the swap
+               costs no layout shift. -->
+          <span class="index" class:loaded={isLoaded}>
+            <span class="idx-num">{t.position ?? ''}</span>
           {#if t.canPlay}
-            <!-- Real transport control. This slot used to be the detail chevron
-                 wearing a ▶ whenever the track was merely loaded, so clicking it
-                 opened track detail and a paused track looked like a playing one.
-                 Row click still opens detail, so nothing is lost. -->
             <span
-              class="transport-icon"
-              class:loaded={isLoaded}
+              class="idx-transport"
               role="button"
               tabindex="-1"
               aria-label={transportLabel(playState, t.title)}
@@ -234,17 +213,10 @@
               onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.currentTarget.click(); } }}
               ondblclick={(e) => e.stopPropagation()}
             >{transportGlyph(playState)}</span>
-          {:else}
-            <span
-              class="info-icon"
-              role="button"
-              tabindex="-1"
-              aria-label="View details for {t.title}"
-              onclick={(e) => { e.stopPropagation(); onTrackSelect?.(t.id); }}
-              onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onTrackSelect?.(t.id); } }}
-              ondblclick={(e) => e.stopPropagation()}
-            >›</span>
           {/if}
+          </span>
+          <span class="track-title" title={t.title}>{t.title}</span>
+          <span class="track-dur">{durationLabel(t.duration_ms)}</span>
         </button>
       {/each}
     </div>
@@ -348,24 +320,17 @@
     </div>
   {/if}
 
-  {#each ALL_SOURCE_IDS as sid}
-    {@const link = sourcesById.get(sid)}
-    {@const meta = metaById.get(sid)}
-    {#if meta}
-      {#if link || meta.isStub}
-        <SourcePanel
-          sourceId={sid}
-          sourceName={meta.name}
-          isStub={meta.isStub && !link}
-          externalUrl={link?.external_url ?? null}
-          facets={link ? facetRowsFor(sid) : []}
-        />
-      {/if}
-    {/if}
-  {/each}
 </div>
 
 <style>
+  .title-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+  }
+  .title-row .title { min-width: 0; }
+
   .vet-row { margin-top: 6px; }
   .vet-btn {
     background: transparent;
@@ -512,8 +477,8 @@
   }
   .track-row {
     display: grid;
-    grid-template-columns: 28px 1fr 48px 20px 56px 20px;
-    gap: 10px;
+    grid-template-columns: 14px 22px minmax(0, 1fr) 44px;
+    gap: 8px;
     padding: 4px 0;
     align-items: center;
     background: transparent;
@@ -526,14 +491,49 @@
     font-size: 12px;
   }
   .track-row:hover { background: var(--bg-row-hover); }
-  .position {
-    color: var(--text-subtle);
-    font-family: var(--font-mono);
+
+  /* Index and transport occupy the same grid cell so swapping them shifts
+     nothing. The number rests; the transport takes over on hover, and holds
+     its place while loaded so a playing or paused track stays identifiable
+     with the pointer elsewhere. */
+  /* The star's own horizontal padding was landing on the left of the index and
+     nowhere on its right, so the number sat 4px off-centre between the two.
+     Zero side padding here makes the button box equal its glyph, which leaves
+     the index's own centring symmetric. */
+  .track-row :global(button.star) { padding: 2px 0; }
+
+  .index {
+    display: grid;
+    place-items: center;
     font-size: 11px;
   }
+  .idx-num, .idx-transport {
+    grid-area: 1 / 1;
+    user-select: none;
+    transition: opacity 0.1s;
+  }
+  .idx-num {
+    color: var(--text-subtle);
+    font-family: var(--font-mono);
+  }
+  .idx-transport {
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    opacity: 0;
+  }
+  .track-row:hover .idx-transport,
+  .idx-transport:focus-visible,
+  .index.loaded .idx-transport { opacity: 1; }
+  .track-row:hover .idx-num,
+  .index.loaded .idx-num { opacity: 0; }
+  .index.loaded .idx-transport { color: var(--accent); }
+  .idx-transport:hover { color: var(--accent-strong); }
+
   .track-title {
     color: var(--text);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 0;
   }
   .track-dur {
     color: var(--text-subtle);
@@ -541,28 +541,7 @@
     font-size: 11px;
     text-align: right;
   }
-  .track-row .info-icon {
-    color: transparent;
-    font-size: 13px;
-    text-align: center;
-    cursor: pointer;
-    user-select: none;
-  }
-  .track-row:hover .info-icon { color: var(--text-muted); }
   .track-row.playing .track-title { color: var(--accent); }
-
-  /* Transport stays visible once the track is loaded (you need to be able to
-     pause without hunting for it); otherwise it appears on row hover. */
-  .track-row .transport-icon {
-    color: transparent;
-    font-size: 12px;
-    text-align: center;
-    cursor: pointer;
-    user-select: none;
-  }
-  .track-row:hover .transport-icon { color: var(--text-muted); }
-  .track-row .transport-icon.loaded { color: var(--accent); }
-  .track-row .transport-icon:hover { color: var(--accent-strong); }
 
   .identify {
     margin-top: 18px;

@@ -131,8 +131,17 @@ export function createExplorerController() {
       }
 
       if (explorerState.nav.section === 'library') {
-        if (explorerState.nav.item === 'starred') params.set('starred', '1');
-        else if (explorerState.nav.item === 'unvetted') params.set('vetted', '0');
+        if (explorerState.nav.item === 'starred') {
+          // A star lives on a track, so the other two lenses need the derived
+          // reading — releases/artists that a starred track belongs to —
+          // rather than no filter at all, which would list the whole library.
+          if (currentEntity === 'tracks') params.set('starred', '1');
+          else params.set('has_starred', '1');
+        } else if (explorerState.nav.item === 'unvetted') {
+          // Vetting is a release-level fact; the tracks and artists lenses
+          // have no honest reading of it, so they stay unfiltered.
+          if (currentEntity === 'releases') params.set('vetted', '0');
+        }
       }
 
       // Release-only sources (e.g. Discogs) in tracks-mode: short-circuit to an

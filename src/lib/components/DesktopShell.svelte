@@ -214,9 +214,7 @@ import RecordingPill from './RecordingPill.svelte';
           <ReleaseDetail
             release={plDetail.data.release}
             sources={plDetail.data.sources}
-            facets={plDetail.data.facets}
             tracks={plDetail.data.tracks ?? []}
-            sourceMeta={sourceMetaForDetail}
             onArtistSelect={(id) => openPlaylistEntity('artist', id)}
           />
         {:else}
@@ -252,9 +250,7 @@ import RecordingPill from './RecordingPill.svelte';
       <ReleaseDetail
         release={detailData.release}
         sources={detailData.sources}
-        facets={detailData.facets}
         tracks={detailData.tracks ?? []}
-        sourceMeta={sourceMetaForDetail}
         notes={detailData.notes ?? null}
         identifiers={detailData.identifiers ?? []}
         addCta={releaseDetailCta}
@@ -340,7 +336,11 @@ import RecordingPill from './RecordingPill.svelte';
   }
   .explorer {
     display: grid;
-    grid-template-columns: 220px 1fr 360px;
+    /* Detail pane grows with the window but never narrows past its old fixed
+       360px. Track titles were the constraint: the pane is where they live,
+       and a hardcoded width is wrong at every size except the one it was
+       picked at. */
+    grid-template-columns: 220px minmax(0, 1fr) clamp(360px, 24vw, 520px);
     flex: 1;
     min-height: 0;
     overflow: hidden;

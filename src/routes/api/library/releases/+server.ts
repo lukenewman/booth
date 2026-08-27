@@ -18,6 +18,7 @@ export const GET: RequestHandler = async ({ url }) => {
   const source = url.searchParams.get('source') ?? undefined;
   const q = url.searchParams.get('q') ?? undefined;
   const multiSource = url.searchParams.get('multi_source') === 'true';
+  const hasStarred = url.searchParams.get('has_starred') === '1';
 
   const rawLimit = Number(url.searchParams.get('limit') ?? DEFAULT_LIMIT);
   const limit = Math.max(1, Math.min(MAX_LIMIT, Number.isFinite(rawLimit) ? rawLimit : DEFAULT_LIMIT));
@@ -27,6 +28,6 @@ export const GET: RequestHandler = async ({ url }) => {
   const sort = parseSort(url.searchParams.get('sort'));
   const vetted = triState(url.searchParams.get('vetted'));
 
-  const result = listReleases(getDb(), { source, q, limit, offset, multiSource, sort, vetted });
+  const result = listReleases(getDb(), { source, q, limit, offset, multiSource, sort, vetted, hasStarred });
   return json(result);
 };
