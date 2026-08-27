@@ -340,12 +340,12 @@
   /* Off-centre is a state worth noticing -- it survives track changes. */
   .pitch-value.active { color: var(--accent); }
 
-  /* Vertical fader: a pitch control reads as a fader, not a scrubber. + is at
-     the top, which is the software convention; a real 1200 has it at the
-     bottom. Flip by swapping `direction` if that ever matters more. */
+  /* Vertical fader: a pitch control reads as a fader, not a scrubber.
+     + is at the BOTTOM, matching a Technics 1200 — push the fader away from
+     you to speed up. `direction: rtl` would put + at the top, which is the
+     generic-slider convention and what this shipped as first. */
   .fader {
     writing-mode: vertical-lr;
-    direction: rtl;
     width: 3px;
     height: 44px;
     cursor: pointer;
