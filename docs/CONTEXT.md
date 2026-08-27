@@ -12,6 +12,7 @@ Single-user, local-only SvelteKit app for adding records to a personal Discogs c
 - **Camera:** `@zxing/browser` (`BrowserMultiFormatReader`).
 - **DB:** SQLite at `~/.booth/booth.db` (user-scoped, not repo-relative), hand-rolled migrations in `src/lib/server/db/migrations/`. Managed via bun's built-in `bun:sqlite` (sync, prepared-statement API). Project is bun-only as a result — no Node fallback.
 - **New deps:** `better-sqlite3`, `plist` (Apple plist parser), `ulid` (entity ID generator). Verification scripts run on bun's native TS execution — no separate runner dep.
+- **External binary: `ffmpeg`** (`brew install ffmpeg`), required only by tempo analysis — the app runs fine without it and the analysis scripts exit with a clear message. It is the one non-Bun dependency; the bun-only property came from `bun:sqlite`, not from a general aversion to dependencies. Chosen over aubio, whose Homebrew build links libsndfile only (no ffmpeg/libav decoding), pulls in Python and numpy as required deps, and last had a stable release in 2019.
 - **No tests, no UI framework.** Session log is in-memory client-side.
 - **Dev:** `bun dev` (binds 5173, falls back upward). **Production:** `bun run build && bun start` — `adapter-node` output run under Bun (port 3000, override with `PORT`). The Bun runtime is not optional in either mode: the DB layer is `bun:sqlite`.
 
@@ -280,6 +281,30 @@ docs/
 - **Stale ids** (a track deleted since capture) are skipped in the direction of travel, bounded by queue length so a run of them terminates rather than spinning.
 - Spec/plan: `docs/superpowers/specs/2026-08-18-playback-queue-design.md`, `docs/superpowers/plans/2026-08-18-playback-queue.md`.
 
+### BPM + pitch
+
+- **BPM is a per-source facet, never a column on `track`.** Sources disagree, so every opinion is stored and `src/lib/server/library/bpm.ts` picks a winner by declared precedence: rekordbox, then local analysis, then the Music.app tag. The order lives in one array so it can be argued with. `resolveBpmForTracks` batches a page in one query, alongside the existing source-link batching.
+- **Two local providers, one source id.** Analysis writes `bpmAnalyzed` (plus `bpmAnalyzedConfidence`), the Music.app importer writes `bpm`, both under `source='local'`. A pseudo-source would have been the other option and was rejected: a source id is user-visible in the source grid and the source filter, and "analysis" is not somewhere a track came from.
+- **`parseBpm` floors at 20 and caps at 400.** Music.app stores `0` for "not set" and an unfiltered 0 renders as a real reading. A rejected higher-precedence value falls through to the next source rather than masking it.
+- **Source 1 — the Music.app tag** was always in the XML; the importer read a dozen neighbouring keys and not that one. 645 of 4,344 file-backed tracks carry one (~15%).
+- **Source 2 — local analysis** (`src/lib/server/analysis/`) covers 3,639. See "Tempo analysis" below.
+- **Source 3 — rekordbox** is still BOO-5. Its `master.db` on this machine is **SQLCipher-encrypted**, not a readable SQLite file (verified: no `SQLite format 3` header). The community fixed-key route needs a native SQLCipher binding, which `bun:sqlite` cannot provide; an unencrypted rekordbox collection XML export is the lower-risk path and mirrors the existing Music.app XML import.
+- **The pitch fader is independent of all of it.** `$lib/pitch.ts` holds the maths (clamp, centre detent, 0.1% quantisation, rate mapping, readout); the store holds state. `preservesPitch = false` is the whole point — the default time-stretches, holding pitch while tempo moves, which is the opposite of a turntable. `defaultPlaybackRate` is set alongside `playbackRate` because a freshly-loaded source adopts the former, and without it each new track starts at 1.0 and snaps.
+- **Pitch persists across track changes** (a fader on a deck does not spring back) and survives `stop()`. Double-click is the centre detent. Ranges are ±8 (Technics) and ±16; narrowing re-clamps a pitch that no longer fits rather than leaving audio at a rate the fader cannot express.
+- **Every BPM surface is gated on data being present**, because a third of the library still has none. `TrackList`, `PlaylistView` and the `ReleaseDetail` tracklist build their `grid-template-columns` in JS rather than declaring them in CSS — notes and BPM are independent, and four hardcoded templates for the four combinations is how that gets out of hand.
+- **Hidden below 768px.** The fader was rendering at x=609 in a 390px viewport — an unreachable control. The phone player bar *already* truncates its own title and the end of its scrubber before any of this was added; it needs its own layout, which this is not.
+- **CSS ordering trap**: the `@media (max-width: 768px)` block must come *after* the `.bpm` / `.pitch` display rules it overrides. Same specificity, so source order decides, and the first version silently did nothing.
+
+### Tempo analysis
+
+- **`src/lib/server/analysis/`**: `fft.ts` (sixty-line radix-2 FFT, one caller), `tempo.ts` (onset envelope + comb filter), `decode.ts` (ffmpeg pipe). This is the Ellis "Beat Tracking by Dynamic Programming" front end without the beat tracker — one number per track is all a readout needs.
+- **Half-wave-rectified spectral flux on log magnitudes.** Rectifying matters: a note *ending* is not an onset, and counting decays smears the envelope until periodicity stops being visible. Log magnitudes stop the loudest thirty seconds deciding the tempo of the whole track.
+- **The tempo prior is load-bearing and its width is not a free parameter.** Swept against 120 tagged tracks: at 0.6 octaves, half-time errors are 0% of the sample; at 1.2, 9%; at 2.5, 52%. A near-flat prior makes the estimator pick whichever metrical level autocorrelates marginally better, and for most dance music that is half time.
+- **Confidence is measured on the envelope, not the score surface.** Scoring the surface was wrong twice over: harmonics of a true tempo also score well, so correct answers looked unremarkable, and where comb scores are all near zero the surface is just the prior's shape — sharply peaked — so white noise came out maximally confident. It is now the envelope's normalised autocorrelation at the winning period.
+- **Below 0.25 confidence nothing is written.** 696 tracks fell below it: ambient pieces and interludes with no steady pulse. A missing BPM is honest; a confident wrong one is not.
+- **Agreement with the Music.app tags is 90.7% within 2 BPM** across the 570 tracks that have both, with 14 octave errors. Tag agreement *understates* accuracy — spot-checking disagreements found autocorrelation at the tagged tempo was often negative while the estimate's was above 0.7, i.e. there is no pulse at the tagged value at all.
+- **90s excerpt from 30s in, mono at 16 kHz.** Tempo is a global property, the head is where intros and needle drops live, and an onset envelope has no use for the top of the spectrum. 0.12s per track at concurrency 4 — the whole library in nine minutes, nothing like a rekordbox analysis session.
+
 ### Release videos
 - **Discogs release detail lazy-loads YouTube videos.** `ReleaseDetail.svelte` fetches `/api/sources/discogs/releases/{id}/videos` when a release with a Discogs `source_link` opens, and renders a list of `<iframe>` embeds (`loading="lazy"`, `youtube-nocookie.com`), each captioned with the Discogs video title. A `$effect` keyed on `release.id` cancels stale fetches when the user switches releases.
 - **Server**: `fetchReleaseVideos(externalId)` (`discogs/videos.ts`) calls the full `/releases/{id}` Discogs endpoint and returns its `.videos[]`, deduped by uri (Discogs sometimes repeats one); `parseYouTubeId` (`discogs/youtube.ts`, pure) resolves the embeddable id. A non-YouTube uri renders as a plain link instead of an embed.
@@ -410,6 +435,8 @@ docs/
 
 ## Notable divergences from the original plan
 
+- **BPM + pitch (2026-08-27).** Multi-source BPM facets, a turntable pitch fader, readouts across player/lists/detail, and local tempo analysis. The prerequisite everyone assumes — MusicBrainz — is a dead end for this: no tempo in its core data, and AcousticBrainz was retired in 2022. The data was already on the machine in three places instead. Two lessons worth keeping: the Music.app export had been carrying a BPM field the importer silently dropped since day one, and *agreement with existing tags is not accuracy* — the tags are often the wrong half of a disagreement. Built straight from the tickets (BOO-47, BOO-61, BOO-62, BOO-63) with no design doc.
+
 - **Track notes (2026-08-26).** Free-text blurbs per track, edited from the release detail and shown read-only in track lists, journalled like the other annotations. Claiming single-click meant dropping double-click-to-play, which the new index-cell transport had already made redundant. Two Svelte traps worth remembering: `bind:` to an undefined object member throws `props_invalid_value` and silently blanks the whole list, and an editor inside a row `<button>` never receives keystrokes.
 - **Backups (2026-08-26).** Append-only annotation journal + rate-limited whole-DB snapshots, prompted by losing 29 real stars to a cleanup script that assumed an empty library. The lesson worth keeping: *a backup that mirrors current state is not a backup* — it mirrors the loss too, and the only reason that data came back was SQLite's WAL still holding the pre-delete pages. Restore is additive by default because a journal is authoritative only for entities it has actually seen.
 - **Stars + vetting (2026-08-26).** Binary track stars plus a release-level vetted flag (migration 009), two Library rail items, `s`/`v` bindings, and a name-keyed backup script. The load-bearing decision is that vetted-ness is *stored*, not derived from "has starred tracks" — that check conflates "not listened to yet" with "listened to and nothing made the cut". Release stars were dropped as ambiguous; releases carry a derived starred-count instead. Shipping it surfaced a latent hazard: hydrating a store from inside an `$effect` while components read that store back loops and starves Svelte's whole effect scheduler, and the symptom shows up somewhere unrelated (the URL-sync effect silently stopping). See `docs/superpowers/specs/2026-08-26-stars-and-vetting-design.md` + plan.
@@ -446,6 +473,7 @@ Deferred features and not-yet-implemented work lives in the **Booth** Linear wor
 Limitations of code that's currently in production. For deferred features and not-yet-implemented work, see the Linear backlog above.
 
 - **No automated tests.** Verification is via `bun verify scripts/<name>.ts`, curl, sqlite3, and manual browser testing.
+- **`scripts/verify-itunes-parse.ts` is stale** — it still imports from `sources/itunes/parse`, a path that stopped existing when the source was renamed to `local` (migration `006`). It does not run.
 - **`Cmd+Z` is intercepted by the browser** when the search input is focused (it'll undo typed text first). The on-screen button and `u` key still work.
 - **Source-grid on listview rows doesn't refresh after a Discogs-remove** for other rows of the same release still on screen. Only the currently-detail-open row updates. Likely benign until duplicate-release scenarios appear.
 - **Playback affordance is on list/tracklist rows only.** `TrackDetail` (the track right-pane) has no play control; only `TrackList` rows and the `ReleaseDetail` tracklist support double-click-to-play.
@@ -453,6 +481,22 @@ Limitations of code that's currently in production. For deferred features and no
 - **Re-sorting or re-filtering mid-playback does not rebuild an in-flight queue.** Intentional (the queue is a snapshot), but it means the queue can hold an order no longer visible on screen.
 - **Playlist reordering isn't reflected in an already-captured queue.**
 - **Only `local`-backed tracks are playable.** A track with no `file_path` match key (e.g. a Discogs release with no Apple-import or vinyl-rip file) has `canPlay = false` and no play affordance.
+
+## BPM scripts
+
+```bash
+bun run scripts/backfill-bpm-tags.ts [--dry-run]   # Music.app tags → facets (one-off; sync does it now)
+bun run scripts/analyze-bpm.ts [--dry-run] [--limit N] [--force] [--concurrency N]
+bun run scripts/measure-tempo-accuracy.ts [--limit N] [--tolerance 2]
+bun run scripts/verify-tempo.ts                    # synthetic click tracks, known answers
+bun run scripts/verify-bpm.ts                      # precedence, junk rejection, ranges
+bun run scripts/verify-pitch.ts                    # clamp, detent, rate mapping, readout
+```
+
+Both write-capable scripts are additive: they match on identifiers already in the
+database and write only their own facet keys. Neither creates, prunes or deletes
+an entity. `collate()` would have been the obvious route for the backfill, but it
+prunes, and pruning has no business running unattended against a real library.
 
 ## Local development
 
