@@ -4,6 +4,7 @@ import { getDb } from '$lib/server/db';
 import { runSync } from '$lib/server/library/sync_run';
 import { listSources } from '$lib/server/sources/registry';
 import { createScheduler, parseIntervalMinutes } from '$lib/server/library/scheduler';
+import { maybeSnapshot } from '$lib/server/backup';
 
 const triggered = new Set<string>();
 
@@ -69,6 +70,9 @@ function startScheduledSync() {
     sync: async (id) => {
       const run = await runSync(getDb(), id);
       console.log(`[sync] ${id}`, run.summary);
+      // A sync is when the bulk of the database changes, so it is the moment a
+      // whole-DB snapshot is worth taking. Rate-limited inside maybeSnapshot.
+      maybeSnapshot(getDb(), `after ${id} sync`);
       return run;
     },
     onError: (id, err) => console.warn(`[sync] ${id} scheduled sync failed:`, err),
@@ -82,8 +86,16 @@ function startScheduledSync() {
   console.log(`[sync] scheduler running every ${minutes}m`);
 }
 
+let snapshotChecked = false;
+function snapshotOnBoot() {
+  if (snapshotChecked) return;
+  snapshotChecked = true;
+  maybeSnapshot(getDb(), 'boot');
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
   autoSyncAll();
   startScheduledSync();
+  snapshotOnBoot();
   return resolve(event);
 };
