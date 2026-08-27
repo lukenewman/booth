@@ -17,6 +17,16 @@
       conflicts: number;
       input?: { path: string; mtime: string; generatedAt?: string };
       stale?: boolean;
+      analysis?:
+        | { state: 'unavailable'; pending: number }
+        | { state: 'running'; pending: number }
+        | {
+            state: 'done';
+            analysed: number;
+            lowConfidence: number;
+            missingFile: number;
+            failed: number;
+          };
     } | null;
     error: string | null;
   }
@@ -110,6 +120,26 @@
     const age = days >= 1 ? `${days}d old` : 'unchanged';
     return `${input.path.split('/').pop()} ${age} — unchanged since the previous sync`;
   }
+  /**
+   * Tempo analysis runs behind the sync, so its outcome lands on a row already
+   * marked finished. `unavailable` is the case worth being loud about: without
+   * it a missing ffmpeg means BPMs silently never appear and nothing says why.
+   */
+  function analysisLabel(run: SyncRun): { text: string; warn: boolean } | null {
+    const a = run.summary?.analysis;
+    if (!a || run.error) return null;
+    if (a.state === 'unavailable') {
+      return {
+        text: `${a.pending} tracks not analysed — ffmpeg not installed`,
+        warn: true,
+      };
+    }
+    if (a.state === 'running') return { text: `analysing ${a.pending} tracks…`, warn: false };
+    const parts = [`${a.analysed} analysed`];
+    if (a.lowConfidence) parts.push(`${a.lowConfidence} no clear pulse`);
+    if (a.failed) parts.push(`${a.failed} failed`);
+    return { text: parts.join(' · '), warn: false };
+  }
 </script>
 
 <div class="history">
@@ -121,15 +151,23 @@
 
   {#snippet runRow(run: SyncRun)}
     {@const stale = staleLabel(run)}
-    <div class="row" class:errored={!!run.error} class:stale={!!stale}>
+    {@const analysis = analysisLabel(run)}
+    <div class="row" class:errored={!!run.error} class:stale={!!stale || !!analysis?.warn}>
       <span class="status" aria-hidden="true"
-        >{run.error ? '✗' : stale ? '⚠' : run.finished_at ? '✓' : '…'}</span
+        >{run.error ? '✗' : stale || analysis?.warn ? '⚠' : run.finished_at ? '✓' : '…'}</span
       >
       <span class="when" title={run.started_at}>{relativeTime(run.started_at)}</span>
       <span class="dur">{durationLabel(run.started_at, run.finished_at)}</span>
       <span class="summary" class:err={!!run.error}>{summaryLabel(run)}</span>
       {#if stale}
         <span class="warn" title={run.summary?.input?.path}>{stale}</span>
+      {/if}
+      {#if analysis}
+        <span
+          class="warn"
+          class:muted={!analysis.warn}
+          title={analysis.warn ? 'Install ffmpeg (brew install ffmpeg) to compute BPM from audio' : undefined}
+        >{analysis.text}</span>
       {/if}
     </div>
   {/snippet}
@@ -201,6 +239,8 @@
   }
   .row.errored .status { color: var(--accent, #c44); }
   .row.stale .status { color: var(--warn, #d69a2c); }
+  /* A finished analysis is information, not a warning — same slot, quieter. */
+  .warn.muted { color: var(--text-subtle); }
   .warn {
     grid-area: warn;
     color: var(--warn, #d69a2c);

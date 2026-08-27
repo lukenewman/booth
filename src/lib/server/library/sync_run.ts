@@ -5,6 +5,13 @@ import { getSource } from '../sources/registry';
 import { NotImplementedError, type SyncInput } from '../sources/types';
 import { hydrateDiscogsTracks } from '../sources/discogs/hydrateDiscogsTracks';
 import { resolvedRecordingsRoot } from '../recording/env';
+import {
+  hasFfmpeg,
+  isAnalysisRunning,
+  pendingAnalysis,
+  startBackgroundAnalysis,
+  type AnalysisCounts,
+} from '../analysis/run';
 
 /**
  * What lands in `sync_run.summary`: the collate counts plus, for file-backed
@@ -19,7 +26,23 @@ export type SyncRunSummary = CollateSummary & {
    * anything new, which is otherwise indistinguishable from a clean no-op.
    */
   stale?: boolean;
+  /**
+   * Tempo analysis for tracks this run left without a BPM. Absent when there
+   * was nothing to analyse, so an ordinary no-op run stays uncluttered.
+   *
+   * `running` is replaced with `done` by the background pass after the run row
+   * has already been marked finished. The row's timestamps therefore predate
+   * its final text — accepted deliberately, because the alternative is either
+   * never reporting the outcome or giving analysis its own history rows.
+   */
+  analysis?: AnalysisState;
 };
+
+export type AnalysisState =
+  /** ffmpeg is not installed, so these tracks cannot be analysed at all. */
+  | { state: 'unavailable'; pending: number }
+  | { state: 'running'; pending: number }
+  | ({ state: 'done' } & AnalysisCounts);
 
 export interface SyncRunRow {
   id: string;
@@ -74,12 +97,50 @@ export async function runSync(db: Database, sourceId: string): Promise<SyncRunRo
     // <10ms on this DB and sync is exactly when the row counts shift.
     db.exec('ANALYZE');
 
+    // Tempo analysis runs *behind* the sync: a run that ingests a few hundred
+    // tracks would otherwise sit there for half a minute finishing something
+    // nobody is waiting on. The ffmpeg check is cached and costs ~10ms, so
+    // whether it can run at all is decided here and lands on the row
+    // immediately rather than surfacing later.
+    const candidates = pendingAnalysis(db);
+    if (candidates.length > 0) {
+      if (!(await hasFfmpeg())) {
+        summary.analysis = { state: 'unavailable', pending: candidates.length };
+      } else if (!isAnalysisRunning()) {
+        summary.analysis = { state: 'running', pending: candidates.length };
+      }
+      // Otherwise a pass is already in flight and will cover these tracks. It
+      // reports against the run that started it, so this row claims nothing —
+      // the field is decided *before* the write, because a row that says
+      // "analysing…" with no pass of its own has no callback coming to correct
+      // it and stays that way forever.
+    }
+
     db.prepare(
       `UPDATE sync_run
           SET finished_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
               summary     = ?
         WHERE id = ?`,
     ).run(JSON.stringify(summary), id);
+
+    // Started after the row is written, so the completion callback cannot race
+    // the initial write and lose its own result. Nothing has awaited since the
+    // isAnalysisRunning() check above, so this cannot lose the race for the
+    // guard either — but if it somehow does, clear the claim rather than
+    // stranding the row.
+    if (summary.analysis?.state === 'running') {
+      const started = startBackgroundAnalysis(db, candidates, (counts) =>
+        recordAnalysisOutcome(db, id, counts),
+      );
+      if (!started) {
+        delete summary.analysis;
+        db.prepare(`UPDATE sync_run SET summary = ? WHERE id = ?`).run(
+          JSON.stringify(summary),
+          id,
+        );
+      }
+    }
+
     return loadSyncRun(db, id);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -92,6 +153,27 @@ export async function runSync(db: Database, sourceId: string): Promise<SyncRunRo
     if (err instanceof NotImplementedError) throw err;
     throw err;
   }
+}
+
+/**
+ * Fold the finished pass's counts into a run row that is already marked done.
+ * Re-reads the stored summary rather than reusing the in-memory object, because
+ * minutes may have passed and this must not clobber anything written since.
+ */
+function recordAnalysisOutcome(db: Database, runId: string, counts: AnalysisCounts): void {
+  const row = db.prepare(`SELECT summary FROM sync_run WHERE id = ?`).get(runId) as
+    | { summary: string | null }
+    | undefined;
+  if (!row?.summary) return;
+
+  let summary: SyncRunSummary;
+  try {
+    summary = JSON.parse(row.summary) as SyncRunSummary;
+  } catch {
+    return;
+  }
+  summary.analysis = { state: 'done', ...counts };
+  db.prepare(`UPDATE sync_run SET summary = ? WHERE id = ?`).run(JSON.stringify(summary), runId);
 }
 
 export function listSyncRuns(
