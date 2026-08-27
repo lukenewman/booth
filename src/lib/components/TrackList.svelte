@@ -70,8 +70,9 @@
   {#snippet headers()}
     <div class="cols">
       <span></span>
+      <span></span>
       <span>Track</span>
-      <span>Album</span>
+      <span>Note</span>
       <span class="right">Length</span>
       <span></span>
       <span class="src-label">
@@ -94,20 +95,35 @@
     >
       <span
         class="info-icon"
-        class:playing={isPlaying}
         role="button"
         tabindex="-1"
         aria-label="View details for {item.title}"
         onclick={(e) => { e.stopPropagation(); onSelect?.(item.id); }}
         onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onSelect?.(item.id); } }}
         ondblclick={(e) => e.stopPropagation()}
-      >{isPlaying ? '▶' : '›'}</span>
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="9.25" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M12 10.6v6.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <circle cx="12" cy="7.4" r="1.1" fill="currentColor"/>
+        </svg>
+      </span>
+      <!-- The ▶ used to ride on the info icon, which meant that slot changed
+           meaning depending on player state. Now that rows have art, the
+           playing badge lives on the cover — the same pattern PlaylistView
+           already uses — and the info icon only ever means "open details". -->
+      <div class="cover" class:playing={isPlaying}>
+        {#if item.thumb_url}
+          <img src={item.thumb_url} alt="" loading="lazy">
+        {/if}
+        {#if isPlaying}<span class="playing-badge">▶</span>{/if}
+      </div>
       <div class="meta">
         <div class="title">{item.title}</div>
         <div class="artist">{item.artist}</div>
-        <TrackNote trackId={item.id} readonly />
+        <div class="album">{item.album ?? '—'}</div>
       </div>
-      <span class="album">{item.album ?? '—'}</span>
+      <div class="note-cell"><TrackNote trackId={item.id} readonly /></div>
       <span class="dur">{formatDuration(item.duration_ms)}</span>
       <StarButton trackId={item.id} />
       <SourceGrid present={item.sources} />
@@ -121,8 +137,8 @@
 <style>
   .cols, .row {
     display: grid;
-    grid-template-columns: 20px 1fr 100px 60px 20px 56px;
-    gap: 14px;
+    grid-template-columns: 20px 34px minmax(0, 1fr) minmax(0, 1.2fr) 60px 20px 56px;
+    gap: 12px;
     padding: 6px 14px;
     align-items: center;
   }
@@ -172,15 +188,52 @@
     text-align: right;
   }
 
+  /* An SVG rather than a glyph: `color: transparent` hid the old › until
+     hover, which cannot work for a stroked icon, so visibility is opacity. */
   .info-icon {
-    color: transparent;
-    font-size: 13px;
-    line-height: 1;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    opacity: 0;
     cursor: pointer;
     user-select: none;
+    transition: opacity 0.12s, color 0.12s;
   }
-  .row:hover .info-icon { color: var(--text-muted); }
-  .info-icon.playing { color: var(--accent) !important; }
+  .row:hover .info-icon,
+  .info-icon:focus-visible { opacity: 1; }
+  .info-icon:hover { color: var(--text); }
+
+  .cover {
+    position: relative;
+    width: 34px;
+    height: 34px;
+    border-radius: 3px;
+    overflow: hidden;
+    background: var(--bg-raised);
+    flex-shrink: 0;
+  }
+  .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .playing-badge {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    color: var(--accent-strong);
+    font-size: 11px;
+  }
+
+  /* Two lines then ellipsis: a long note must not make row heights ragged. */
+  .note-cell {
+    min-width: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
   .row.playing .title { color: var(--accent); }
 </style>

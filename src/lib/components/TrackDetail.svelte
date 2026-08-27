@@ -3,7 +3,16 @@
 
   interface SourceLink { source: string; external_id: string; external_url: string | null; match_method: string; }
   interface Facet { source: string; key: string; value: string; }
-  interface ParentRelease { id: string; title: string; artist: string; year: number | null; }
+  // thumb_url was omitted here while the slot rendered a hardcoded "cov"
+  // placeholder — getTrackDetail has always returned it on the release row.
+  interface ParentRelease {
+    id: string;
+    title: string;
+    artist: string;
+    year: number | null;
+    thumb_url?: string | null;
+    cover_url?: string | null;
+  }
   interface Track { id: string; title: string; artist: string; duration_ms: number | null; }
   interface SourceMeta { id: string; name: string; isStub: boolean; }
 
@@ -58,7 +67,11 @@
 
   {#if release}
     <button class="parent-card" onclick={() => onReleaseSelect?.(release.id)}>
-      <div class="parent-cover">cov</div>
+      <div class="parent-cover">
+        {#if release.thumb_url ?? release.cover_url}
+          <img src={release.thumb_url ?? release.cover_url} alt="" loading="lazy">
+        {/if}
+      </div>
       <div class="parent-meta">
         <div class="parent-title">{release.title}</div>
         <div class="parent-artist">{release.artist}{release.year ? ` · ${release.year}` : ''}</div>
@@ -120,8 +133,10 @@
     font-family: inherit;
   }
   .parent-card:hover { border-color: var(--text-muted); }
+  .parent-cover img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 3px; }
   .parent-cover {
     width: 48px; height: 48px;
+    overflow: hidden;
     background: var(--bg);
     border-radius: 3px;
     display: flex; align-items: center; justify-content: center;
