@@ -50,6 +50,7 @@ export interface TrackRow {
   position: string | null;
   thumb_url: string | null;
   starred_at: string | null;
+  note: string | null;
 }
 
 export interface SourceLinkRow {
@@ -325,7 +326,7 @@ export function listTracks(
     .prepare(
       `SELECT track.id, track.title, artist.name AS artist,
               track.album, track.duration_ms, track.release_id, track.position,
-              release.thumb_url, track.starred_at
+              release.thumb_url, track.starred_at, track.note
          FROM track
          JOIN artist ON artist.id = track.artist_id
          LEFT JOIN release ON release.id = track.release_id
@@ -403,7 +404,7 @@ export function getReleaseDetail(
     .prepare(
       `SELECT track.id, track.title, artist.name AS artist,
               track.album, track.duration_ms, track.release_id, track.position,
-              track.starred_at
+              track.starred_at, track.note
          FROM track
          JOIN artist ON artist.id = track.artist_id
          WHERE track.release_id = ?

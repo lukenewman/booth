@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import SourceGrid from './SourceGrid.svelte';
   import StarButton from './StarButton.svelte';
+  import TrackNote from './TrackNote.svelte';
   import { annotations } from '$lib/stores/annotations.svelte';
   import { player } from '$lib/stores/player.svelte';
   import { translucentDragImage } from '$lib/dnd';
@@ -70,6 +71,9 @@
   const playableTracks = $derived(tracks.filter((t) => t.canPlay));
   const isVetted = $derived(annotations.isVetted(release.id));
 
+  /** The one track whose note editor is open, if any. */
+  let editingTrackId = $state<string | null>(null);
+
   // Detail can be reached by deep link with no list page behind it, so the
   // tracklist payload is its own hydration source for the star state.
   //
@@ -84,6 +88,7 @@
     const payloadRelease = release;
     untrack(() => {
       annotations.hydrateTracks(payloadTracks);
+      annotations.hydrateNotes(payloadTracks);
       annotations.hydrateReleases([payloadRelease]);
     });
   });
@@ -181,14 +186,21 @@
       {#each tracks as t}
         {@const playState = trackPlayState(t.id, player.nowPlaying?.trackId, player.isPlaying)}
         {@const isLoaded = playState !== 'idle'}
+        <div class="track">
         <button
           class="track-row"
           class:playing={isLoaded}
           type="button"
           draggable="true"
           ondragstart={(e) => { e.dataTransfer?.setData('application/x-booth-track', t.id); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; if (e.currentTarget instanceof HTMLElement) translucentDragImage(e, e.currentTarget); }}
-          onclick={(e) => { if (e.detail > 0) e.stopPropagation(); else onTrackSelect?.(t.id); }}
-          ondblclick={() => { if (t.canPlay) player.playFrom(releaseCtx, t.id, { trackId: t.id, title: t.title, artist: release.artist, thumbUrl: release.thumb_url, releaseId: release.id }, releaseSeed); }}
+          onclick={(e) => {
+            if (e.detail === 0) { onTrackSelect?.(t.id); return; }
+            // Real click opens the note editor. Double-click-to-play is gone —
+            // the transport in the index cell covers playback, which frees this
+            // gesture without the click/dblclick race a delayed handler needs.
+            e.stopPropagation();
+            editingTrackId = t.id;
+          }}
         >
           <StarButton trackId={t.id} />
           <!-- Index and transport share one cell. The number is the resting
@@ -218,6 +230,13 @@
           <span class="track-title" title={t.title}>{t.title}</span>
           <span class="track-dur">{durationLabel(t.duration_ms)}</span>
         </button>
+        <TrackNote
+          trackId={t.id}
+          editing={editingTrackId === t.id}
+          onRequestEdit={() => (editingTrackId = t.id)}
+          onDone={() => (editingTrackId = null)}
+        />
+        </div>
       {/each}
     </div>
   {/if}
@@ -494,6 +513,8 @@
     font-family: inherit;
     font-size: 12px;
   }
+  .track { padding: 1px 0; }
+  .track:has(:global(.note-input)) { padding-bottom: 4px; }
   .track-row:hover { background: var(--bg-row-hover); }
 
   /* Index and transport occupy the same grid cell so swapping them shifts

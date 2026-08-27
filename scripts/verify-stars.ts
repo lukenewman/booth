@@ -102,6 +102,28 @@ assert(unknown.size === 0, 'unknown release id should not appear in the map');
 db.prepare(`DELETE FROM track WHERE id = ?`).run(t2);
 assert(countStarredByRelease(db, [relId]).get(relId) === 1, 'deleting a track drops its star');
 
+// --- notes ------------------------------------------------------------------
+const { setTrackNote, MAX_NOTE_LENGTH } = await import(
+  '../src/lib/server/library/annotations'
+);
+
+assert(setTrackNote(db, t1, 'peak time roller').note === 'peak time roller', 'note round-trips');
+assert(setTrackNote(db, t1, '  padded  ').note === 'padded', 'note is trimmed');
+
+// Empty and whitespace-only clear rather than storing '' — otherwise "has a
+// note" needs two checks everywhere and a cleared note stays invisibly present.
+assert(setTrackNote(db, t1, '').note === null, 'empty string clears the note');
+setTrackNote(db, t1, 'again');
+assert(setTrackNote(db, t1, '   ').note === null, 'whitespace-only clears the note');
+assert(setTrackNote(db, t1, null).note === null, 'null clears the note');
+
+const long = 'x'.repeat(MAX_NOTE_LENGTH + 500);
+assert(
+  setTrackNote(db, t1, long).note!.length === MAX_NOTE_LENGTH,
+  `note is capped at ${MAX_NOTE_LENGTH}`,
+);
+setTrackNote(db, t1, null);
+
 // --- query filters ----------------------------------------------------------
 const { listReleases, listTracks, listTrackIds } = await import(
   '../src/lib/server/library/queries'

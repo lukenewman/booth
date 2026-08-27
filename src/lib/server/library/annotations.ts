@@ -47,6 +47,30 @@ export function setReleaseVetted(
   return { vettedAt: row?.vetted_at ?? null };
 }
 
+/** Longest note we will store. Blurbs, not essays. */
+export const MAX_NOTE_LENGTH = 1000;
+
+/**
+ * Set or clear a track's note.
+ *
+ * Empty and whitespace-only input clears the note rather than storing '' —
+ * otherwise "has a note" needs two checks everywhere and an accidental
+ * clear-then-save leaves an invisible empty row behind.
+ */
+export function setTrackNote(
+  db: Database,
+  trackId: string,
+  note: string | null,
+): { note: string | null } {
+  const trimmed = note?.trim() ?? '';
+  const value = trimmed === '' ? null : trimmed.slice(0, MAX_NOTE_LENGTH);
+  db.prepare(`UPDATE track SET note = ? WHERE id = ?`).run(value, trackId);
+  const row = db.prepare(`SELECT note FROM track WHERE id = ?`).get(trackId) as
+    | { note: string | null }
+    | undefined;
+  return { note: row?.note ?? null };
+}
+
 /**
  * Starred-track counts for a page of releases, in one round-trip.
  *

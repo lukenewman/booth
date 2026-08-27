@@ -4,6 +4,7 @@
   import Listview from './Listview.svelte';
   import SourceGrid from './SourceGrid.svelte';
   import StarButton from './StarButton.svelte';
+  import TrackNote from './TrackNote.svelte';
   import EmptyState from './EmptyState.svelte';
   import { player } from '$lib/stores/player.svelte';
   import { translucentDragImage } from '$lib/dnd';
@@ -19,6 +20,7 @@
     thumb_url: string | null;
     release_id: string | null;
     starred_at?: string | null;
+    note?: string | null;
   }
 
   let {
@@ -103,6 +105,7 @@
       <div class="meta">
         <div class="title">{item.title}</div>
         <div class="artist">{item.artist}</div>
+        <TrackNote trackId={item.id} readonly />
       </div>
       <span class="album">{item.album ?? '—'}</span>
       <span class="dur">{formatDuration(item.duration_ms)}</span>

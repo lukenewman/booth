@@ -172,7 +172,10 @@ export function createExplorerController() {
       }
       // Seed the annotation store from every page so stars and vetted checks
       // render on first paint rather than after a second round-trip.
-      if (currentEntity === 'tracks') annotations.hydrateTracks(items);
+      if (currentEntity === 'tracks') {
+        annotations.hydrateTracks(items);
+        annotations.hydrateNotes(items);
+      }
       if (currentEntity === 'releases') annotations.hydrateReleases(items);
 
       listItems = reset ? items : [...listItems, ...items];

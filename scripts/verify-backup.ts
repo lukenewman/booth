@@ -74,6 +74,15 @@ assert(restar.stars.get(t1) === '2026-08-26T20:00:00.000Z', 'latest star event w
 assert(before.byName.size === 2, `expected 2 name-keyed stars, got ${before.byName.size}`);
 assert(before.byName.has('A T-' + t1), 'name key present for t1');
 
+// --- notes rewind like everything else --------------------------------------
+const noteHistory: AnnotationEvent[] = [
+  { ...ev('2026-08-26T10:00:00.000Z', 'star', t1), action: 'note', value: 'peak time roller' },
+  { ...ev('2026-08-26T21:18:00.000Z', 'star', t1), action: 'note', value: null },
+];
+assert(replayEvents(noteHistory).notes.size === 0, 'a cleared note leaves no note in current state');
+const notesBefore = replayEvents(noteHistory, '2026-08-26T21:00:00.000Z');
+assert(notesBefore.notes.get(t1) === 'peak time roller', 'as-of rewind restores the note text');
+
 // --- append + read round-trip ----------------------------------------------
 const logPath = join(root, 'annotations.log');
 for (const e of history) appendEvent(logPath, e);

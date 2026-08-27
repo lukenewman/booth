@@ -57,7 +57,7 @@ console.log(
 );
 console.log(
   `target state${asOf ? ` as of ${asOf}` : ' (now)'}: ` +
-    `${target.stars.size} stars, ${target.vetted.size} vetted`,
+    `${target.stars.size} stars, ${target.vetted.size} vetted, ${target.notes.size} notes`,
 );
 
 const db = new Database(dbPath);
@@ -109,6 +109,19 @@ if (prune) {
   }
 }
 
+const liveNotes = new Map(
+  (
+    db.prepare(`SELECT id, note FROM track WHERE note IS NOT NULL`).all() as {
+      id: string;
+      note: string;
+    }[]
+  ).map((r) => [r.id, r.note]),
+);
+const toNote = [...target.notes.entries()].filter(([id, text]) => liveNotes.get(id) !== text);
+const toClearNote = prune
+  ? [...liveNotes.keys()].filter((id) => !target.notes.has(id) && seenTracks.has(id))
+  : [];
+
 const toVet = [...target.vetted.keys()].filter((id) => !liveVetted.has(id));
 const toUnvet = prune
   ? [...liveVetted].filter((id) => !target.vetted.has(id) && seenReleases.has(id))
@@ -117,7 +130,8 @@ const toUnvet = prune
 console.log(
   `live: ${liveStars.size} stars, ${liveVetted.size} vetted\n` +
     `plan: +${toStar.length} stars, -${toUnstar.length} stars, ` +
-    `+${toVet.length} vetted, -${toUnvet.length} vetted` +
+    `+${toVet.length} vetted, -${toUnvet.length} vetted, ` +
+    `~${toNote.length} notes, -${toClearNote.length} notes` +
     (unmatched ? `, ${unmatched} unmatched (row gone, no name match)` : '') +
     (prune ? '' : '\n(additive only — pass --prune to also remove annotations the journal dropped)'),
 );
@@ -129,12 +143,15 @@ if (!apply) {
 
 const setStar = db.prepare(`UPDATE track SET starred_at = ? WHERE id = ?`);
 const setVet = db.prepare(`UPDATE release SET vetted_at = ? WHERE id = ?`);
+const setNote = db.prepare(`UPDATE track SET note = ? WHERE id = ?`);
 
 db.transaction(() => {
   for (const { id, ts } of toStar) setStar.run(ts, id);
   for (const id of toUnstar) setStar.run(null, id);
   for (const id of toVet) setVet.run(target.vetted.get(id)!, id);
   for (const id of toUnvet) setVet.run(null, id);
+  for (const [id, text] of toNote) setNote.run(text, id);
+  for (const id of toClearNote) setNote.run(null, id);
 })();
 
 const afterStars = (

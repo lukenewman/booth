@@ -70,7 +70,11 @@
     {@const link = sourcesById.get(sid)}
     {@const meta = metaById.get(sid)}
     {#if meta}
-      {#if link || meta.isStub}
+      <!-- Only sources that actually contribute. Stubs used to render a
+           "not implemented" card each, which meant Rekordbox and Plex took up
+           half the pane to say nothing. Written as a link check rather than a
+           name blocklist, so an implemented source appears on its own. -->
+      {#if link}
         <SourcePanel
           sourceId={sid}
           sourceName={meta.name}

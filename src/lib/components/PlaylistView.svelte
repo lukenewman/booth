@@ -1,6 +1,7 @@
 <script lang="ts">
   import { playlists } from '$lib/stores/playlists.svelte';
   import StarButton from './StarButton.svelte';
+  import TrackNote from './TrackNote.svelte';
   import type { PlaybackContext } from '$lib/queue';
   import { player } from '$lib/stores/player.svelte';
   import { translucentDragImage, startPointerDrag } from '$lib/dnd';
@@ -234,7 +235,10 @@
                 {#if t.thumb_url}<img src={t.thumb_url} alt="" loading="lazy" />{/if}
                 {#if isPlaying}<span class="play-badge">▶</span>{/if}
               </span>
-              <span class="cell title" class:dim={!t.canPlay}>{t.title}</span>
+              <span class="cell title" class:dim={!t.canPlay}>
+                {t.title}
+                <TrackNote trackId={t.id} readonly />
+              </span>
               <span
                 class="cell artist link"
                 role="link"

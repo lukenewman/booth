@@ -21,8 +21,11 @@ export interface AnnotationEvent {
   kind: 'track' | 'release';
   /** Entity ULID — exact replay onto the same database. */
   id: string;
-  action: 'star' | 'unstar' | 'vet' | 'unvet';
-  /** Resulting starred_at / vetted_at, or null when cleared. */
+  action: 'star' | 'unstar' | 'vet' | 'unvet' | 'note';
+  /**
+   * The resulting value: an ISO8601 timestamp for star/vet, or the note text
+   * itself for `note`. Null when the annotation was cleared.
+   */
   value: string | null;
   /** Name keys — replay onto a rebuilt database, where ULIDs won't match. */
   artist: string;
@@ -35,6 +38,8 @@ export interface ReplayResult {
   stars: Map<string, string>;
   /** releaseId -> vetted_at */
   vetted: Map<string, string>;
+  /** trackId -> note text */
+  notes: Map<string, string>;
   /** "artist title" -> starred_at, for matching against a rebuilt database. */
   byName: Map<string, string>;
 }
@@ -53,6 +58,7 @@ export function nameKey(artist: string, title: string): string {
 export function replayEvents(events: AnnotationEvent[], asOf?: string): ReplayResult {
   const stars = new Map<string, string>();
   const vetted = new Map<string, string>();
+  const notes = new Map<string, string>();
   const byName = new Map<string, string>();
 
   for (const e of events) {
@@ -74,10 +80,17 @@ export function replayEvents(events: AnnotationEvent[], asOf?: string): ReplayRe
       case 'unvet':
         vetted.delete(e.id);
         break;
+      case 'note':
+        // A cleared note is recorded as a `note` event with a null value, not
+        // a separate action — the log should read as "the note became X",
+        // where X can be nothing.
+        if (e.value) notes.set(e.id, e.value);
+        else notes.delete(e.id);
+        break;
     }
   }
 
-  return { stars, vetted, byName };
+  return { stars, vetted, notes, byName };
 }
 
 /** Append one event. Creates the directory and file on first write. */
