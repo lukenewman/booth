@@ -5,6 +5,7 @@
   import SourceGrid from './SourceGrid.svelte';
   import StarButton from './StarButton.svelte';
   import TrackNote from './TrackNote.svelte';
+  import { annotations } from '$lib/stores/annotations.svelte';
   import EmptyState from './EmptyState.svelte';
   import { player } from '$lib/stores/player.svelte';
   import { translucentDragImage } from '$lib/dnd';
@@ -47,6 +48,13 @@
 
   // The library queue is resolved server-side from these filters, because the
   // loaded rows are only a 200-row window of a much longer list.
+  /**
+   * Whether anything currently loaded has a note. The note column is dropped
+   * entirely when nothing does — a fixed share for it was stealing width from
+   * titles on every row, including the ones with nothing to show there.
+   */
+  const anyNotes = $derived(items.some((i) => annotations.noteFor(i.id) !== null));
+
   const libraryCtx = $derived({
     kind: 'library',
     query: query ?? { sort: DEFAULT_SORT },
@@ -68,11 +76,11 @@
   {loadMore}
 >
   {#snippet headers()}
-    <div class="cols">
+    <div class="cols" class:has-notes={anyNotes}>
       <span></span>
       <span></span>
       <span>Track</span>
-      <span>Note</span>
+      {#if anyNotes}<span>Note</span>{/if}
       <span class="right">Length</span>
       <span></span>
       <span class="src-label">
@@ -85,6 +93,7 @@
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
       class="row"
+      class:has-notes={anyNotes}
       class:playing={isPlaying}
       role="listitem"
       draggable="true"
@@ -123,7 +132,9 @@
         <div class="artist">{item.artist}</div>
         <div class="album">{item.album ?? '—'}</div>
       </div>
-      <div class="note-cell"><TrackNote trackId={item.id} readonly /></div>
+      {#if anyNotes}
+        <div class="note-cell"><TrackNote trackId={item.id} readonly /></div>
+      {/if}
       <span class="dur">{formatDuration(item.duration_ms)}</span>
       <StarButton trackId={item.id} />
       <SourceGrid present={item.sources} />
@@ -141,8 +152,14 @@
        artist 17 + album 17), and the cover itself stretches to the row, so the
        two stay square against each other. If the stack ever grows, the cover
        grows with it and object-fit crops rather than distorting. */
-    grid-template-columns: 20px 52px minmax(0, 1fr) minmax(0, 1.2fr) 60px 20px 56px;
+    grid-template-columns: 20px 52px minmax(0, 1fr) 60px 20px 56px;
     gap: 12px;
+  }
+  /* Titles get the larger share when the note column is present: notes are
+     supporting detail, and the first version had them 1.2fr against the
+     title's 1fr — wider than the thing they annotate. */
+  .cols.has-notes, .row.has-notes {
+    grid-template-columns: 20px 52px minmax(0, 1.7fr) minmax(0, 1fr) 60px 20px 56px;
     padding: 6px 14px;
     align-items: center;
   }
