@@ -329,7 +329,11 @@
     gap: 10px;
     min-width: 0;
   }
-  .title-row .title { min-width: 0; }
+  /* Title takes the slack so the source dots sit on the trailing edge rather
+     than trailing the title. min-width:0 lets a long title ellipsize instead
+     of pushing the dots out of the pane. */
+  .title-row .title { flex: 1 1 auto; min-width: 0; }
+  .title-row > :global(:not(.title)) { flex: 0 0 auto; }
 
   .vet-row { margin-top: 6px; }
   .vet-btn {
