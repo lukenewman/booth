@@ -4,6 +4,14 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { parseFile as parseAudioFile } from 'music-metadata';
 import { env } from '$lib/server/env';
+import { getDb } from '../../db';
+import {
+  DATE_ADDED_KEY,
+  DATE_ADDED_ORIGIN_KEY,
+  DATE_ADDED_REPORTED_KEY,
+  loadDateOverlay,
+  mediaPathKey,
+} from './date_overlay';
 import { parseITunesLibrary, type ITunesTrack } from './parse';
 import type { SourceRelease, SourceTrack, SyncInput, SyncResult } from '../types';
 
@@ -83,8 +91,14 @@ export async function syncITunesLibrary(): Promise<SyncResult> {
     );
   }
 
+  // Acquisition dates recovered from the old MacBook's library, applied here
+  // rather than as a one-off backfill: this sync re-parses the live export on
+  // every server boot and would overwrite a directly-written facet each time.
+  const overlay = loadDateOverlay(getDb());
+
   const tracks: SourceTrack[] = lib.tracks.map((t) => {
     const groupKey = albumGroupKey(t);
+    const recovered = overlay.get(mediaPathKey(t.location));
     return {
       // Persistent ID, not Track ID: Music.app renumbers Track IDs on purge or
       // re-export, and a changed external_id used to prune the link and delete
@@ -101,7 +115,9 @@ export async function syncITunesLibrary(): Promise<SyncResult> {
         bpm: t.bpm,
         rating: t.rating,
         playCount: t.playCount,
-        dateAdded: t.dateAdded,
+        [DATE_ADDED_KEY]: recovered?.dateAdded ?? t.dateAdded,
+        [DATE_ADDED_REPORTED_KEY]: t.dateAdded,
+        [DATE_ADDED_ORIGIN_KEY]: recovered ? 'recovered' : 'reported',
         kind: t.kind,
         bitRate: t.bitRate,
         sampleRate: t.sampleRate,
