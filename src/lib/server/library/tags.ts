@@ -54,7 +54,7 @@ export async function readTags(filePath: string): Promise<FileTags> {
     genre: c.genre?.[0],
     durationMs: meta.format.duration != null ? Math.round(meta.format.duration * 1000) : undefined,
     bpm: c.bpm,
-    comment: firstComment(c.comment),
+    comment: pickComment(c.comment),
     rating: firstRating(c.rating),
     booth,
   };
@@ -65,9 +65,18 @@ function boothKey(id: string): string | null {
   return i >= 0 ? id.slice(i + BOOTH_TAG_PREFIX.length) : null;
 }
 
-/** music-metadata returns comments as a list of `{ text }`; Booth wants one string. */
-function firstComment(comments: { text?: string }[] | undefined): string | undefined {
-  return comments?.find((c) => c.text)?.text;
+/**
+ * The user's comment, from a list that is usually not all user comments.
+ *
+ * iTunes stores gapless-playback and normalisation data in comment frames tagged
+ * with a descriptor — `iTunPGAP`, `iTunNORM`, `iTunSMPB`. Taking the first entry
+ * returns "0" for any file iTunes has touched, which is most of this library.
+ * A real user comment has no descriptor, so prefer that and never return an
+ * iTunes technical frame.
+ */
+export function pickComment(comments: { text?: string; descriptor?: string }[] | undefined): string | undefined {
+  const usable = (comments ?? []).filter((c) => c.text && !/^iTun/i.test(c.descriptor ?? ''));
+  return (usable.find((c) => !c.descriptor) ?? usable[0])?.text;
 }
 
 /** music-metadata normalises ratings to 0..1; Booth's facets are 0..100 like Music.app's. */

@@ -11,7 +11,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readTags } from '../src/lib/server/library/tags';
+import { pickComment, readTags } from '../src/lib/server/library/tags';
 import { hasFfmpeg } from '../src/lib/server/analysis/decode';
 
 let failures = 0;
@@ -76,6 +76,27 @@ const b = await readTags(withBooth);
 check('Booth field read under its bare name', b.booth.DATE_ADDED, '2020-10-05T18:22:00Z');
 check('second Booth field', b.booth.STARRED, '1');
 check('standard fields still read alongside', b.title, 'Test Title');
+
+// iTunes writes gapless and normalisation data into COMM frames carrying a
+// descriptor. Taking the first comment blind returns "0" for any file iTunes has
+// touched, which is most of this library — it made the round-trip probe report a
+// false failure. The array below is exactly what one such file produced.
+// Tested directly because ffmpeg cannot write descriptor'd COMM frames to build
+// a fixture (it routes them to TXXX instead — the same defect that rules it out
+// as the tag writer).
+const iTunesComments = [
+  { language: 'eng', descriptor: 'iTunPGAP', text: '0' },
+  { language: 'eng', descriptor: 'iTunNORM', text: ' 0000015E 00000138' },
+  { language: 'eng', descriptor: 'iTunSMPB', text: ' 00000000 00000210' },
+];
+check('iTunes technical frames are never the note', pickComment(iTunesComments), undefined);
+check(
+  'a real note wins over iTunes frames',
+  pickComment([...iTunesComments, { language: 'eng', descriptor: '', text: 'the real note' }]),
+  'the real note',
+);
+check('a lone plain comment is the note', pickComment([{ text: 'just this' }]), 'just this');
+check('no comments at all', pickComment(undefined), undefined);
 
 const m4a = await tagged('t.m4a', 'aac');
 const m = await readTags(m4a);
