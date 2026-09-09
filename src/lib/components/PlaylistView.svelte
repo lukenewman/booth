@@ -39,7 +39,7 @@
   const anyBpm = $derived(innerWidth > NARROW && (open?.tracks ?? []).some((t) => t.bpm != null));
   const gridTemplate = $derived(
     [
-      '28px',
+      '52px',
       'minmax(0, 2.2fr)',
       'minmax(0, 1.5fr)',
       'minmax(0, 1.5fr)',
@@ -51,6 +51,17 @@
     ]
       .filter(Boolean)
       .join(' '),
+  );
+
+  /**
+   * Total runtime. Discogs-only tracks often carry no duration, so a sum can
+   * silently undercount — the `+` says the real total is at least this.
+   */
+  const totalMs = $derived(
+    (open?.tracks ?? []).reduce((n: number, t: { duration_ms: number | null }) => n + (t.duration_ms ?? 0), 0),
+  );
+  const partialDuration = $derived(
+    (open?.tracks ?? []).some((t: { duration_ms: number | null }) => !t.duration_ms),
   );
 
   const playlistCtx = $derived({
@@ -102,6 +113,14 @@
     if (!ms) return '—';
     const s = Math.round(ms / 1000);
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }
+
+  /** Playlist totals: hours matter for a set, seconds don't. */
+  function formatTotal(ms: number, partial: boolean): string {
+    const min = Math.round(ms / 60000);
+    const h = Math.floor(min / 60);
+    const label = h ? `${h} hr ${min % 60} min` : `${min} min`;
+    return partial ? `${label}+` : label;
   }
 
   let fileInput = $state<HTMLInputElement>();
@@ -211,7 +230,10 @@
       {:else}
         <button class="name" onclick={startRename} title="Rename">{open.name}</button>
       {/if}
-      <span class="meta">{open.tracks.length} {open.tracks.length === 1 ? 'track' : 'tracks'}</span>
+      <span class="meta">
+        {open.tracks.length} {open.tracks.length === 1 ? 'track' : 'tracks'}
+        {#if open.tracks.length > 0}<span class="sep">·</span>{formatTotal(totalMs, partialDuration)}{/if}
+      </span>
       <div class="header-actions">
         {#if open.coverUrl}
           <button class="link" onclick={() => open && playlists.removeCover(open.id)}>Remove custom cover</button>
@@ -255,6 +277,10 @@
             type="button"
             draggable="true"
             ondragstart={(e) => onDragStart(e, t.id)}
+            ondragover={(e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; if (dragId && dragId !== t.id) overId = t.id; }}
+            ondragleave={() => { if (overId === t.id) overId = null; }}
+            ondrop={(e) => { e.preventDefault(); overId = null; applyReorder(t.id); }}
+            ondragend={() => { dragId = null; overId = null; }}
             onclick={(e) => { if (e.detail > 0) e.stopPropagation(); else onTrackSelect?.(t.id); }}
             ondblclick={() => { if (t.canPlay) player.playFrom(playlistCtx, t.id, { trackId: t.id, title: t.title, artist: t.artist, thumbUrl: t.thumb_url, releaseId: t.release_id, bpm: t.bpm ?? null }, playlistSeed); }}
           >
@@ -401,7 +427,7 @@
     width: 100%;
     margin-top: 4px;
   }
-  .link {
+  .header-actions .link {
     background: transparent;
     border: 0;
     color: var(--text-subtle);
@@ -411,7 +437,7 @@
     padding: 0;
     text-decoration: underline;
   }
-  .link:hover { color: var(--text-muted); }
+  .header-actions .link:hover { color: var(--text-muted); }
   .name {
     background: transparent; border: 0; color: var(--text);
     font-family: inherit; font-size: 14px; font-weight: 600;
@@ -424,6 +450,7 @@
     font-family: inherit; font-size: 14px; font-weight: 600;
   }
   .meta { color: var(--text-subtle); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .meta .sep { margin: 0 5px; opacity: 0.6; }
   .del {
     margin-left: auto; background: transparent; border: 0;
     color: var(--text-subtle); cursor: pointer; font-size: 13px;
@@ -462,7 +489,7 @@
   .cols .right { text-align: right; }
   .row { padding: 6px 14px; }
   .thumb {
-    width: 28px; height: 28px; border-radius: 3px;
+    width: 52px; height: 52px; border-radius: 3px;
     background: var(--bg-raised); border: 1px solid var(--border);
     position: relative; overflow: hidden; cursor: grab; flex-shrink: 0;
   }

@@ -203,13 +203,17 @@
   .cols, .row {
     display: grid;
     gap: 12px;
+    /* Cells are centred against the tallest thing in the row (the meta stack);
+       the cover opts back out with `align-self: stretch` so it stays square.
+       Without this, single-line cells — length, star, sources — sat on the
+       grid's default stretch baseline and hugged the top of the row. */
+    align-items: center;
   }
   /* Titles get the larger share when the note column is present: notes are
      supporting detail, and the first version had them 1.2fr against the
      title's 1fr — wider than the thing they annotate. */
   .cols.has-notes, .row.has-notes {
     padding: 6px 14px;
-    align-items: center;
   }
   .cols {
     color: var(--text-subtle);
