@@ -21,10 +21,11 @@ export interface AnnotationEvent {
   kind: 'track' | 'release';
   /** Entity ULID — exact replay onto the same database. */
   id: string;
-  action: 'star' | 'unstar' | 'vet' | 'unvet' | 'note';
+  action: 'star' | 'unstar' | 'vet' | 'unvet' | 'note' | 'bpm';
   /**
-   * The resulting value: an ISO8601 timestamp for star/vet, or the note text
-   * itself for `note`. Null when the annotation was cleared.
+   * The resulting value: an ISO8601 timestamp for star/vet, the note text
+   * itself for `note`, or the tempo as a decimal string for `bpm`. Null when
+   * the annotation was cleared.
    */
   value: string | null;
   /** Name keys — replay onto a rebuilt database, where ULIDs won't match. */
@@ -40,6 +41,8 @@ export interface ReplayResult {
   vetted: Map<string, string>;
   /** trackId -> note text */
   notes: Map<string, string>;
+  /** trackId -> tapped BPM */
+  bpms: Map<string, number>;
   /** "artist title" -> starred_at, for matching against a rebuilt database. */
   byName: Map<string, string>;
 }
@@ -59,6 +62,7 @@ export function replayEvents(events: AnnotationEvent[], asOf?: string): ReplayRe
   const stars = new Map<string, string>();
   const vetted = new Map<string, string>();
   const notes = new Map<string, string>();
+  const bpms = new Map<string, number>();
   const byName = new Map<string, string>();
 
   for (const e of events) {
@@ -87,10 +91,17 @@ export function replayEvents(events: AnnotationEvent[], asOf?: string): ReplayRe
         if (e.value) notes.set(e.id, e.value);
         else notes.delete(e.id);
         break;
+      case 'bpm': {
+        // Same shape as `note`: a cleared tempo is a `bpm` event with no value.
+        const n = e.value == null ? NaN : Number(e.value);
+        if (Number.isFinite(n)) bpms.set(e.id, n);
+        else bpms.delete(e.id);
+        break;
+      }
     }
   }
 
-  return { stars, vetted, notes, byName };
+  return { stars, vetted, notes, bpms, byName };
 }
 
 /** Append one event. Creates the directory and file on first write. */

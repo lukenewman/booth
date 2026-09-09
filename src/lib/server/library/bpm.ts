@@ -20,7 +20,23 @@ export const BPM_KEY_TAG = 'bpm';
 export const BPM_KEY_ANALYZED = 'bpmAnalyzed';
 
 /**
+ * Pseudo-source for the user's own tapped reading.
+ *
+ * A tap lives in a column on `track`, not in source_facets — it is the user's
+ * judgment, like a star, and sync must never touch it. It is presented to the
+ * resolver as a facet row anyway so the precedence list stays one array over
+ * one shape; nothing writes this source id to the database, and unlike a real
+ * source it never reaches the source grid or the source filter.
+ */
+const BOOTH_SOURCE = 'booth';
+
+/**
  * Which opinion wins, best first.
+ *
+ * Tapping is last, deliberately. It exists to fill blanks — chiefly the vinyl
+ * the app can see but not analyse — not to correct a beatgrid. A hurried tap
+ * silently displacing a good rekordbox number is a worse failure than a missing
+ * one, and clearing the tap is the way to re-measure.
  *
  * rekordbox is first because those numbers have been through a DJ's hands —
  * analysed and then corrected in the places analysis gets it wrong, which is
@@ -35,7 +51,16 @@ const PRECEDENCE: { provider: BpmProvider; source: string; key: string }[] = [
   { provider: 'rekordbox', source: 'rekordbox', key: BPM_KEY_TAG },
   { provider: 'analysis', source: 'local', key: BPM_KEY_ANALYZED },
   { provider: 'tag', source: 'local', key: BPM_KEY_TAG },
+  { provider: 'tapped', source: BOOTH_SOURCE, key: BPM_KEY_TAG },
 ];
+
+/**
+ * Present a tapped BPM as a facet row, so callers holding a track row can feed
+ * it to `resolveBpm` without the resolver learning about columns.
+ */
+export function tappedBpmFacets(tappedBpm: number | null | undefined): FacetLike[] {
+  return tappedBpm == null ? [] : [{ source: BOOTH_SOURCE, key: BPM_KEY_TAG, value: String(tappedBpm) }];
+}
 
 interface FacetLike {
   source: string;
@@ -92,6 +117,20 @@ export function resolveBpmForTracks(
     const list = byTrack.get(r.entity_id) ?? [];
     list.push(r);
     byTrack.set(r.entity_id, list);
+  }
+
+  // Taps live on the track row rather than in facets, so they need their own
+  // pass — still one round trip, matching the batching this function exists for.
+  const tapped = db
+    .prepare(
+      `SELECT id, tapped_bpm FROM track
+        WHERE tapped_bpm IS NOT NULL AND id IN (${trackIds.map(() => '?').join(',')})`,
+    )
+    .all(...trackIds) as { id: string; tapped_bpm: number }[];
+  for (const t of tapped) {
+    const list = byTrack.get(t.id) ?? [];
+    list.push(...tappedBpmFacets(t.tapped_bpm));
+    byTrack.set(t.id, list);
   }
 
   for (const [trackId, facets] of byTrack) {

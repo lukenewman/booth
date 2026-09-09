@@ -1,5 +1,6 @@
 <script lang="ts">
   import SourcePanel from './SourcePanel.svelte';
+  import TapTempo from './TapTempo.svelte';
   import { PITCH_RANGES } from '$lib/pitch';
   import { bpmProviderLabel, formatBpm, formatBpmRange, type ResolvedBpm } from '$lib/bpm';
 
@@ -36,6 +37,25 @@
     onReleaseSelect?: (releaseId: string) => void;
   } = $props();
 
+  /**
+   * A tap saved here should show immediately rather than waiting for the pane
+   * to be re-fetched. Keyed by track id so the override cannot bleed onto the
+   * next track when the same component instance is reused.
+   */
+  let override = $state<{ id: string; bpm: ResolvedBpm | null } | null>(null);
+  const shownBpm = $derived(
+    override && override.id === track.id ? override.bpm : bpm,
+  );
+
+  async function clearTap() {
+    const res = await fetch(`/api/library/tracks/${track.id}/bpm`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ bpm: null }),
+    });
+    if (res.ok) override = { id: track.id, bpm: null };
+  }
+
   function facetRowsFor(sourceId: string) {
     const monoKeys = new Set(['file', 'file path', 'external id', 'bitrate', 'samplerate', 'date added', 'added']);
     return facets
@@ -69,23 +89,32 @@
   <div class="title">{track.title}</div>
   <div class="artist">{track.artist} · {durationLabel(track.duration_ms)}</div>
 
-  {#if bpm}
+  {#if shownBpm}
     <!-- The detail pane is the one surface with room to answer "what can I mix
          this with" in full, so both fader ranges are spelled out rather than
          only the one the player happens to be set to. -->
     <div class="tempo">
       <div class="tempo-head">
-        <span class="tempo-value">{formatBpm(bpm.value)}</span>
+        <span class="tempo-value">{formatBpm(shownBpm.value)}</span>
         <span class="tempo-unit">BPM</span>
-        <span class="tempo-src">{bpmProviderLabel(bpm.provider)}</span>
+        <span class="tempo-src">{bpmProviderLabel(shownBpm.provider)}</span>
       </div>
       {#each PITCH_RANGES as range}
         <div class="tempo-row">
           <span class="tempo-range">±{range}%</span>
-          <span class="tempo-span">{formatBpmRange(bpm.value, range)}</span>
+          <span class="tempo-span">{formatBpmRange(shownBpm.value, range)}</span>
         </div>
       {/each}
+      {#if shownBpm.provider === 'tapped'}
+        <!-- Tapping only fills blanks, so clearing is how you re-measure. -->
+        <button class="tempo-clear" onclick={clearTap}>clear and re-tap</button>
+      {/if}
     </div>
+  {:else}
+    <TapTempo
+      trackId={track.id}
+      onSaved={(value) => (override = { id: track.id, bpm: { value, provider: 'tapped' } })}
+    />
   {/if}
 
   {#if release}
@@ -167,6 +196,16 @@
     margin-top: 3px;
   }
   .tempo-span { color: var(--text-muted); }
+  .tempo-clear {
+    margin-top: 6px;
+    font-size: 10px;
+    color: var(--text-subtle);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+  .tempo-clear:hover { color: var(--text-muted); }
 
   .parent-card {
     display: flex;

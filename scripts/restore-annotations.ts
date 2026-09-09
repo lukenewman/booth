@@ -52,12 +52,20 @@ if (events.length === 0) {
 }
 
 const target = replayEvents(events, asOf);
+
+/** When each surviving tap was recorded — the journal's own clock. */
+const bpmMeasuredAt = new Map<string, string>();
+for (const e of events) {
+  if (asOf && e.at > asOf) continue;
+  if (e.action === 'bpm') bpmMeasuredAt.set(e.id, e.at);
+}
 console.log(
   `journal: ${events.length} events, ${events[0].at} → ${events[events.length - 1].at}`,
 );
 console.log(
   `target state${asOf ? ` as of ${asOf}` : ' (now)'}: ` +
-    `${target.stars.size} stars, ${target.vetted.size} vetted, ${target.notes.size} notes`,
+    `${target.stars.size} stars, ${target.vetted.size} vetted, ${target.notes.size} notes, ` +
+    `${target.bpms.size} tapped BPMs`,
 );
 
 const db = new Database(dbPath);
@@ -122,6 +130,19 @@ const toClearNote = prune
   ? [...liveNotes.keys()].filter((id) => !target.notes.has(id) && seenTracks.has(id))
   : [];
 
+const liveBpms = new Map(
+  (
+    db.prepare(`SELECT id, tapped_bpm FROM track WHERE tapped_bpm IS NOT NULL`).all() as {
+      id: string;
+      tapped_bpm: number;
+    }[]
+  ).map((r) => [r.id, r.tapped_bpm]),
+);
+const toBpm = [...target.bpms.entries()].filter(([id, v]) => liveBpms.get(id) !== v);
+const toClearBpm = prune
+  ? [...liveBpms.keys()].filter((id) => !target.bpms.has(id) && seenTracks.has(id))
+  : [];
+
 const toVet = [...target.vetted.keys()].filter((id) => !liveVetted.has(id));
 const toUnvet = prune
   ? [...liveVetted].filter((id) => !target.vetted.has(id) && seenReleases.has(id))
@@ -131,7 +152,8 @@ console.log(
   `live: ${liveStars.size} stars, ${liveVetted.size} vetted\n` +
     `plan: +${toStar.length} stars, -${toUnstar.length} stars, ` +
     `+${toVet.length} vetted, -${toUnvet.length} vetted, ` +
-    `~${toNote.length} notes, -${toClearNote.length} notes` +
+    `~${toNote.length} notes, -${toClearNote.length} notes, ` +
+    `~${toBpm.length} tapped BPMs, -${toClearBpm.length} tapped BPMs` +
     (unmatched ? `, ${unmatched} unmatched (row gone, no name match)` : '') +
     (prune ? '' : '\n(additive only — pass --prune to also remove annotations the journal dropped)'),
 );
@@ -144,6 +166,9 @@ if (!apply) {
 const setStar = db.prepare(`UPDATE track SET starred_at = ? WHERE id = ?`);
 const setVet = db.prepare(`UPDATE release SET vetted_at = ? WHERE id = ?`);
 const setNote = db.prepare(`UPDATE track SET note = ? WHERE id = ?`);
+// Restoring a measurement without when it was measured would be a lie, and the
+// journal timestamp is the moment it was recorded, so it doubles as measured-at.
+const setBpm = db.prepare(`UPDATE track SET tapped_bpm = ?, tapped_bpm_at = ? WHERE id = ?`);
 
 db.transaction(() => {
   for (const { id, ts } of toStar) setStar.run(ts, id);
@@ -152,6 +177,8 @@ db.transaction(() => {
   for (const id of toUnvet) setVet.run(null, id);
   for (const [id, text] of toNote) setNote.run(text, id);
   for (const id of toClearNote) setNote.run(null, id);
+  for (const [id, value] of toBpm) setBpm.run(value, bpmMeasuredAt.get(id) ?? null, id);
+  for (const id of toClearBpm) setBpm.run(null, null, id);
 })();
 
 const afterStars = (
@@ -162,4 +189,7 @@ const afterVetted = (
     n: number;
   }
 ).n;
-console.log(`applied — now ${afterStars} stars, ${afterVetted} vetted`);
+const afterBpms = (
+  db.prepare(`SELECT COUNT(*) AS n FROM track WHERE tapped_bpm IS NOT NULL`).get() as { n: number }
+).n;
+console.log(`applied — now ${afterStars} stars, ${afterVetted} vetted, ${afterBpms} tapped BPMs`);

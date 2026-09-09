@@ -11,6 +11,10 @@ import type { Database } from 'bun:sqlite';
 
 const NOW = `strftime('%Y-%m-%dT%H:%M:%fZ','now')`;
 
+/** Plausibility bounds for a tapped tempo, matching the BPM resolver's. */
+export const MIN_TAPPED_BPM = 20;
+export const MAX_TAPPED_BPM = 400;
+
 export function setTrackStar(
   db: Database,
   trackId: string,
@@ -69,6 +73,38 @@ export function setTrackNote(
     | { note: string | null }
     | undefined;
   return { note: row?.note ?? null };
+}
+
+/**
+ * Set or clear a track's tapped BPM.
+ *
+ * Whole numbers only, and implausible values are refused outright rather than
+ * stored for the resolver to reject later — a tap is hand-made data with no
+ * source to re-derive it from, so the bad value would simply sit there.
+ *
+ * Unlike a star, re-tapping is meant to overwrite: the timestamp answers "when
+ * did I last measure this", so there is no COALESCE here.
+ */
+export function setTrackTappedBpm(
+  db: Database,
+  trackId: string,
+  bpm: number | null,
+): { tappedBpm: number | null; tappedBpmAt: string | null } {
+  const value =
+    bpm == null || !Number.isFinite(bpm) || bpm < MIN_TAPPED_BPM || bpm > MAX_TAPPED_BPM
+      ? null
+      : Math.round(bpm);
+
+  db.prepare(
+    value === null
+      ? `UPDATE track SET tapped_bpm = NULL, tapped_bpm_at = NULL WHERE id = ?`
+      : `UPDATE track SET tapped_bpm = ?, tapped_bpm_at = ${NOW} WHERE id = ?`,
+  ).run(...(value === null ? [trackId] : [value, trackId]));
+
+  const row = db
+    .prepare(`SELECT tapped_bpm, tapped_bpm_at FROM track WHERE id = ?`)
+    .get(trackId) as { tapped_bpm: number | null; tapped_bpm_at: string | null } | undefined;
+  return { tappedBpm: row?.tapped_bpm ?? null, tappedBpmAt: row?.tapped_bpm_at ?? null };
 }
 
 /**

@@ -9,6 +9,7 @@ import {
 } from '../src/lib/server/library/bpm';
 import { bpmRange, formatBpm, formatBpmRange, pitchedBpm } from '../src/lib/bpm';
 import { getTrackDetail, listTracks } from '../src/lib/server/library/queries';
+import { setTrackTappedBpm } from '../src/lib/server/library/annotations';
 
 function fail(msg: string): never {
   console.error(`FAIL: ${msg}`);
@@ -154,5 +155,68 @@ db.prepare(
 const afterAnalysis = resolveBpmForTracks(db, [withBpm.id]).get(withBpm.id);
 assert(afterAnalysis?.value === 123.8, 'analysis outranks the tag');
 assert(afterAnalysis?.provider === 'analysis', 'analysis provider reported');
+
+// --- Tapping fills blanks and never displaces a measured number ----
+const tappedOnly = collate(db, 'discogs', {
+  releases: [{ externalId: 'alb-9', title: 'Vinyl Only', artist: 'Nobody', year: 2020 }],
+  tracks: [
+    {
+      externalId: 'v1',
+      title: 'No File Behind It',
+      artist: 'Nobody',
+      album: 'Vinyl Only',
+      position: 'A1',
+      releaseExternalId: 'alb-9',
+      facets: {},
+    },
+  ],
+});
+assert(tappedOnly.tracksUpserted === 1, 'vinyl-only track created');
+const vinylId = (
+  db.prepare(`SELECT id FROM track WHERE title='No File Behind It'`).get() as { id: string }
+).id;
+
+assert(resolveBpmForTracks(db, [vinylId]).get(vinylId) === undefined, 'no reading before tapping');
+
+setTrackTappedBpm(db, vinylId, 128);
+const afterTap = resolveBpmForTracks(db, [vinylId]).get(vinylId);
+assert(afterTap?.value === 128, `tap fills the blank, got ${afterTap?.value}`);
+assert(afterTap?.provider === 'tapped', `tapped provider reported, got ${afterTap?.provider}`);
+assert(
+  getTrackDetail(db, vinylId)?.bpm?.provider === 'tapped',
+  'the track detail resolves a tap too',
+);
+
+// A tap on a track that already has analysis must lose to it.
+setTrackTappedBpm(db, withBpm.id, 100);
+const contested = resolveBpmForTracks(db, [withBpm.id]).get(withBpm.id);
+assert(contested?.value === 123.8, `analysis still wins, got ${contested?.value}`);
+assert(contested?.provider === 'analysis', 'tapping cannot displace a measured number');
+
+// Clearing puts the blank back.
+setTrackTappedBpm(db, vinylId, null);
+assert(resolveBpmForTracks(db, [vinylId]).get(vinylId) === undefined, 'clearing removes it');
+
+// Junk is refused at write time rather than stored for the reader to reject.
+setTrackTappedBpm(db, vinylId, 5000);
+assert(
+  (db.prepare(`SELECT tapped_bpm FROM track WHERE id=?`).get(vinylId) as { tapped_bpm: number | null })
+    .tapped_bpm === null,
+  'an implausible tempo is not stored',
+);
+
+// Re-tapping overwrites, unlike a star's first-time-only timestamp.
+setTrackTappedBpm(db, vinylId, 120);
+const firstAt = (
+  db.prepare(`SELECT tapped_bpm_at FROM track WHERE id=?`).get(vinylId) as { tapped_bpm_at: string }
+).tapped_bpm_at;
+assert(firstAt !== null, 'tap records when it was measured');
+setTrackTappedBpm(db, vinylId, 124);
+const second = db.prepare(`SELECT tapped_bpm, tapped_bpm_at FROM track WHERE id=?`).get(vinylId) as {
+  tapped_bpm: number;
+  tapped_bpm_at: string;
+};
+assert(second.tapped_bpm === 124, 'a re-tap replaces the value');
+assert(second.tapped_bpm_at >= firstAt, 're-tap moves the measured-at timestamp');
 
 console.log('OK: bpm resolution');

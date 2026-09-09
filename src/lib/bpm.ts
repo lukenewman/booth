@@ -7,7 +7,7 @@
 import { pitchToRate, type PitchRange } from './pitch';
 
 /** Where a BPM reading came from. Mirrors the server resolver's providers. */
-export type BpmProvider = 'rekordbox' | 'analysis' | 'tag';
+export type BpmProvider = 'rekordbox' | 'analysis' | 'tag' | 'tapped';
 
 export interface ResolvedBpm {
   value: number;
@@ -50,5 +50,7 @@ export function bpmProviderLabel(provider: BpmProvider): string {
       return 'analysed';
     case 'tag':
       return 'from file tag';
+    case 'tapped':
+      return 'tapped by ear';
   }
 }

@@ -10,7 +10,7 @@ const playableSources = new Set(
 );
 
 import { countStarredByRelease } from './annotations';
-import { resolveBpm, resolveBpmForTracks, type ResolvedBpm } from './bpm';
+import { resolveBpm, resolveBpmForTracks, tappedBpmFacets, type ResolvedBpm } from './bpm';
 
 export function getMembershipExternalIds(
   db: Database,
@@ -52,6 +52,7 @@ export interface TrackRow {
   thumb_url: string | null;
   starred_at: string | null;
   note: string | null;
+  tapped_bpm: number | null;
 }
 
 export interface SourceLinkRow {
@@ -468,7 +469,8 @@ export function getTrackDetail(
   const track = db
     .prepare(
       `SELECT track.id, track.title, artist.name AS artist,
-              track.album, track.duration_ms, track.release_id, track.position
+              track.album, track.duration_ms, track.release_id, track.position,
+              track.tapped_bpm
          FROM track
          JOIN artist ON artist.id = track.artist_id
          WHERE track.id = ?`,
@@ -505,7 +507,13 @@ export function getTrackDetail(
         .get(track.release_id) as ReleaseRow | undefined) ?? null;
   }
 
-  return { track, sources, facets, release, bpm: resolveBpm(facets) };
+  return {
+    track,
+    sources,
+    facets,
+    release,
+    bpm: resolveBpm([...facets, ...tappedBpmFacets(track.tapped_bpm)]),
+  };
 }
 
 // ---- Artists -----------------------------------------------------
