@@ -6,7 +6,12 @@ import type {
   SourceTrack,
   SyncResult,
 } from '../sources/types';
-import { normalizeArtistAlbumYear, normalizeArtistName, normalizeFilePath } from './normalize';
+import {
+  normalizeArtistAlbum,
+  normalizeArtistAlbumYear,
+  normalizeArtistName,
+  normalizeFilePath,
+} from './normalize';
 
 const UNKNOWN_ARTIST_NAME = '(unknown)';
 
@@ -28,6 +33,7 @@ export interface CollateSummary {
 export type MatchMethod =
   | 'file_path'
   | 'artist_album_year'
+  | 'artist_album'
   | 'release_position'
   | 'external_id_carryover'
   | 'name_normalized'
@@ -187,6 +193,69 @@ export function upsertArtist(
 
 // ---- Releases ---------------------------------------------------
 
+/**
+ * Resolve an incoming release to an existing entity, in descending confidence:
+ *
+ *   1. `artist_album_year` — artist, album and year all agree.
+ *   2. `artist_album`      — artist and album agree, year does not.
+ *
+ * Step 2 exists because the sources do not mean the same thing by "year": a
+ * local file carries the album's original release year from its tags, while
+ * Discogs carries the year of the *pressing* held in the collection. Under the
+ * year-bearing key alone every repress split one album into two entities.
+ *
+ * Returns null when nothing matches — the caller mints a new entity.
+ *
+ * Exported so the Discogs add path resolves releases exactly as a sync does;
+ * it used to mint an entity unconditionally, permanently duplicating any record
+ * already present locally.
+ */
+export function resolveReleaseEntity(
+  db: Database,
+  r: { artist: string; album: string; year?: number | null },
+): { entityId: string; method: MatchMethod } | null {
+  const exact = normalizeArtistAlbumYear({ artist: r.artist, album: r.album, year: r.year });
+  if (exact) {
+    const found = db
+      .prepare(
+        `SELECT entity_id FROM match_key
+          WHERE entity_kind='release' AND key_type='artist_album_year' AND key_value=?`,
+      )
+      .get(exact) as { entity_id: string } | undefined;
+    if (found) return { entityId: found.entity_id, method: 'artist_album_year' };
+  }
+
+  const loose = normalizeArtistAlbum({ artist: r.artist, album: r.album });
+  if (loose) {
+    const found = db
+      .prepare(
+        `SELECT entity_id FROM match_key
+          WHERE entity_kind='release' AND key_type='artist_album' AND key_value=?`,
+      )
+      .get(loose) as { entity_id: string } | undefined;
+    if (found) return { entityId: found.entity_id, method: 'artist_album' };
+  }
+
+  return null;
+}
+
+/**
+ * Write both release match keys for an entity. The exact key may be stolen by a
+ * later entity (an artist rename between syncs should move it); the weaker key
+ * is claimed first-come, or two same-titled albums would trade it back and forth
+ * on every sync and the fallback would never resolve to a stable entity.
+ */
+function upsertReleaseMatchKeys(
+  db: Database,
+  entityId: string,
+  r: { artist: string; album: string; year?: number | null },
+): void {
+  const exact = normalizeArtistAlbumYear({ artist: r.artist, album: r.album, year: r.year });
+  if (exact) upsertMatchKey(db, 'release', entityId, 'artist_album_year', exact);
+  const loose = normalizeArtistAlbum({ artist: r.artist, album: r.album });
+  if (loose) upsertMatchKey(db, 'release', entityId, 'artist_album', loose, { steal: false });
+}
+
 function upsertRelease(
   db: Database,
   sourceId: string,
@@ -194,27 +263,10 @@ function upsertRelease(
   summary: CollateSummary,
   artistCache: Map<string, string>,
 ): string {
-  const matchKey = normalizeArtistAlbumYear({
-    artist: r.artist,
-    album: r.title,
-    year: r.year,
-  });
+  const matched = resolveReleaseEntity(db, { artist: r.artist, album: r.title, year: r.year });
 
-  let entityId: string | undefined;
-  let method: MatchMethod = 'first_seen';
-
-  if (matchKey) {
-    const found = db
-      .prepare(
-        `SELECT entity_id FROM match_key
-          WHERE entity_kind='release' AND key_type='artist_album_year' AND key_value=?`,
-      )
-      .get(matchKey) as { entity_id: string } | undefined;
-    if (found) {
-      entityId = found.entity_id;
-      method = 'artist_album_year';
-    }
-  }
+  let entityId: string | undefined = matched?.entityId;
+  let method: MatchMethod = matched?.method ?? 'first_seen';
 
   if (!entityId) {
     const carry = db
@@ -249,7 +301,7 @@ function upsertRelease(
   }
 
   upsertSourceLink(db, 'release', entityId, sourceId, r.externalId, r.externalUrl, method, summary);
-  if (matchKey) upsertMatchKey(db, 'release', entityId, 'artist_album_year', matchKey);
+  upsertReleaseMatchKeys(db, entityId, { artist: r.artist, album: r.title, year: r.year });
   upsertFacets(db, 'release', entityId, sourceId, r.facets);
 
   summary.releasesUpserted++;
@@ -456,6 +508,7 @@ export function upsertMatchKey(
   entityId: string,
   keyType: string,
   keyValue: string,
+  opts: { steal?: boolean } = {},
 ): void {
   // Two unique constraints on this table:
   //   PK   (entity_kind, key_type, key_value)  → "this key already maps to that entity"
@@ -470,7 +523,7 @@ export function upsertMatchKey(
     `INSERT INTO match_key (entity_kind, entity_id, key_type, key_value)
      VALUES (?, ?, ?, ?)
      ON CONFLICT(entity_kind, key_type, key_value) DO UPDATE SET
-       entity_id = excluded.entity_id`,
+       entity_id = ${opts.steal === false ? 'match_key.entity_id' : 'excluded.entity_id'}`,
   ).run(kind, entityId, keyType, keyValue);
 }
 

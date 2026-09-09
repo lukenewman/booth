@@ -1,4 +1,5 @@
 import {
+  normalizeArtistAlbum,
   normalizeArtistAlbumYear,
   normalizeFilePath,
 } from '../src/lib/server/library/normalize';
@@ -38,6 +39,27 @@ assertEq(
   normalizeArtistAlbumYear({ artist: '', album: 'Y', year: 1999 }),
   null,
   'empty artist',
+);
+
+assertEq(
+  normalizeArtistAlbum({ artist: 'ML Buch', album: 'Suntub' }),
+  'mlbuch|suntub',
+  'artist_album basic',
+);
+assertEq(
+  normalizeArtistAlbum({ artist: 'Björk', album: 'Post' }),
+  'bjork|post',
+  'artist_album diacritics',
+);
+assertEq(
+  normalizeArtistAlbum({ artist: 'X', album: '' }),
+  null,
+  'artist_album empty album',
+);
+assertEq(
+  normalizeArtistAlbum({ artist: 'Seb Wildblood', album: ':~^' }),
+  null,
+  'artist_album unkeyable title',
 );
 
 assertEq(

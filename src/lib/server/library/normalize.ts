@@ -49,3 +49,21 @@ export function normalizeFilePath(input: string): string {
   }
   return p.replace(/\/$/, '');
 }
+
+/**
+ * Weaker match-key for cross-source release matching, consulted only after
+ * `artist_album_year` misses.
+ *
+ * The two sources disagree about what "year" means: a local file carries the
+ * album's original release year (from its tags), while Discogs carries the year
+ * of the *pressing* sitting in the collection. Any repress therefore splits one
+ * album into two entities under the year-bearing key alone.
+ *
+ * Returns null when artist or album normalizes to empty.
+ */
+export function normalizeArtistAlbum(args: { artist: string; album: string }): string | null {
+  const a = squashAlphanumLower(args.artist);
+  const b = squashAlphanumLower(args.album);
+  if (!a || !b) return null;
+  return `${a}|${b}`;
+}
