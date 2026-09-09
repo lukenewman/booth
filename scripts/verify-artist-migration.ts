@@ -16,6 +16,23 @@ function assert(cond: unknown, msg: string): asserts cond {
 const here = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS = join(here, '../src/lib/server/db/migrations');
 
+/**
+ * Apply every migration that sorts after `file`.
+ *
+ * The 003 assertions below deliberately run against a 002-shaped database —
+ * that is the situation the migration has to survive. But the query functions
+ * this script also exercises are current code against the current schema, and
+ * they drifted past 003 (cover art in 005, annotations in 009/010/012). Bringing
+ * the database up to date at that seam keeps both halves honest, and reading the
+ * directory rather than a hardcoded list means the next migration needs no edit
+ * here.
+ */
+function applyMigrationsAfter(db: Database, file: string): void {
+  for (const f of readdirSync(MIGRATIONS).sort()) {
+    if (f.endsWith('.sql') && f > file) applyMigration(db, f);
+  }
+}
+
 function applyMigration(db: Database, file: string): void {
   const sql = readFileSync(join(MIGRATIONS, file), 'utf8');
   // Match production migrate.ts: wrap in a tx so PRAGMA defer_foreign_keys
@@ -109,6 +126,10 @@ db.prepare(
      VALUES ('artist', ?, 'name_normalized', 'daftpunk')`,
 ).run(daftId);
 
+// Everything past 003, so the current query functions meet the schema they
+// were written against.
+applyMigrationsAfter(db, '003_artist_entity.sql');
+
 // Queries return artist via JOIN — wire shape unchanged.
 const pageDetail = getReleaseDetail(db, 'rel-1');
 assert(
@@ -144,6 +165,7 @@ db2.exec('PRAGMA foreign_keys = ON');
 applyMigration(db2, '001_init.sql');
 applyMigration(db2, '002_source_state.sql');
 applyMigration(db2, '003_artist_entity.sql');
+applyMigrationsAfter(db2, '003_artist_entity.sql');
 collate(db2, 'itunes', {
   releases: [
     { externalId: 'a', title: 'Album', artist: 'Björk', year: 2007 },

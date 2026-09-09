@@ -1,4 +1,4 @@
-import { parseITunesLibrary } from '../src/lib/server/sources/itunes/parse';
+import { parseITunesLibrary } from '../src/lib/server/sources/local/parse';
 
 const lib = parseITunesLibrary('scripts/fixtures/itunes-tiny.xml');
 
