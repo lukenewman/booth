@@ -1,4 +1,5 @@
 import { discogsFetch } from './api';
+import { stripDisambiguation } from './format';
 import { getUsername } from './username';
 import { env } from '$lib/server/env';
 import type { SourceRelease, SyncResult } from '../types';
@@ -66,7 +67,8 @@ export async function syncDiscogsCollection(): Promise<SyncResult> {
 
   for (const [releaseId, item] of lastSeen) {
     const bi = item.basic_information;
-    const artist = bi.artists?.map((a) => a.name).join(', ') || '(unknown)';
+    const artist =
+      bi.artists?.map((a) => stripDisambiguation(a.name)).join(', ') || '(unknown)';
     const label = bi.labels?.[0]?.name ?? null;
     const catno = bi.labels?.[0]?.catno ?? null;
     const format = bi.formats?.map((f) => f.name).join(', ') || null;

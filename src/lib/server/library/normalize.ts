@@ -7,6 +7,26 @@ function squashAlphanumLower(s: string): string {
 }
 
 /**
+ * A trailing "(Reissue)", "(Full Album)", "(2009 Remaster)" or
+ * "(25th Anniversary Edition)" is how Bandcamp and Apple tag an edition — it is
+ * not part of the album name and never reaches the Discogs side, so left in
+ * the key it split Jubiiilæum, both Felbm tapes and Homework from their Discogs
+ * copies. Only groups *ending* in one of those words go; "(Remixes)", "(Edit)"
+ * and a catalogue number name a different record and stay. A title that is
+ * nothing but the tag is left alone.
+ */
+const EDITION_TAG = /\s*[([][^()[\]]*\b(?:re-?issue|re-?master(?:ed)?|full album|edition)[)\]]\s*$/i;
+
+export function stripEditionTags(album: string): string {
+  let out = album;
+  for (;;) {
+    const next = out.replace(EDITION_TAG, '');
+    if (next === out || next.trim() === '') return out;
+    out = next;
+  }
+}
+
+/**
  * Match-key for cross-source release matching.
  * Returns null when year is missing — we do not match year-less releases.
  */
@@ -17,7 +37,7 @@ export function normalizeArtistAlbumYear(args: {
 }): string | null {
   if (args.year == null) return null;
   const a = squashAlphanumLower(args.artist);
-  const b = squashAlphanumLower(args.album);
+  const b = squashAlphanumLower(stripEditionTags(args.album));
   if (!a || !b) return null;
   return `${a}|${b}|${args.year}`;
 }
@@ -63,7 +83,7 @@ export function normalizeFilePath(input: string): string {
  */
 export function normalizeArtistAlbum(args: { artist: string; album: string }): string | null {
   const a = squashAlphanumLower(args.artist);
-  const b = squashAlphanumLower(args.album);
+  const b = squashAlphanumLower(stripEditionTags(args.album));
   if (!a || !b) return null;
   return `${a}|${b}`;
 }

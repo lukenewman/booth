@@ -1,7 +1,11 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { discogsFetch, DiscogsError } from '$lib/server/sources/discogs/api';
-import { buildFormatLabel, type DiscogsFormat } from '$lib/server/sources/discogs/format';
+import {
+  buildFormatLabel,
+  stripDisambiguation,
+  type DiscogsFormat,
+} from '$lib/server/sources/discogs/format';
 import type { SearchHit } from '$lib/discogs/group';
 
 interface DiscogsSearchResult {
@@ -26,7 +30,7 @@ interface DiscogsSearchResponse {
 function parseTitle(combined: string): { artist: string; title: string } {
   const idx = combined.indexOf(' - ');
   if (idx === -1) return { artist: '', title: combined };
-  return { artist: combined.slice(0, idx), title: combined.slice(idx + 3) };
+  return { artist: stripDisambiguation(combined.slice(0, idx)), title: combined.slice(idx + 3) };
 }
 
 function byYearAsc(a: SearchHit, b: SearchHit): number {

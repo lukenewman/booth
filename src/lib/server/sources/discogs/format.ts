@@ -37,3 +37,16 @@ export function buildFormatLabel(formats: DiscogsFormat[] | undefined | null): s
 
   return labels.length ? labels.join(' / ') : null;
 }
+
+/**
+ * Drop Discogs' numeric disambiguation from an artist string — "Picture (6)"
+ * is how Discogs tells the sixth artist called Picture apart from the other
+ * five. It is not part of the name and never appears in a file's tags, so
+ * left in place it puts the Discogs and local copies of an album under
+ * different match keys and they never pair (Picture *Uuuuuuuu*, Speed Boat
+ * *Speed Tools*). Handles an already-joined list too, where a suffix can sit
+ * before a separator rather than at the end.
+ */
+export function stripDisambiguation(artist: string): string {
+  return artist.replace(/ \(\d+\)(?=$|[\s,&/])/g, '').trim();
+}
