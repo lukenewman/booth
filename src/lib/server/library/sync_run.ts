@@ -2,7 +2,7 @@ import type { Database } from 'bun:sqlite';
 import { ulid } from 'ulid';
 import { collate, type CollateSummary } from './collate';
 import { getSource } from '../sources/registry';
-import { NotImplementedError, type SyncInput } from '../sources/types';
+import { NotImplementedError, type IngestReport, type SyncInput } from '../sources/types';
 import { hydrateDiscogsTracks } from '../sources/discogs/hydrateDiscogsTracks';
 import { resolvedRecordingsRoot } from '../recording/env';
 import {
@@ -36,6 +36,12 @@ export type SyncRunSummary = CollateSummary & {
    * never reporting the outcome or giving analysis its own history rows.
    */
   analysis?: AnalysisState;
+  /**
+   * Drop-folder activity, present only when the inbox had something in it or
+   * the library tree holds ingested files. Absent on an ordinary run so a
+   * no-op summary stays uncluttered, which is the same rule `analysis` follows.
+   */
+  ingest?: IngestReport;
 };
 
 export type AnalysisState =
@@ -75,6 +81,10 @@ export async function runSync(db: Database, sourceId: string): Promise<SyncRunRo
     // Without this an adapter re-parsing a frozen export reports the same clean
     // counts forever, which reads as a healthy sync (see the Apple-Music XML
     // going stale for three months, 2026-05 → 2026-08).
+    if (result.ingest && (result.ingest.tracked > 0 || result.ingest.waiting > 0 || result.ingest.failed.length > 0)) {
+      summary.ingest = result.ingest;
+    }
+
     if (result.input) {
       summary.input = result.input;
       const previous = previousInput(db, sourceId, id);

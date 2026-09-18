@@ -43,10 +43,26 @@ export interface SyncInput {
   generatedAt?: string;
 }
 
+/**
+ * What a drop-folder pass did, reported so the sync-run history distinguishes
+ * "nothing was dropped" from "something was dropped and failed to import".
+ * Only the local source populates it.
+ */
+export interface IngestReport {
+  /** Files moved out of the inbox into the library this run. */
+  ingested: number;
+  /** Files still settling — picked up on a later pass. */
+  waiting: number;
+  failed: { path: string; error: string }[];
+  /** Total ingested files the library tree now holds. */
+  tracked: number;
+}
+
 export interface SyncResult {
   tracks: SourceTrack[];
   releases: SourceRelease[];
   input?: SyncInput;
+  ingest?: IngestReport;
 }
 
 export interface MusicSource {

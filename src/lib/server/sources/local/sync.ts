@@ -3,6 +3,8 @@ import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { parseFile as parseAudioFile } from 'music-metadata';
+import { runInboxIngest, scanIngestedLibrary } from './ingest';
+import { resolvedInboxRoot, resolvedLibraryRoot } from './ingest_env';
 import { env } from '$lib/server/env';
 import { getDb } from '../../db';
 import {
@@ -21,13 +23,31 @@ function squashAlphanumLower(s: string): string {
   return s.normalize('NFD').replace(/\p{Diacritic}+/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
-function albumGroupKey(t: ITunesTrack): string | null {
+/**
+ * Takes the structural shape rather than an ITunesTrack so files ingested
+ * through the drop folder group by exactly the same rule — a dropped track then
+ * joins the album it belongs to instead of forming a release of its own.
+ */
+interface AlbumGrouped {
+  album?: string | null;
+  artist?: string | null;
+  albumArtist?: string | null;
+  year?: number | null;
+}
+
+function albumGroupKey(t: AlbumGrouped): string | null {
   const album = t.album?.trim();
   if (!album) return null;
-  const artist = (t.albumArtist ?? t.artist).trim();
+  const artist = (t.albumArtist ?? t.artist ?? '').trim();
   if (!artist) return null;
   const year = t.year ?? 0;
   return `${squashAlphanumLower(artist)}|${squashAlphanumLower(album)}|${year}`;
+}
+
+/** The release external_id a set of tags belongs to, or undefined when untitled. */
+export function releaseIdForTags(t: AlbumGrouped): string | undefined {
+  const key = albumGroupKey(t);
+  return key ? syntheticReleaseId(key) : undefined;
 }
 
 function syntheticReleaseId(groupKey: string): string {
@@ -126,7 +146,28 @@ export async function syncITunesLibrary(): Promise<SyncResult> {
     };
   });
 
-  return { tracks, releases, input };
+  // The drop folder contributes to the same result rather than writing rows of
+  // its own. That is what keeps ingested files safe from the prune: a track
+  // present in the sync result is never deleted, so unlike vinyl rips they need
+  // no special-casing — and deleting a file from the tree still removes it.
+  const inboxRoot = resolvedInboxRoot();
+  const libraryRoot = resolvedLibraryRoot();
+  const ingest = await runInboxIngest(inboxRoot, libraryRoot);
+  const ingested = await scanIngestedLibrary(libraryRoot, releaseIdForTags);
+  tracks.push(...ingested.tracks);
+  releases.push(...ingested.releases);
+
+  return {
+    tracks,
+    releases,
+    input,
+    ingest: {
+      ingested: ingest.ingested,
+      waiting: ingest.waiting,
+      failed: ingest.failed,
+      tracked: ingested.tracks.length,
+    },
+  };
 }
 
 function pickDefined<T extends Record<string, unknown>>(o: T): Partial<T> {

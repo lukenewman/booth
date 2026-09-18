@@ -27,6 +27,12 @@
             missingFile: number;
             failed: number;
           };
+      ingest?: {
+        ingested: number;
+        waiting: number;
+        failed: { path: string; error: string }[];
+        tracked: number;
+      };
     } | null;
     error: string | null;
   }
@@ -140,6 +146,27 @@
     if (a.failed) parts.push(`${a.failed} failed`);
     return { text: parts.join(' · '), warn: false };
   }
+  /**
+   * Drop-folder activity. Only worth a line when something happened: a run that
+   * ingested nothing and has nothing waiting says the same as no line at all.
+   * A failed import is the loud case — the file is still sitting in the inbox
+   * and nothing else will tell you it didn't make it.
+   */
+  function ingestLabel(run: SyncRun): { text: string; warn: boolean } | null {
+    const i = run.summary?.ingest;
+    if (!i || run.error) return null;
+    if (i.failed.length > 0) {
+      return {
+        text: `${i.failed.length} could not be imported — still in the inbox`,
+        warn: true,
+      };
+    }
+    const parts: string[] = [];
+    if (i.ingested) parts.push(`${i.ingested} dropped in`);
+    if (i.waiting) parts.push(`${i.waiting} still copying`);
+    if (parts.length === 0) return null;
+    return { text: parts.join(' · '), warn: false };
+  }
 </script>
 
 <div class="history">
@@ -152,9 +179,14 @@
   {#snippet runRow(run: SyncRun)}
     {@const stale = staleLabel(run)}
     {@const analysis = analysisLabel(run)}
-    <div class="row" class:errored={!!run.error} class:stale={!!stale || !!analysis?.warn}>
+    {@const ingest = ingestLabel(run)}
+    <div
+      class="row"
+      class:errored={!!run.error}
+      class:stale={!!stale || !!analysis?.warn || !!ingest?.warn}
+    >
       <span class="status" aria-hidden="true"
-        >{run.error ? '✗' : stale || analysis?.warn ? '⚠' : run.finished_at ? '✓' : '…'}</span
+        >{run.error ? '✗' : stale || analysis?.warn || ingest?.warn ? '⚠' : run.finished_at ? '✓' : '…'}</span
       >
       <span class="when" title={run.started_at}>{relativeTime(run.started_at)}</span>
       <span class="dur">{durationLabel(run.started_at, run.finished_at)}</span>
@@ -168,6 +200,13 @@
           class:muted={!analysis.warn}
           title={analysis.warn ? 'Install ffmpeg (brew install ffmpeg) to compute BPM from audio' : undefined}
         >{analysis.text}</span>
+      {/if}
+      {#if ingest}
+        <span
+          class="warn"
+          class:muted={!ingest.warn}
+          title={ingest.warn ? run.summary?.ingest?.failed.map((f) => `${f.path}: ${f.error}`).join('\n') : undefined}
+        >{ingest.text}</span>
       {/if}
     </div>
   {/snippet}
