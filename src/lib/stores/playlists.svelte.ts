@@ -1,4 +1,5 @@
 import type { ResolvedBpm } from '$lib/bpm';
+import { annotations } from '$lib/stores/annotations.svelte';
 export interface PlaylistSummary {
   id: string; name: string; trackCount: number; coverUrl: string | null; mosaic: string[];
   isGig: boolean;
@@ -19,6 +20,8 @@ export interface PlaylistTrack {
   canPlay: boolean;
   /** Resting tempo. Null for the majority of tracks until more BPM sources land. */
   bpm?: ResolvedBpm | null;
+  starred_at?: string | null;
+  note?: string | null;
 }
 
 export interface TrackSnapshot { artist: string; title: string; album: string | null; position: string | null }
@@ -51,17 +54,34 @@ class PlaylistsStore {
     }
   }
 
+  /**
+   * Bumped on every load; a response that comes back after a newer load was
+   * started is stale and dropped, so an older refresh can't overwrite a newer
+   * view (or an optimistic move) on its way in.
+   */
+  private loadSeq = 0;
+
   async loadPlaylist(id: string) {
-    this.pendingRemove = null;
+    const seq = ++this.loadSeq;
+    // A refresh of the same playlist must not dismiss an open remove-confirm.
+    if (this.openPlaylist?.id !== id) this.pendingRemove = null;
     try {
       const res = await fetch(`/api/playlists/${id}`);
+      if (seq !== this.loadSeq) return;
       if (!res.ok) {
         this.openPlaylist = null;
         return;
       }
-      this.openPlaylist = (await res.json()) as PlaylistDetail;
+      const detail = (await res.json()) as PlaylistDetail;
+      if (seq !== this.loadSeq) return;
+      // Hydrate stars and notes from the fetch callback (the house rule:
+      // never from an effect that reads the store it writes), so gig and
+      // playlist rows show them without the tracks being browsed elsewhere.
+      annotations.hydrateTracks(detail.tracks);
+      annotations.hydrateNotes(detail.tracks);
+      this.openPlaylist = detail;
     } catch {
-      this.openPlaylist = null;
+      if (seq === this.loadSeq) this.openPlaylist = null;
     }
   }
 
@@ -151,7 +171,18 @@ class PlaylistsStore {
     if (this.openPlaylist?.id === playlistId) {
       const byId = new Map(this.openPlaylist.tracks.map((t) => [t.id, t]));
       const next = orderedTrackIds.map((id) => byId.get(id)).filter((t): t is PlaylistTrack => !!t);
-      this.openPlaylist = { ...this.openPlaylist, tracks: next };
+      // Mirror the server rule in the Unsorted section the plain view renders:
+      // present tracks take the present slots in the new order, missing rows
+      // keep theirs.
+      const sections = this.openPlaylist.sections.map((sec) => {
+        if (!sec.isUnsorted) return sec;
+        const present = sec.entries.filter((e) => e.track);
+        const byTrack = new Map(present.map((e) => [e.track!.id, e]));
+        const named = orderedTrackIds.flatMap((id) => (byTrack.has(id) ? [byTrack.get(id)!] : []));
+        const queue = [...named, ...present.filter((e) => !named.includes(e))];
+        return { ...sec, entries: sec.entries.map((e) => (e.track ? queue.shift()! : e)) };
+      });
+      this.openPlaylist = { ...this.openPlaylist, tracks: next, sections };
     }
     await fetch(`/api/playlists/${playlistId}/tracks`, {
       method: 'PATCH',
@@ -164,12 +195,23 @@ class PlaylistsStore {
     await Promise.all([this.loadList(), this.openPlaylist?.id === playlistId ? this.loadPlaylist(playlistId) : null]);
   }
 
-  private async send(method: string, url: string, body?: unknown): Promise<Response> {
-    return fetch(url, {
-      method,
-      headers: body === undefined ? undefined : { 'content-type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+  /**
+   * Gig writes go out one at a time, in the order they were made. Without
+   * this a slow move could land after a later add's refresh had already read
+   * the pre-move state, leaving the screen and the database disagreeing.
+   */
+  private writes: Promise<unknown> = Promise.resolve();
+
+  private send(method: string, url: string, body?: unknown): Promise<Response> {
+    const run = () =>
+      fetch(url, {
+        method,
+        headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    const next = this.writes.then(run, run);
+    this.writes = next.catch(() => undefined);
+    return next;
   }
 
   async createGig(name: string, targetMinutes: number): Promise<PlaylistSummary | null> {
@@ -226,8 +268,8 @@ class PlaylistsStore {
         }
       }
     }
-    const res = await this.send('PATCH', `/api/playlists/${playlistId}/entries/${entryId}`, { sectionId, index });
-    if (!res.ok) await this.refresh(playlistId);
+    await this.send('PATCH', `/api/playlists/${playlistId}/entries/${entryId}`, { sectionId, index });
+    await this.refresh(playlistId);
   }
 
   async removeEntry(playlistId: string, entryId: string) {

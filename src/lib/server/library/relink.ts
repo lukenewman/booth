@@ -1,5 +1,5 @@
 import type { Database } from 'bun:sqlite';
-import { squashAlphanumLower, stripEditionTags } from './normalize';
+import { stripEditionTags } from './normalize';
 
 export interface RelinkSummary {
   tracks: number;
@@ -7,13 +7,18 @@ export interface RelinkSummary {
 }
 
 /**
- * Squash for matching, falling back to the trimmed text when squashing leaves
- * nothing — a title in Japanese has no a-z0-9 at all, and an empty key would
- * make every such title "match" every other.
+ * Name key for matching: case-, accent- and punctuation-insensitive, but it
+ * keeps letters and digits in every script. The sync's a-z0-9 squash would
+ * drop the Japanese and keep only the Latin, so "夜 (Instrumental)" and
+ * "朝 (Instrumental)" would both become "instrumental" and a missing one would
+ * re-link onto the other — a different song silently in the set.
  */
-function k(s: string | null): string {
-  const raw = (s ?? '').normalize('NFC').trim();
-  return squashAlphanumLower(raw) || raw.toLowerCase();
+export function matchKey(s: string | null): string {
+  return (s ?? '')
+    .normalize('NFKD')
+    .replace(/\p{Diacritic}+/gu, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '');
 }
 
 /**
@@ -38,13 +43,13 @@ export function relinkMissing(db: Database): RelinkSummary {
       .prepare(`SELECT t.id, a.name AS artist, t.title, t.album FROM track t JOIN artist a ON a.id = t.artist_id`)
       .all() as { id: string; artist: string; title: string; album: string | null }[];
     for (const t of all) {
-      const key = `${k(t.artist)}|${k(t.title)}|${k(stripEditionTags(t.album ?? ''))}`;
+      const key = `${matchKey(t.artist)}|${matchKey(t.title)}|${matchKey(stripEditionTags(t.album ?? ''))}`;
       index.set(key, [...(index.get(key) ?? []), t.id]);
     }
     const taken = db.prepare(`SELECT 1 FROM playlist_track WHERE playlist_id = ? AND track_id = ?`);
     const set = db.prepare(`UPDATE playlist_track SET track_id = ? WHERE id = ?`);
     for (const m of missingTracks) {
-      const hits = index.get(`${k(m.snap_artist)}|${k(m.snap_title)}|${k(stripEditionTags(m.snap_album ?? ''))}`);
+      const hits = index.get(`${matchKey(m.snap_artist)}|${matchKey(m.snap_title)}|${matchKey(stripEditionTags(m.snap_album ?? ''))}`);
       if (hits?.length !== 1) continue;
       if (taken.get(m.playlist_id, hits[0])) continue;
       set.run(hits[0], m.id);
@@ -61,13 +66,13 @@ export function relinkMissing(db: Database): RelinkSummary {
       .prepare(`SELECT r.id, a.name AS artist, r.title FROM release r JOIN artist a ON a.id = r.artist_id`)
       .all() as { id: string; artist: string; title: string }[];
     for (const r of all) {
-      const key = `${k(r.artist)}|${k(stripEditionTags(r.title))}`;
+      const key = `${matchKey(r.artist)}|${matchKey(stripEditionTags(r.title))}`;
       index.set(key, [...(index.get(key) ?? []), r.id]);
     }
     const taken = db.prepare(`SELECT 1 FROM playlist_release WHERE playlist_id = ? AND release_id = ?`);
     const set = db.prepare(`UPDATE playlist_release SET release_id = ? WHERE id = ?`);
     for (const m of missingReleases) {
-      const hits = index.get(`${k(m.snap_artist)}|${k(stripEditionTags(m.snap_title))}`);
+      const hits = index.get(`${matchKey(m.snap_artist)}|${matchKey(stripEditionTags(m.snap_title))}`);
       if (hits?.length !== 1) continue;
       if (taken.get(m.playlist_id, hits[0])) continue;
       set.run(hits[0], m.id);

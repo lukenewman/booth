@@ -13,7 +13,7 @@ import { Database } from 'bun:sqlite';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { readPlaylistEvents, replayPlaylistEvents } from '../src/lib/server/backup/playlistJournal';
-import { squashAlphanumLower } from '../src/lib/server/library/normalize';
+import { matchKey as k } from '../src/lib/server/library/relink';
 
 const args = process.argv.slice(2);
 const flag = (n: string) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
@@ -23,7 +23,6 @@ const log = flag('--log') ?? join(process.env.BOOTH_BACKUP_PATH ?? join(homedir(
 const db = new Database(process.env.BOOTH_DB_PATH ?? join(homedir(), '.booth', 'booth.db'));
 db.exec('PRAGMA foreign_keys = ON');
 
-const k = (s: string | null) => squashAlphanumLower(s ?? '') || (s ?? '').normalize('NFC').trim().toLowerCase();
 const exists = (table: string, id: string) => !!db.prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(id);
 
 function findTrack(id: string | null, artist: string, title: string, album: string | null): string | null {

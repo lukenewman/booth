@@ -26,6 +26,9 @@
   } = $props();
 
   const open = $derived(playlists.openPlaylist);
+  // A plain playlist is exactly its Unsorted section; rendering entries (not
+  // just present tracks) is what keeps a missing row visible here.
+  const entries = $derived(open?.sections[0]?.entries ?? []);
 
   // Playing from a playlist queues that playlist, and keeps queueing it even
   // after you navigate away — the context is captured at play time.
@@ -260,10 +263,29 @@
       <span></span>
     </div>
     <div class="body" bind:this={listEl}>
-      {#if open.tracks.length === 0}
+      {#if entries.length === 0}
         <EmptyState title="No tracks yet" detail="Drag tracks here, or press a on a track to add it." />
       {:else}
-        {#each open.tracks as t (t.id)}
+        {#each entries as entry (entry.entryId)}
+          {#if !entry.track}
+            <!-- A track the library no longer has. Kept, greyed, from its
+                 snapshot; not a .row-btn because the a / Delete keys act on
+                 library track ids. Relinks itself after a sync if it returns. -->
+            <div class="missing" role="listitem" data-entry-id={entry.entryId}>
+              <span class="row" style="grid-template-columns: {gridTemplate}">
+                <span class="thumb"></span>
+                <span class="cell title">{entry.snapshot.title}<span class="missing-tag">missing</span></span>
+                <span class="cell artist">{entry.snapshot.artist}</span>
+                <span class="cell release">{entry.snapshot.album ?? '—'}</span>
+                {#if anyBpm}<span class="bpm"></span>{/if}
+                <span class="dur">—</span>
+                <span></span>
+                <button class="remove" aria-label="Remove {entry.snapshot.title}" onclick={() => open && playlists.removeEntry(open.id, entry.entryId)}>×</button>
+                <span></span>
+              </span>
+            </div>
+          {:else}
+          {@const t = entry.track}
           {@const isPlaying = player.nowPlaying?.trackId === t.id}
           <button
             class="row-btn"
@@ -339,6 +361,7 @@
               >⠿</span>
             </span>
           </button>
+          {/if}
         {/each}
       {/if}
     </div>
@@ -477,6 +500,9 @@
   .row-btn.playing .title { color: var(--accent); }
   .bpm { color: var(--text-muted); font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 11.5px; text-align: right; }
   .dur { color: var(--text-subtle); font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 11.5px; text-align: right; }
+  .missing { opacity: 0.45; border-top: 1px solid rgba(255, 255, 255, 0.025); }
+  .missing .remove { background: none; border: 0; cursor: pointer; }
+  .missing-tag { margin-left: 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--warn); }
   .remove { color: transparent; text-align: center; cursor: pointer; font-size: 14px; user-select: none; }
 
   .grip {

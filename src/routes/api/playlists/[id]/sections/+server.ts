@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { createSection, reorderSections, getPlaylist } from '$lib/server/library/playlists';
-import { recordPlaylistEvent } from '$lib/server/backup';
+import { recordPlaylistEvent, crateEntryIds, recordNewCrateRows } from '$lib/server/backup';
 
 export const POST: RequestHandler = async ({ params, request }) => {
   const body = await request.json().catch(() => ({}));
@@ -10,8 +10,10 @@ export const POST: RequestHandler = async ({ params, request }) => {
   if (!name) throw error(400, 'name required');
   const db = getDb();
   if (!getPlaylist(db, params.id)) throw error(404, `playlist not found: ${params.id}`);
+  const before = crateEntryIds(db, params.id);
   const s = createSection(db, params.id, name);
   recordPlaylistEvent(db, params.id, { action: 'section-add', sectionId: s.id, name: s.name });
+  recordNewCrateRows(db, params.id, before);
   return json(s, { status: 201 });
 };
 

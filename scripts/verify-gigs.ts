@@ -40,21 +40,21 @@ let d = getPlaylist(db, p.id)!;
 assert(d.sections.length === 1 && d.sections[0].isUnsorted, 'new playlist has exactly Unsorted');
 assert(d.isGig === false, 'plain playlist is not a gig');
 
-// --- addTrack defaults to Unsorted and crates the release
+// --- a plain playlist stays plain: adding a track lands in Unsorted and crates nothing
 const r = addTrack(db, p.id, a1);
 assert(r.added && r.sectionName === 'Unsorted', 'add lands in Unsorted');
 d = getPlaylist(db, p.id)!;
-assert(d.crate.length === 1 && d.crate[0].releaseId === r1 && d.crate[0].sketchedCount === 1, 'release auto-crated with count');
-assert(d.isGig === true, 'crate makes it a gig');
+assert(d.crate.length === 0 && d.isGig === false, `plain playlist must not auto-crate or turn into a gig (crate ${d.crate.length}, isGig ${d.isGig})`);
 addTrack(db, p.id, loose);
-assert(getPlaylist(db, p.id)!.crate.length === 1, 'release-less track adds no crate row');
 
 // --- dedupe reports where it already is
 const again = addTrack(db, p.id, a1);
 assert(!again.added && again.sectionName === 'Unsorted', 'dedupe names the existing section');
 
-// --- sections: create, add into one, rename, reorder (Unsorted pinned first)
+// --- becoming a gig crates the records of tracks already sketched
 const openers = createSection(db, p.id, 'Openers');
+d = getPlaylist(db, p.id)!;
+assert(d.isGig && d.crate.length === 1 && d.crate[0].releaseId === r1 && d.crate[0].sketchedCount === 1, `crate backfilled on becoming a gig: ${JSON.stringify(d.crate)}`);
 const closers = createSection(db, p.id, 'Closers');
 assert(addTrack(db, p.id, a2, openers.id).sectionName === 'Openers', 'add into named section');
 addTrack(db, p.id, b1, closers.id);
@@ -108,6 +108,12 @@ db.prepare(`DELETE FROM release WHERE id = ?`).run(r2);
 d = getPlaylist(db, p.id)!;
 assert(d.crate.length === 1 && d.crate[0].releaseId === null && d.crate[0].title === 'LP Two', 'missing crate row shows snapshot');
 
+// --- backfill also happens when a target length or a record is what makes it a gig
+const t1p = createPlaylist(db, 'Becomes gig by length');
+addTrack(db, t1p.id, a2);
+setTargetMinutes(db, t1p.id, 90);
+assert(getPlaylist(db, t1p.id)!.crate.some((c) => c.releaseId === r1), 'length → backfill');
+
 // --- target length alone makes a gig; flat reorder still works for plain playlists
 const q = createPlaylist(db, 'Plain');
 const x1 = track('X1', null, '1');
@@ -120,5 +126,19 @@ assert(getPlaylist(db, q.id)!.tracks.length === 1, 'removeTrack by track id');
 assert(!getPlaylist(db, q.id)!.isGig, 'plain still plain');
 setTargetMinutes(db, q.id, 180);
 assert(getPlaylist(db, q.id)!.isGig && getPlaylist(db, q.id)!.targetMinutes === 180, 'target length → gig');
+
+// --- a plain reorder leaves a missing row in its slot (not shoved to the end)
+const r3 = createPlaylist(db, 'Slots');
+const s1 = track('S1', null, '1'); const s2 = track('S2', null, '2'); const s3 = track('S3', null, '3');
+addTrack(db, r3.id, s1); addTrack(db, r3.id, s2); addTrack(db, r3.id, s3);
+db.prepare(`DELETE FROM track WHERE id = ?`).run(s2);
+reorderTracks(db, r3.id, [s3, s1]);
+const slots = getPlaylist(db, r3.id)!.sections[0].entries.map((e) => e.track?.title ?? `missing:${e.snapshot.title}`);
+assert(slots.join('|') === 'S3|missing:S2|S1', `missing row keeps its slot: ${slots.join('|')}`);
+
+// --- the playlist payload carries notes and stars, so gig rows can show them
+db.prepare(`UPDATE track SET note = 'big room only', starred_at = '2026-10-01T00:00:00Z' WHERE id = ?`).run(s1);
+const s1row = getPlaylist(db, r3.id)!.tracks.find((t) => t.id === s1)!;
+assert(s1row.note === 'big room only' && s1row.starred_at === '2026-10-01T00:00:00Z', `note/star in payload: ${s1row.note} ${s1row.starred_at}`);
 
 console.log('PASS: gigs — sections, sketch, crate, missing rows');

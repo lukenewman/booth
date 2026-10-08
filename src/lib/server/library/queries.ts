@@ -730,7 +730,7 @@ export function getTracksByIds(
     .prepare(
       `SELECT track.id, track.title, artist.name AS artist, track.artist_id,
               track.album, track.duration_ms, track.release_id, track.position,
-              release.thumb_url
+              release.thumb_url, track.note, track.starred_at
          FROM track
          JOIN artist ON artist.id = track.artist_id
          LEFT JOIN release ON release.id = track.release_id

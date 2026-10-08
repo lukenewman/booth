@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { addTrack, reorderTracks, listPlaylists, getPlaylist, sectionOf } from '$lib/server/library/playlists';
-import { recordPlaylistEvent } from '$lib/server/backup';
+import { recordPlaylistEvent, crateEntryIds, recordNewCrateRows } from '$lib/server/backup';
 
 function trackCount(id: string): number {
   return listPlaylists(getDb()).find((p) => p.id === id)?.trackCount ?? 0;
@@ -20,7 +20,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
   if (!refs.p) throw error(404, `playlist not found: ${params.id}`);
   if (!refs.t) throw error(404, `track not found: ${trackId}`);
   if (sectionId && !sectionOf(db, params.id, sectionId)) throw error(404, `section not found: ${sectionId}`);
-  const before = new Set(getPlaylist(db, params.id)!.crate.map((c) => c.entryId));
+  const before = crateEntryIds(db, params.id);
   const res = addTrack(db, params.id, trackId, sectionId);
   if (res.added) {
     const d = getPlaylist(db, params.id)!;
@@ -29,11 +29,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
       action: 'track-add', entryId: res.entryId, sectionId: entry.sectionId, sectionName: res.sectionName,
       trackId, ...entry.snapshot,
     });
-    for (const c of d.crate) {
-      if (!before.has(c.entryId) && c.releaseId) {
-        recordPlaylistEvent(db, params.id, { action: 'crate-add', entryId: c.entryId, releaseId: c.releaseId, artist: c.artist, title: c.title, year: c.year });
-      }
-    }
+    recordNewCrateRows(db, params.id, before);
   }
   return json({ added: res.added, sectionName: res.sectionName, trackCount: trackCount(params.id) });
 };

@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { getPlaylist, renamePlaylist, deletePlaylist, setTargetMinutes, parseTarget } from '$lib/server/library/playlists';
-import { recordPlaylistEvent } from '$lib/server/backup';
+import { recordPlaylistEvent, crateEntryIds, recordNewCrateRows } from '$lib/server/backup';
 
 export const GET: RequestHandler = async ({ params }) => {
   const detail = getPlaylist(getDb(), params.id);
@@ -24,8 +24,10 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
     recordPlaylistEvent(db, params.id, { action: 'rename', name });
   }
   if (target !== undefined) {
+    const before = crateEntryIds(db, params.id);
     setTargetMinutes(db, params.id, target);
     recordPlaylistEvent(db, params.id, { action: 'target', minutes: target });
+    recordNewCrateRows(db, params.id, before);
   }
   const after = getPlaylist(db, params.id)!;
   return json({ id: after.id, name: after.name, targetMinutes: after.targetMinutes });

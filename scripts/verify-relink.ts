@@ -56,13 +56,20 @@ db.prepare(`INSERT INTO playlist_release (id, playlist_id, release_id, position,
 db.prepare(`DELETE FROM release WHERE id = ?`).run(r2);
 const r2b = rel(A, 'My Favorite Tune (Reissue)'); // edition tag stripped for matching
 
-assert(missingTitles(p.id).length === 4, `4 missing before relink, got ${missingTitles(p.id).join(',')}`);
+// 6. partly non-Latin titles must not collapse onto each other: "夜 (Instrumental)"
+//    going missing must not re-link onto "朝 (Instrumental)"
+const n1 = trk(J, '夜 (Instrumental)', 'HOSONO HOUSE', null);
+addTrack(db, p.id, n1);
+db.prepare(`DELETE FROM track WHERE id = ?`).run(n1);
+trk(J, '朝 (Instrumental)', 'HOSONO HOUSE', null);
+
+assert(missingTitles(p.id).length === 5, `5 missing before relink, got ${missingTitles(p.id).join(',')}`);
 const res = relinkMissing(db);
 assert(res.tracks === 2 && res.releases === 1, `relinked ${JSON.stringify(res)}`);
 const d = getPlaylist(db, p.id)!;
 const ids = d.tracks.map((t) => t.id);
 assert(ids.includes(t1b) && ids.includes(t4b), 'renamed + non-Latin re-linked');
-assert(missingTitles(p.id).join('|') === 'Mellow Dream|Willow Weep for Me', `left missing: ${missingTitles(p.id).join('|')}`);
+assert(missingTitles(p.id).join('|') === 'Mellow Dream|Willow Weep for Me|夜 (Instrumental)', `left missing: ${missingTitles(p.id).join('|')}`);
 assert(d.crate.find((c) => c.entryId === 'c2')!.releaseId === r2b, 'crate re-linked');
 assert(relinkMissing(db).tracks === 0, 'idempotent');
 console.log('PASS: relink');

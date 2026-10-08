@@ -47,6 +47,23 @@ export function recordPlaylistEvent(db: Database, playlistId: string, body: Play
   }
 }
 
+/** Crate entry ids now on a playlist — take before a write, pass to recordNewCrateRows after. */
+export function crateEntryIds(db: Database, playlistId: string): Set<string> {
+  return new Set(getPlaylist(db, playlistId)?.crate.map((c) => c.entryId) ?? []);
+}
+
+/**
+ * Journal every crate row a write added, including the ones it added as a side
+ * effect (a sketched track's record, or the backfill when a playlist becomes a
+ * gig), so replay never has to re-derive them.
+ */
+export function recordNewCrateRows(db: Database, playlistId: string, before: Set<string>): void {
+  for (const c of getPlaylist(db, playlistId)?.crate ?? []) {
+    if (before.has(c.entryId) || !c.releaseId) continue;
+    recordPlaylistEvent(db, playlistId, { action: 'crate-add', entryId: c.entryId, releaseId: c.releaseId, artist: c.artist, title: c.title, year: c.year });
+  }
+}
+
 /**
  * First boot with the journal: write one baseline per existing playlist so the
  * log can rebuild playlists that predate it. Runs only when the file is absent.

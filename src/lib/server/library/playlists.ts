@@ -141,7 +141,10 @@ export function renamePlaylist(db: Database, id: string, name: string): void {
 }
 
 export function setTargetMinutes(db: Database, id: string, minutes: number | null): void {
-  db.prepare(`UPDATE playlist SET target_minutes = ?, updated_at = ${NOW} WHERE id = ?`).run(minutes, id);
+  db.transaction(() => {
+    db.prepare(`UPDATE playlist SET target_minutes = ?, updated_at = ${NOW} WHERE id = ?`).run(minutes, id);
+    if (minutes != null) backfillCrate(db, id);
+  })();
 }
 
 export function deletePlaylist(db: Database, id: string): void {
@@ -297,9 +300,34 @@ function addReleaseInner(db: Database, playlistId: string, releaseId: string): {
   return { added: true, entryId };
 }
 
+function isGigNow(db: Database, playlistId: string): boolean {
+  const row = db.prepare(`SELECT ${IS_GIG} AS g FROM playlist WHERE id = ?`).get(playlistId) as { g: number } | undefined;
+  return !!row?.g;
+}
+
 /**
- * Sketch a track. Lands in Unsorted unless a section is named. Its release is
- * crated if it isn't already — you can't play a track whose record stayed home.
+ * Crate the record of every sketched track that isn't crated yet. Runs when a
+ * playlist becomes a gig, so a plain playlist promoted by a section, a record
+ * or a set length arrives with its bag already packed.
+ */
+function backfillCrate(db: Database, playlistId: string): void {
+  const releases = db
+    .prepare(
+      `SELECT DISTINCT t.release_id AS id FROM playlist_track pt
+         JOIN playlist_section s ON s.id = pt.section_id
+         JOIN track t ON t.id = pt.track_id
+        WHERE pt.playlist_id = ? AND t.release_id IS NOT NULL
+        ORDER BY s.position, pt.position`,
+    )
+    .all(playlistId) as { id: string }[];
+  for (const r of releases) addReleaseInner(db, playlistId, r.id);
+}
+
+/**
+ * Sketch a track. Lands in Unsorted unless a section is named. In a gig its
+ * release is crated if it isn't already — you can't play a track whose record
+ * stayed home. A plain playlist crates nothing, or the first track added would
+ * silently turn it into a gig.
  * A track already in the playlist is a no-op that reports where it sits.
  */
 export function addTrack(
@@ -327,7 +355,7 @@ export function addTrack(
       `INSERT INTO playlist_track (id, playlist_id, section_id, track_id, position, snap_artist, snap_title, snap_album, snap_position)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(entryId, playlistId, target.id, trackId, nextPosition(db, 'playlist_track', 'section_id', target.id), snap.artist, snap.title, snap.album, snap.position);
-    if (snap.releaseId) addReleaseInner(db, playlistId, snap.releaseId);
+    if (snap.releaseId && isGigNow(db, playlistId)) addReleaseInner(db, playlistId, snap.releaseId);
     touch(db, playlistId);
     return { added: true, entryId, sectionName: target.name };
   })();
@@ -354,20 +382,23 @@ export function removeTrack(db: Database, playlistId: string, trackId: string): 
 
 /**
  * The plain playlist view's reorder: a flat list of track ids, which for a
- * plain playlist is exactly its Unsorted section. Ids not named keep their
- * relative order after the named ones.
+ * plain playlist is exactly its Unsorted section. Present tracks take the
+ * slots present tracks held, in the new order (unnamed ones keep their
+ * relative order after the named); missing rows stay in their own slots, so a
+ * row that relinks later reappears where it was rather than at the bottom.
  */
 export function reorderTracks(db: Database, playlistId: string, orderedTrackIds: string[]): void {
   db.transaction(() => {
     const sectionId = unsortedSectionId(db, playlistId);
-    const stmt = db.prepare(
-      `UPDATE playlist_track SET position = ? WHERE section_id = ? AND track_id = ?`,
-    );
-    const offset = orderedTrackIds.length;
-    // Push everything past the named ids first, so unnamed rows sort after them.
-    db.prepare(`UPDATE playlist_track SET position = position + ? WHERE section_id = ?`).run(offset, sectionId);
-    orderedTrackIds.forEach((trackId, i) => stmt.run(i, sectionId, trackId));
-    renumberSection(db, sectionId);
+    const rows = db
+      .prepare(`SELECT id, track_id AS trackId FROM playlist_track WHERE section_id = ? ORDER BY position, id`)
+      .all(sectionId) as { id: string; trackId: string | null }[];
+    const present = rows.filter((r) => r.trackId);
+    const byTrack = new Map(present.map((r) => [r.trackId!, r]));
+    const named = orderedTrackIds.flatMap((t) => (byTrack.has(t) ? [byTrack.get(t)!] : []));
+    const queue = [...named, ...present.filter((r) => !named.includes(r))];
+    const stmt = db.prepare(`UPDATE playlist_track SET position = ? WHERE id = ?`);
+    rows.forEach((r, i) => stmt.run(i, r.trackId ? queue.shift()!.id : r.id));
     touch(db, playlistId);
   })();
 }
@@ -398,10 +429,13 @@ export function createSection(db: Database, playlistId: string, name: string): {
   const clean = name.trim();
   if (!clean) throw new Error('section name required');
   const id = ulid();
-  db.prepare(
-    `INSERT INTO playlist_section (id, playlist_id, name, position, is_unsorted) VALUES (?, ?, ?, ?, 0)`,
-  ).run(id, playlistId, clean, nextPosition(db, 'playlist_section', 'playlist_id', playlistId));
-  touch(db, playlistId);
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO playlist_section (id, playlist_id, name, position, is_unsorted) VALUES (?, ?, ?, ?, 0)`,
+    ).run(id, playlistId, clean, nextPosition(db, 'playlist_section', 'playlist_id', playlistId));
+    backfillCrate(db, playlistId);
+    touch(db, playlistId);
+  })();
   return { id, name: clean };
 }
 
@@ -453,6 +487,7 @@ export function reorderSections(db: Database, playlistId: string, orderedSection
 export function addRelease(db: Database, playlistId: string, releaseId: string): { added: boolean; entryId: string } {
   return db.transaction(() => {
     const r = addReleaseInner(db, playlistId, releaseId);
+    backfillCrate(db, playlistId);
     if (r.added) touch(db, playlistId);
     return r;
   })();

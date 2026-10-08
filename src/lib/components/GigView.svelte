@@ -175,7 +175,8 @@
       </span>
     </header>
 
-    <div class="sketch">
+    <!-- `body` is what the global ↑/↓ handler scopes row navigation to. -->
+    <div class="sketch body">
       {#each open.sections as s (s.id)}
         {@const sum = summarize(sectionTracks(s))}
         <section
