@@ -4,7 +4,7 @@ import { getDb } from '$lib/server/db';
 import { runSync } from '$lib/server/library/sync_run';
 import { listSources } from '$lib/server/sources/registry';
 import { createScheduler, parseIntervalMinutes } from '$lib/server/library/scheduler';
-import { maybeSnapshot } from '$lib/server/backup';
+import { maybeSnapshot, seedPlaylistJournal } from '$lib/server/backup';
 
 const triggered = new Set<string>();
 
@@ -91,6 +91,7 @@ function snapshotOnBoot() {
   if (snapshotChecked) return;
   snapshotChecked = true;
   maybeSnapshot(getDb(), 'boot');
+  seedPlaylistJournal(getDb());
 }
 
 export const handle: Handle = async ({ event, resolve }) => {

@@ -4,6 +4,9 @@ import { join } from 'path';
 import { env } from '$lib/server/env';
 import { appendEvent, type AnnotationEvent } from './journal';
 import { snapshotDb, newestSnapshotMtime, shouldSnapshot } from './snapshot';
+import { appendPlaylistEvent, baselineFromDetail, type PlaylistEventBody } from './playlistJournal';
+import { getPlaylist, listPlaylists, unsortedSectionId } from '$lib/server/library/playlists';
+import { existsSync } from 'fs';
 
 /**
  * Wiring for the two backup artifacts. Everything here is best-effort: a
@@ -18,6 +21,46 @@ export function backupRoot(): string {
 
 export function journalPath(): string {
   return join(backupRoot(), 'annotations.log');
+}
+
+export function playlistJournalPath(): string {
+  return join(backupRoot(), 'playlists.log');
+}
+
+/**
+ * Record one playlist mutation. Called from the playlist routes after the
+ * write succeeds (for `delete`, before it — the name is gone afterwards).
+ * Best-effort like recordAnnotation: a failed append never fails the request.
+ */
+export function recordPlaylistEvent(db: Database, playlistId: string, body: PlaylistEventBody): void {
+  try {
+    const row = db.prepare(`SELECT name FROM playlist WHERE id = ?`).get(playlistId) as { name: string } | undefined;
+    appendPlaylistEvent(playlistJournalPath(), {
+      at: new Date().toISOString(),
+      playlistId,
+      playlistName: row?.name ?? '(unknown)',
+      unsortedId: row ? unsortedSectionId(db, playlistId) : '',
+      ...body,
+    });
+  } catch (e) {
+    console.warn('[backup] playlist journal append failed:', e);
+  }
+}
+
+/**
+ * First boot with the journal: write one baseline per existing playlist so the
+ * log can rebuild playlists that predate it. Runs only when the file is absent.
+ */
+export function seedPlaylistJournal(db: Database): void {
+  try {
+    if (existsSync(playlistJournalPath())) return;
+    for (const p of listPlaylists(db)) {
+      const d = getPlaylist(db, p.id);
+      if (d) recordPlaylistEvent(db, p.id, { action: 'baseline', state: baselineFromDetail(d) });
+    }
+  } catch (e) {
+    console.warn('[backup] playlist journal seed failed:', e);
+  }
 }
 
 export function snapshotDir(): string {

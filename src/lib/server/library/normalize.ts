@@ -2,7 +2,7 @@ function stripDiacritics(s: string): string {
   return s.normalize('NFD').replace(/\p{Diacritic}+/gu, '');
 }
 
-function squashAlphanumLower(s: string): string {
+export function squashAlphanumLower(s: string): string {
   return stripDiacritics(s).toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
