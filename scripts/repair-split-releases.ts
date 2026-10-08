@@ -320,6 +320,13 @@ const merge = db.transaction((plans: Plan[]) => {
       );
     }
 
+    // Crate rows follow the record to the surviving entity; if the playlist
+    // already crates the kept release, the duplicate goes.
+    db.prepare(
+      `UPDATE OR IGNORE playlist_release SET release_id = ? WHERE release_id = ?`,
+    ).run(p.keep.id, p.drop.id);
+    db.prepare(`DELETE FROM playlist_release WHERE release_id = ?`).run(p.drop.id);
+
     // Discogs-only track rows, deleted by explicit id — never "everything on
     // the release" — after the guard above proved none carry user data.
     for (const trackId of p.dropTrackIds) {

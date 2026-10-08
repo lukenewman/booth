@@ -489,3 +489,11 @@ export function removeCrateEntry(db: Database, playlistId: string, entryId: stri
     return { removedTracks };
   })();
 }
+
+/** Body parsing for targetMinutes: undefined = not supplied, null = clear. */
+export function parseTarget(raw: unknown): number | null | undefined | 'invalid' {
+  if (raw === undefined) return undefined;
+  if (raw === null) return null;
+  if (typeof raw === 'number' && Number.isInteger(raw) && raw > 0 && raw <= 24 * 60) return raw;
+  return 'invalid';
+}
