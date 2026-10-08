@@ -16,12 +16,16 @@ import { dirname, join } from 'node:path';
  * started from the repo root (`bun start` → `bun ./build/index.js`), which is
  * also where the checkout that produced the build lives.
  *
+ * The packaged Mac app runs from neither place, so its launcher points
+ * BOOTH_MIGRATIONS_DIR at the copy it ships beside the build; that wins when set.
+ *
  * Deliberately not bundled into JS: keeping migrations as plain .sql files a
  * developer can drop in is worth more than making `build/` self-contained for
  * a single-user app that is served from its own checkout.
  */
 function resolveMigrationsDir(): string {
   const candidates = [
+    ...(process.env.BOOTH_MIGRATIONS_DIR ? [process.env.BOOTH_MIGRATIONS_DIR] : []),
     join(dirname(fileURLToPath(import.meta.url)), 'migrations'),
     join(process.cwd(), 'src', 'lib', 'server', 'db', 'migrations'),
   ];

@@ -29,3 +29,6 @@ vite.config.ts.timestamp-*
 
 # booth's local sqlite store
 .booth/
+
+# Packaged Mac zips (packaging/build-mac.sh)
+/dist

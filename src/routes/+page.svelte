@@ -237,10 +237,10 @@
     <p>
       booth needs a Discogs personal access token to talk to the Discogs API.
       Generate one at <a href="https://www.discogs.com/settings/developers">discogs.com/settings/developers</a>,
-      then add it to <code>.env</code>:
+      then add it to <code>.env</code> (in the repo, or <code>~/.booth/settings.env</code> if you downloaded booth):
     </p>
     <pre><code>DISCOGS_TOKEN=your-token-here</code></pre>
-    <p>Restart <code>bun dev</code> after editing.</p>
+    <p>Restart booth after editing.</p>
     {#if setupNeeded === 'invalid_token'}
       <p class="error">The token in <code>.env</code> was rejected by Discogs (401). Double-check it's correct.</p>
     {/if}

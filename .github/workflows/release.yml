@@ -1,0 +1,30 @@
+# Push a version tag (git tag v0.1.0 && git push --tags) to build the Mac zips
+# and publish them as a GitHub Release.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          # The packaged runtime is whatever Bun builds it, so pin it.
+          bun-version: 1.2.21
+      - run: bun install --frozen-lockfile
+      - run: packaging/build-mac.sh arm64 x64
+        env:
+          BOOTH_VERSION: ${{ github.ref_name }}
+      - run: >
+          gh release create "$GITHUB_REF_NAME" dist/*.zip
+          --title "booth $GITHUB_REF_NAME" --generate-notes
+          --notes "Download the zip for your Mac — Apple Silicon (M1 and later): mac-arm64; Intel: mac-x64. Unzip it and read README.txt."
+        env:
+          GH_TOKEN: ${{ github.token }}
