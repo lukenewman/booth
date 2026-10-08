@@ -9,6 +9,8 @@
  *   ⏎          add CTA in detail (when present)
  *   Esc        clear search input / close scanner / blur input
  *   u, ⌘Z      undo last add
+ *   a          add focused track to a playlist
+ *   c          add focused release to a gig's crate
  *   ?          toggle shortcut overlay
  */
 
@@ -28,6 +30,7 @@ export interface KeyboardActions {
   navRailPrev: () => void;
   togglePlay: () => void;
   addToPlaylist: () => void;
+  addToCrate: () => void;
   removeFromPlaylist: () => void;
 }
 
@@ -121,6 +124,7 @@ export function installKeyboard(actions: KeyboardActions, guards: KeyboardGuards
     if (e.key === 'Enter')                                  { e.preventDefault(); actions.commit();         return; }
     if (e.key === 'u' || e.key === 'U')                     { e.preventDefault(); actions.undoLast();       return; }
     if (e.key === 'a' || e.key === 'A')                     { e.preventDefault(); actions.addToPlaylist();      return; }
+    if (e.key === 'c' || e.key === 'C')                     { e.preventDefault(); actions.addToCrate();         return; }
     if (e.key === 'Delete' || e.key === 'Backspace')        { e.preventDefault(); actions.removeFromPlaylist(); return; }
     if (e.key === '?')                                      { e.preventDefault(); actions.toggleShortcuts(); return; }
   }

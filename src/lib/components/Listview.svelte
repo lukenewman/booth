@@ -1,5 +1,6 @@
 <script lang="ts" generics="T extends { id: string }">
   import type { Snippet } from 'svelte';
+  import { translucentDragImage } from '$lib/dnd';
 
   /**
    * Generic paginated list shell. Caller provides:
@@ -20,6 +21,7 @@
     headers,
     row,
     empty,
+    dragMime,
   }: {
     items: T[];
     total: number;
@@ -30,6 +32,8 @@
     headers: Snippet;
     row: Snippet<[T, boolean]>;
     empty?: Snippet;
+    /** When set, rows drag out carrying their id under this mime type. */
+    dragMime?: string;
   } = $props();
 
   let sentinel: HTMLElement | undefined = $state();
@@ -67,6 +71,8 @@
           class:selected={item.id === selectedId}
           data-id={item.id}
           onclick={() => onSelect?.(item.id)}
+          draggable={!!dragMime}
+          ondragstart={(e) => { if (!dragMime || !e.dataTransfer) return; e.dataTransfer.setData(dragMime, item.id); e.dataTransfer.effectAllowed = 'copy'; if (e.currentTarget instanceof HTMLElement) translucentDragImage(e, e.currentTarget); }}
           type="button"
         >
           {@render row(item, item.id === selectedId)}

@@ -20,8 +20,7 @@
   let setupNeeded = $state<null | 'no_token' | 'invalid_token'>(null);
   let probed = $state(false);
   let shortcutOpen = $state(false);
-  let pickerOpen = $state(false);
-  let pickerTrackId = $state<string | null>(null);
+  let pickerTarget = $state<{ kind: 'track' | 'release'; id: string } | null>(null);
 
   onMount(() => {
     const mq = window.matchMedia('(max-width: 768px)');
@@ -195,8 +194,17 @@
           if (!trackId) return;
           // Only meaningful for track rows: the tracks lens, or inside a playlist.
           if (explorerState.entity !== 'tracks' && explorerState.nav.section !== 'playlist') return;
-          pickerTrackId = trackId;
-          pickerOpen = true;
+          pickerTarget = { kind: 'track', id: trackId };
+        },
+        addToCrate: () => {
+          const active = document.activeElement;
+          // List rows and grid cards both carry the release id.
+          if (!(active instanceof HTMLElement) || !active.matches('.row-btn, .card-btn')) return;
+          const releaseId = active.dataset.id;
+          // Library release rows only: in the tracks lens or a playlist data-id
+          // is a track, and in Add → Discogs it is a Discogs search hit.
+          if (!releaseId || explorerState.entity !== 'releases' || explorerState.nav.section !== 'library') return;
+          pickerTarget = { kind: 'release', id: releaseId };
         },
         removeFromPlaylist: () => {
           if (explorerState.nav.section !== 'playlist') return;
@@ -252,8 +260,8 @@
     <DesktopShell />
   {/if}
   <ShortcutOverlay open={shortcutOpen} onClose={() => (shortcutOpen = false)} />
-  {#if pickerOpen && pickerTrackId}
-    <PlaylistPicker trackId={pickerTrackId} onClose={() => { pickerOpen = false; pickerTrackId = null; }} />
+  {#if pickerTarget}
+    <PlaylistPicker target={pickerTarget} onClose={() => (pickerTarget = null)} />
   {/if}
 {/if}
 

@@ -104,6 +104,15 @@ import RecordingPill from './RecordingPill.svelte';
       const name = playlists.items.find((p) => p.id === playlistId)?.name ?? 'playlist';
       toast.show(added ? `Added to ${name}` : 'Already in playlist');
     }}
+    onCreateGig={async (name, minutes) => {
+      const created = await playlists.createGig(name, minutes);
+      if (created) explorerState.setNav({ section: 'playlist', item: created.id });
+    }}
+    onAddReleaseToPlaylist={async (playlistId, releaseId) => {
+      const { added } = await playlists.addRelease(playlistId, releaseId);
+      const name = playlists.items.find((p) => p.id === playlistId)?.name ?? 'gig';
+      toast.show(added ? `Crated in ${name}` : 'Already in the crate');
+    }}
   />
 
   <section class="middle">
@@ -179,6 +188,7 @@ import RecordingPill from './RecordingPill.svelte';
     {:else if currentEntity === 'releases'}
       {#if releaseView === 'grid'}
         <ReleaseGrid
+          draggableToGig={!isAddView}
           items={isAddView ? addItems : listItems}
           total={isAddView ? addItems.length : listTotal}
           hasMore={isAddView ? false : listHasMore}
@@ -189,6 +199,7 @@ import RecordingPill from './RecordingPill.svelte';
         />
       {:else}
         <ReleaseList
+          draggableToGig={!isAddView}
           items={isAddView ? addItems : listItems}
           total={isAddView ? addItems.length : listTotal}
           hasMore={isAddView ? false : listHasMore}

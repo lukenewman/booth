@@ -6,6 +6,8 @@
   import TrackDetail from './TrackDetail.svelte';
   import ArtistDetail from './ArtistDetail.svelte';
   import PlaylistView from './PlaylistView.svelte';
+  import GigView from './GigView.svelte';
+  import CratePanel from './CratePanel.svelte';
   import PlaylistCover from './PlaylistCover.svelte';
   import EmptyState from './EmptyState.svelte';
   import Scanner from './Scanner.svelte';
@@ -54,6 +56,8 @@
   // shell uses, so deep links and back/forward keep working identically.
   const detailOpen = $derived(!!explorerState.id && tab !== 'playlists');
   const playlistOpen = $derived(tab === 'playlists' && explorerState.nav.section === 'playlist');
+  // A gig on a phone is two panes in one column: the sketch, or the crate.
+  let gigPane = $state<'sketch' | 'crate'>('sketch');
 
   const title = $derived(
     tab === 'library' ? 'Library'
@@ -216,7 +220,24 @@
         <EmptyState title="Loading…" />
       {/if}
     {:else if tab === 'playlists'}
-      {#if playlistOpen}
+      {#if playlistOpen && playlists.openPlaylist?.isGig}
+        <div class="seg gig-seg" role="group" aria-label="Gig pane">
+          <button class:active={gigPane === 'sketch'} onclick={() => (gigPane = 'sketch')}>Sketch</button>
+          <button class:active={gigPane === 'crate'} onclick={() => (gigPane = 'crate')}>Crate</button>
+        </div>
+        {#if gigPane === 'sketch'}
+          <GigView
+            compact
+            selectedId={explorerState.id}
+            onTrackSelect={(id) => explorerState.setEntity(id)}
+            onDeleted={() => explorerState.setNav({ section: 'library', item: 'all' })}
+          />
+        {:else}
+          <!-- Crate rows don't open a tracklist on a phone yet; that's the
+               booth view (milestone 2). -->
+          <CratePanel onOpenRelease={() => {}} />
+        {/if}
+      {:else if playlistOpen}
         <PlaylistView
           selectedId={explorerState.id}
           onTrackSelect={(id) => explorerState.setEntity(id)}
@@ -313,6 +334,7 @@
     background: var(--bg-raised); border: 1px solid var(--border);
     border-radius: 6px; color: var(--text); font-size: 15px; /* 16px avoids iOS zoom-on-focus */
   }
+  .gig-seg { margin: 8px 12px; }
   .seg { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
   .seg button {
     background: none; border: none; color: var(--text-dim);

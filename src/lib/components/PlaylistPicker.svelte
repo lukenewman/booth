@@ -3,12 +3,22 @@
   import { toast } from '$lib/stores/toast.svelte';
 
   let {
-    trackId,
+    target,
     onClose,
   }: {
-    trackId: string;
+    /** A track goes into a playlist's sketch; a release goes into a gig's crate. */
+    target: { kind: 'track' | 'release'; id: string };
     onClose: () => void;
   } = $props();
+
+  async function put(playlistId: string, name: string): Promise<string> {
+    if (target.kind === 'track') {
+      const { added } = await playlists.addTrack(playlistId, target.id);
+      return added ? `Added to ${name}` : 'Already in playlist';
+    }
+    const { added } = await playlists.addRelease(playlistId, target.id);
+    return added ? `Crated in ${name}` : 'Already in the crate';
+  }
 
   let filter = $state('');
   let highlight = $state(0);
@@ -20,18 +30,14 @@
   const rowCount = $derived(matches.length + 1);
 
   async function addTo(playlistId: string, name: string) {
-    const { added } = await playlists.addTrack(playlistId, trackId);
-    toast.show(added ? `Added to ${name}` : 'Already in playlist');
+    toast.show(await put(playlistId, name));
     onClose();
   }
 
   async function createAndAdd() {
-    const name = filter.trim() || 'New playlist';
+    const name = filter.trim() || (target.kind === 'track' ? 'New playlist' : 'New gig');
     const created = await playlists.create(name);
-    if (created) {
-      await playlists.addTrack(created.id, trackId);
-      toast.show(`Added to ${created.name}`);
-    }
+    if (created) toast.show(await put(created.id, created.name));
     onClose();
   }
 
@@ -55,7 +61,7 @@
 <div class="backdrop" onclick={onClose} role="presentation">
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="panel" onclick={(e) => e.stopPropagation()} onkeydown={onKey} role="dialog" aria-modal="true" tabindex={-1}>
-    <div class="title">Add to playlist</div>
+    <div class="title">{target.kind === 'track' ? 'Add to playlist' : 'Add to gig crate'}</div>
     <!-- svelte-ignore a11y_autofocus -->
     <input
       class="filter"
@@ -66,7 +72,7 @@
     />
     <div class="rows">
       <button class="opt create" class:active={highlight === 0} onclick={() => choose(0)}>
-        ＋ New playlist{filter.trim() ? ` “${filter.trim()}”` : '…'}
+        ＋ New {target.kind === 'track' ? 'playlist' : 'gig'}{filter.trim() ? ` “${filter.trim()}”` : '…'}
       </button>
       {#each matches as p, i (p.id)}
         <button class="opt" class:active={highlight === i + 1} onclick={() => choose(i + 1)}>

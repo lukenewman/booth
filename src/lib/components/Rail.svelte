@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { NavValue } from '$lib/stores/explorerState.svelte';
   import PlaylistCover from './PlaylistCover.svelte';
+  import { parseLength } from '$lib/gig';
 
   interface SourceWithState {
     id: string;
@@ -28,15 +29,19 @@
     onSelect,
     onCreatePlaylist,
     onAddTrackToPlaylist,
+    onCreateGig,
+    onAddReleaseToPlaylist,
   }: {
     nav: NavValue;
     entity: 'releases' | 'tracks' | 'artists';
     sources: SourceWithState[];
     counts: Counts;
-    playlists?: { id: string; name: string; trackCount: number; coverUrl: string | null; mosaic: string[] }[];
+    playlists?: { id: string; name: string; trackCount: number; coverUrl: string | null; mosaic: string[]; isGig?: boolean }[];
     onSelect?: (nav: NavValue) => void;
     onCreatePlaylist?: (name: string) => void;
     onAddTrackToPlaylist?: (playlistId: string, trackId: string) => void;
+    onCreateGig?: (name: string, targetMinutes: number) => void;
+    onAddReleaseToPlaylist?: (playlistId: string, releaseId: string) => void;
   } = $props();
 
   const allCount = $derived(
@@ -77,7 +82,37 @@
     e.preventDefault();
     dropTargetId = null;
     const trackId = e.dataTransfer?.getData('application/x-booth-track');
-    if (trackId) onAddTrackToPlaylist?.(playlistId, trackId);
+    if (trackId) { onAddTrackToPlaylist?.(playlistId, trackId); return; }
+    const releaseId = e.dataTransfer?.getData('application/x-booth-release');
+    if (releaseId) onAddReleaseToPlaylist?.(playlistId, releaseId);
+  }
+
+  // New gig: a name and a set length. An empty length means the default three
+  // hours; a length that doesn't parse keeps the form open rather than guess.
+  const DEFAULT_GIG_MINUTES = 180;
+  let creatingGig = $state(false);
+  let gigName = $state('');
+  let gigLength = $state('');
+  let gigLengthInvalid = $state(false);
+
+  function submitGig() {
+    const name = gigName.trim();
+    if (!name) { cancelGig(); return; }
+    const minutes = gigLength.trim() ? parseLength(gigLength) : DEFAULT_GIG_MINUTES;
+    if (minutes == null) { gigLengthInvalid = true; return; }
+    onCreateGig?.(name, minutes);
+    cancelGig();
+  }
+  function cancelGig() {
+    creatingGig = false;
+    gigName = '';
+    gigLength = '';
+    gigLengthInvalid = false;
+  }
+  function gigKey(e: KeyboardEvent) {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); submitGig(); }
+    else if (e.key === 'Escape') cancelGig();
   }
 </script>
 
@@ -126,6 +161,7 @@
       >
         <PlaylistCover coverUrl={p.coverUrl} mosaic={p.mosaic} size={22} />
         <span class="pname">{p.name}</span>
+        {#if p.isGig}<span class="gig-tag">gig</span>{/if}
         <span class="count">{p.trackCount.toLocaleString()}</span>
       </button>
     {/each}
@@ -144,6 +180,28 @@
       />
     {:else}
       <button class="new-btn" onclick={() => (creating = true)}>＋ New playlist</button>
+    {/if}
+    {#if creatingGig}
+      <!-- Blur only submits when focus leaves the whole form, so tabbing from
+           name to length doesn't create a half-filled gig. -->
+      <div
+        class="new-gig"
+        role="group"
+        onfocusout={(e) => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null)) submitGig(); }}
+      >
+        <!-- svelte-ignore a11y_autofocus -->
+        <input class="new-playlist" bind:value={gigName} placeholder="Gig name…" autofocus onkeydown={gigKey} />
+        <input
+          class="new-playlist"
+          bind:value={gigLength}
+          placeholder="Length — 3:00"
+          aria-invalid={gigLengthInvalid}
+          oninput={() => (gigLengthInvalid = false)}
+          onkeydown={gigKey}
+        />
+      </div>
+    {:else}
+      <button class="new-btn new-gig-btn" onclick={() => (creatingGig = true)}>＋ New gig</button>
     {/if}
   </div>
 
@@ -239,6 +297,8 @@
   }
   .item.drop-target .pname { color: var(--accent); }
   .pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gig-tag { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-subtle); border: 1px solid var(--border-strong); border-radius: 3px; padding: 0 3px; }
+  .new-playlist[aria-invalid='true'] { border-color: var(--danger); }
   .new-btn {
     background: transparent;
     border: 0;

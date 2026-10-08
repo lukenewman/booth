@@ -2,6 +2,7 @@
   import SourceGrid from './SourceGrid.svelte';
   import { annotations } from '$lib/stores/annotations.svelte';
   import EmptyState from './EmptyState.svelte';
+  import { translucentDragImage } from '$lib/dnd';
 
   interface ReleaseItem {
     id: string;
@@ -23,6 +24,7 @@
     loadMore,
     emptyTitle = 'No releases',
     emptyDetail = '',
+    draggableToGig = false,
   }: {
     items: ReleaseItem[];
     total: number;
@@ -32,6 +34,7 @@
     loadMore?: () => void;
     emptyTitle?: string;
     emptyDetail?: string;
+    draggableToGig?: boolean;
   } = $props();
 
   let sentinel: HTMLElement | undefined = $state();
@@ -64,8 +67,11 @@
         {#each items as item (item.id)}
           <button
             class="card-btn"
+            data-id={item.id}
             class:selected={item.id === selectedId}
             onclick={() => onSelect?.(item.id)}
+            draggable={draggableToGig}
+            ondragstart={(e) => { if (!draggableToGig || !e.dataTransfer) return; e.dataTransfer.setData('application/x-booth-release', item.id); e.dataTransfer.effectAllowed = 'copy'; if (e.currentTarget instanceof HTMLElement) translucentDragImage(e, e.currentTarget); }}
             type="button"
           >
             {#if item.thumbUrl}

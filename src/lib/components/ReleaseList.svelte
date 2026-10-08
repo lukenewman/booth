@@ -33,6 +33,7 @@
     loadMore,
     emptyTitle = 'No releases',
     emptyDetail = '',
+    draggableToGig = false,
   }: {
     items: ReleaseItem[];
     total: number;
@@ -42,6 +43,8 @@
     loadMore?: () => void;
     emptyTitle?: string;
     emptyDetail?: string;
+    /** Library rows can be dropped on a gig in the rail; Add-view search hits can't. */
+    draggableToGig?: boolean;
   } = $props();
 </script>
 
@@ -52,6 +55,7 @@
   {selectedId}
   {onSelect}
   {loadMore}
+  dragMime={draggableToGig ? 'application/x-booth-release' : undefined}
 >
   {#snippet headers()}
     <div class="cols">
