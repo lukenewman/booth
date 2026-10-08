@@ -13,6 +13,8 @@
   import SessionLog from './SessionLog.svelte';
   import SyncRunHistory from './SyncRunHistory.svelte';
   import PlaylistView from './PlaylistView.svelte';
+  import GigView from './GigView.svelte';
+  import CratePanel from './CratePanel.svelte';
   import Player from './Player.svelte';
   import PlayerBar from './PlayerBar.svelte';
   import RecordSession from './RecordSession.svelte';
@@ -41,6 +43,15 @@ import RecordingPill from './RecordingPill.svelte';
   const isAddView = $derived(c.isAddView);
   const isSourcesView = $derived(c.isSourcesView);
   const isPlaylistView = $derived(c.isPlaylistView);
+  // A gig always has a right pane: the crate, or a crate record's tracklist.
+  const isGig = $derived(isPlaylistView && !!playlists.openPlaylist?.isGig);
+
+  async function addToGig(trackId: string) {
+    const open = playlists.openPlaylist;
+    if (!open) return;
+    const { added, sectionName } = await playlists.addTrack(open.id, trackId);
+    toast.show(added ? 'Added to Unsorted' : `Already in ${sectionName}`);
+  }
   const libraryQuery = $derived(c.libraryQuery);
   const drilledMaster = $derived(c.drilledMaster);
   const addItems = $derived(c.addItems);
@@ -76,7 +87,7 @@ import RecordingPill from './RecordingPill.svelte';
 <Player />
 
 <div class="shell">
-  <div class="explorer" class:no-detail={isPlaylistView && !plDetail}>
+  <div class="explorer" class:no-detail={isPlaylistView && !plDetail && !isGig}>
   <Rail
     nav={explorerState.nav}
     entity={currentEntity}
@@ -96,7 +107,15 @@ import RecordingPill from './RecordingPill.svelte';
   />
 
   <section class="middle">
-    {#if isPlaylistView}
+    {#if isPlaylistView && isGig}
+      <GigView
+        selectedId={explorerState.id}
+        onTrackSelect={(id) => explorerState.setEntity(id)}
+        onArtistSelect={(id) => openPlaylistEntity('artist', id)}
+        onReleaseSelect={(id) => openPlaylistEntity('release', id)}
+        onDeleted={() => explorerState.setNav({ section: 'library', item: 'all' })}
+      />
+    {:else if isPlaylistView}
       <PlaylistView
         selectedId={explorerState.id}
         onTrackSelect={(id) => explorerState.setEntity(id)}
@@ -209,13 +228,14 @@ import RecordingPill from './RecordingPill.svelte';
   {#if isPlaylistView}
     {#if plDetail}
       <section class="right">
-        <button class="pl-detail-close" onclick={() => c.closePlDetail()}>← Close detail</button>
+        <button class="pl-detail-close" onclick={() => c.closePlDetail()}>{isGig ? '← Crate' : '← Close detail'}</button>
         {#if plDetail.kind === 'release'}
           <ReleaseDetail
             release={plDetail.data.release}
             sources={plDetail.data.sources}
             tracks={plDetail.data.tracks ?? []}
             onArtistSelect={(id) => openPlaylistEntity('artist', id)}
+            onAddTrack={isGig ? addToGig : undefined}
           />
         {:else}
           <ArtistDetail
@@ -228,6 +248,10 @@ import RecordingPill from './RecordingPill.svelte';
             onReleaseSelect={(id) => openPlaylistEntity('release', id)}
           />
         {/if}
+      </section>
+    {:else if isGig}
+      <section class="right">
+        <CratePanel onOpenRelease={(id) => openPlaylistEntity('release', id)} />
       </section>
     {/if}
   {:else}

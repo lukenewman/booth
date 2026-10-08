@@ -50,6 +50,7 @@
     onRecord,
     onVet,
     recordDisabled = false,
+    onAddTrack,
   }: {
     release: Release;
     sources: SourceLink[];
@@ -67,6 +68,8 @@
     onRecord?: () => void;
     onVet?: (releaseId: string, next: boolean) => void;
     recordDisabled?: boolean;
+    /** Set in a gig: each tracklist row gets a ＋ that sketches the track into Unsorted. */
+    onAddTrack?: (trackId: string) => void;
   } = $props();
 
   // Playing from a tracklist queues the rest of the release. Filtered to
@@ -101,7 +104,7 @@
    */
   const anyBpm = $derived(tracks.some((t) => t.bpm != null));
   const trackGrid = $derived(
-    ['14px', '22px', 'minmax(0, 1fr)', anyBpm ? '40px' : null, '44px'].filter(Boolean).join(' '),
+    ['14px', '22px', 'minmax(0, 1fr)', anyBpm ? '40px' : null, '44px', onAddTrack ? '24px' : null].filter(Boolean).join(' '),
   );
 
   const releaseCtx = $derived({
@@ -216,7 +219,7 @@
             // being swallowed and the note editor opened instead. (Synthetic
             // dispatchEvent bubbles natively and hid this in testing.)
             const origin = e.target as HTMLElement | null;
-            if (origin?.closest('.index.playable, .star')) return;
+            if (origin?.closest('.index.playable, .star, .add-to-gig')) return;
             // Real click opens the note editor. Double-click-to-play is gone —
             // the transport in the index cell covers playback, which frees this
             // gesture without the click/dblclick race a delayed handler needs.
@@ -266,6 +269,17 @@
             <span class="track-bpm">{t.bpm ? formatBpm(t.bpm.value) : ''}</span>
           {/if}
           <span class="track-dur">{durationLabel(t.duration_ms)}</span>
+          {#if onAddTrack}
+            <span
+              class="add-to-gig"
+              role="button"
+              tabindex="-1"
+              aria-label="Add {t.title} to the sketch"
+              title="Add to Unsorted (or drag onto a section)"
+              onclick={(e) => { e.stopPropagation(); onAddTrack(t.id); }}
+              onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onAddTrack(t.id); } }}
+            >＋</span>
+          {/if}
         </button>
         <TrackNote
           trackId={t.id}
@@ -581,6 +595,8 @@
     font-family: var(--font-mono);
   }
   .index.playable { cursor: pointer; }
+  .add-to-gig { color: var(--text-subtle); text-align: center; cursor: pointer; }
+  .add-to-gig:hover { color: var(--accent); }
   .idx-transport {
     color: var(--text-muted);
     font-size: 12px;
