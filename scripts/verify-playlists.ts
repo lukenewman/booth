@@ -79,17 +79,18 @@ assert(detail!.tracks[0].id === t2 && detail!.tracks[1].id === t1, 'reorder did 
 removeTrack(db, p.id, t2);
 detail = getPlaylist(db, p.id);
 assert(detail!.tracks.length === 1 && detail!.tracks[0].id === t1, 'remove failed');
-const pos = db.prepare(`SELECT position FROM playlist_track WHERE playlist_id=?`).get(p.id) as { position: number };
+const pos = db.prepare(`SELECT position FROM playlist_track WHERE playlist_id=? AND track_id IS NOT NULL`).get(p.id) as { position: number };
 assert(pos.position === 0, `remaining track should be renumbered to 0, got ${pos.position}`);
 
 // rename
 renamePlaylist(db, p.id, 'Late Night');
 assert(listPlaylists(db)[0].name === 'Late Night', 'rename did not take');
 
-// deleting a track cascades the join row
+// deleting a track leaves a missing entry (no longer a cascade)
 db.prepare(`DELETE FROM track WHERE id=?`).run(t1);
 detail = getPlaylist(db, p.id);
-assert(detail!.tracks.length === 0, 'track delete should cascade out of the playlist');
+assert(detail!.tracks.length === 0, 'missing track is not in the flat list');
+assert(detail!.sections[0].entries.length === 1 && detail!.sections[0].entries[0].track === null, 'missing entry kept');
 
 // deletePlaylist cascades remaining join rows + removes the playlist.
 // Re-add t2 (the track still exists — it was only removed from the playlist
@@ -100,4 +101,4 @@ assert(listPlaylists(db).length === 0, 'playlist should be gone after delete');
 const orphans = db.prepare(`SELECT COUNT(*) AS n FROM playlist_track`).get() as { n: number };
 assert(orphans.n === 0, `playlist_track rows should be gone after playlist delete, got ${orphans.n}`);
 
-console.log('PASS: playlists — create, list, add/dedupe, reorder, remove, rename, cascade');
+console.log('PASS: playlists — create, list, add/dedupe, reorder, remove, rename, missing rows');
