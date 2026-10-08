@@ -1,6 +1,7 @@
 import type { Database } from 'bun:sqlite';
 import { ulid } from 'ulid';
 import { collate, type CollateSummary } from './collate';
+import { relinkMissing, type RelinkSummary } from './relink';
 import { getSource } from '../sources/registry';
 import { NotImplementedError, type IngestReport, type SyncInput } from '../sources/types';
 import { hydrateDiscogsTracks } from '../sources/discogs/hydrateDiscogsTracks';
@@ -42,6 +43,11 @@ export type SyncRunSummary = CollateSummary & {
    * no-op summary stays uncluttered, which is the same rule `analysis` follows.
    */
   ingest?: IngestReport;
+  /**
+   * Playlist entries / crate records re-attached by name after this run.
+   * Absent when nothing was re-linked, like `analysis` and `ingest`.
+   */
+  playlistsRelinked?: RelinkSummary;
 };
 
 export type AnalysisState =
@@ -105,6 +111,11 @@ export async function runSync(db: Database, sourceId: string): Promise<SyncRunRo
     // source-filtered artist list (driving from source_link instead of the
     // artist's releases/tracks), turning a ~1ms query into ~500ms. ANALYZE is
     // <10ms on this DB and sync is exactly when the row counts shift.
+    // A moved or renamed file comes back as a new track row within this run;
+    // re-attach any playlist entries that lost theirs (see relink.ts).
+    const relinked = relinkMissing(db);
+    if (relinked.tracks || relinked.releases) summary.playlistsRelinked = relinked;
+
     db.exec('ANALYZE');
 
     // Tempo analysis runs *behind* the sync: a run that ingests a few hundred
