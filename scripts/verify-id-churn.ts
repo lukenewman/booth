@@ -87,12 +87,19 @@ function syncWith(externalId: string): SyncResult {
   const trackId = (db.prepare(`SELECT id FROM track`).get() as { id: string }).id;
   db.prepare(`INSERT INTO playlist (id, name) VALUES ('p1','Crate')`).run();
   db.prepare(
-    `INSERT INTO playlist_track (playlist_id, track_id, position) VALUES ('p1',?,0)`,
+    `INSERT INTO playlist_section (id, playlist_id, name, position, is_unsorted) VALUES ('s1','p1','Unsorted',0,1)`,
+  ).run();
+  db.prepare(
+    `INSERT INTO playlist_track (id, playlist_id, section_id, track_id, position) VALUES ('e1','p1','s1',?,0)`,
   ).run(trackId);
 
   collate(db, 'local', syncWith('88888'));
 
-  const n = db.prepare(`SELECT COUNT(*) c FROM playlist_track`).get() as { c: number };
+  // Membership rows no longer cascade away (track_id goes NULL instead), so
+  // check the row still points at the same track, not just that it exists.
+  const n = db
+    .prepare(`SELECT COUNT(*) c FROM playlist_track WHERE track_id = ?`)
+    .get(trackId) as { c: number };
   assert(n.c === 1, `playlist membership survives (got ${n.c})`);
 }
 
