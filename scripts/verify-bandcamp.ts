@@ -49,3 +49,41 @@ const got = await collectPages(async () => pages[Math.min(calls++, pages.length 
 eq(got.map((g) => g.itemId), ['a1', 'a2', 'a3'], 'deduplicated purchases');
 eq(calls, 3, 'stops on a page with nothing new');
 console.log('ok pagination');
+
+// Loose titles: only within the purchase's own Bandcamp host, only on an exact
+// loose-key match (never containment), and only when exactly one release fits.
+const { looseTitleKey } = await import('../src/lib/server/genres/bandcampMatch');
+eq(looseTitleKey('Tidal Waves EP', 'Bob Bonádis'), looseTitleKey('Tidal Waves', 'Bob Bonádis'), 'EP suffix');
+eq(looseTitleKey('[PHONICA030] Escape Artist - Energy Breakthrough EP', 'Escape Artist'), 'energybreakthrough', 'catalogue + artist in title');
+eq(looseTitleKey('MPC Dreams - FTC03', 'Kyle Hall'), 'mpcdreams', 'trailing catalogue number');
+eq(looseTitleKey('Lighten You Up *BC Exclusive*', 'Aleqs Notal'), 'lightenyouup', 'starred note');
+eq(looseTitleKey('On A Nimbus Remixes', 'Priori') === looseTitleKey('On A Nimbus', 'Priori'), false, 'remixes stay distinct');
+eq(looseTitleKey('TEK-88', 'Tenderlonious'), '', 'title that is only a catalogue number has no loose key');
+
+const loose = buildMatcher(
+  [rel('b1', 'Bob Bonádis', 'Tidal Waves EP', ['ace.bandcamp.com']), rel('b2', 'Escape Artist', '[PHONICA030] Escape Artist - Energy Breakthrough EP', ['phonica.bandcamp.com']),
+   rel('b3', 'Priori', 'On A Nimbus Remixes', ['priori.bandcamp.com']), rel('b4', 'Same', 'Twin EP', ['twin.bandcamp.com']), rel('b5', 'Same', 'Twin LP', ['twin.bandcamp.com']),
+   rel('b6', 'Max Graef', 'Natural Element', ['maxgraef.bandcamp.com'])],
+  [{ releaseId: 'b6', artist: 'Max Graef', title: 'Zan' }],
+);
+eq(loose(buy({ artist: 'Bob Bonádis', albumTitle: 'Tidal Waves', url: 'https://ace.bandcamp.com/album/tidal-waves' })), { state: 'matched', releaseId: 'b1' }, 'loose: EP');
+eq(loose(buy({ artist: 'Bob Bonádis', albumTitle: 'Tidal Waves', url: 'https://other.bandcamp.com/album/tidal-waves' })), { state: 'unmatched' }, 'loose: wrong host');
+eq(loose(buy({ artist: 'Escape Artist', albumTitle: 'Energy Breakthrough EP', url: 'https://phonica.bandcamp.com/album/e' })), { state: 'matched', releaseId: 'b2' }, 'loose: catalogue prefix');
+eq(loose(buy({ artist: 'Priori', albumTitle: 'On A Nimbus', url: 'https://priori.bandcamp.com/album/n' })), { state: 'unmatched' }, 'loose: remixes not matched');
+eq(loose(buy({ artist: 'Same', albumTitle: 'Twin', url: 'https://twin.bandcamp.com/album/t' })), { state: 'ambiguous' }, 'loose: two fits');
+eq(loose(buy({ itemType: 'track', artist: 'Various Artists', title: 'Zan', albumTitle: 'Something Else', url: 'https://maxgraef.bandcamp.com/track/zan' })), { state: 'matched', releaseId: 'b6' }, 'track title on a release under the same host, artist differs');
+console.log('ok loose titles');
+
+// Removing an artist's name from both titles can leave a generic word that
+// matches across artists ("RNT030 // Al-Tone Edits" vs "RNT016 // Al Kent
+// Edits" both become "edits"). When a key needed the artist stripped, the
+// artists must agree.
+const edits = buildMatcher(
+  [rel('e1', 'Al Kent', 'RNT016 // Al Kent Edits', ['rnt.bandcamp.com']), rel('e2', 'ALEQS NOTAL', 'Lighten You Up *BC Exclusive*', ['rnt.bandcamp.com']),
+   rel('e3', 'Lone', 'Lone - Abraxas EP', ['rnt.bandcamp.com'])],
+  [],
+);
+eq(edits(buy({ artist: 'Al-Tone', albumTitle: 'RNT030 // Al-Tone Edits', url: 'https://rnt.bandcamp.com/album/a' })), { state: 'unmatched' }, 'different artists, stripped keys');
+eq(edits(buy({ artist: 'Aleqs Notal', albumTitle: 'Lighten You Up', url: 'https://rnt.bandcamp.com/album/l' })), { state: 'matched', releaseId: 'e2' }, 'no artist stripped, case-different artist fine');
+eq(edits(buy({ artist: 'Lone', albumTitle: 'Abraxas EP', url: 'https://rnt.bandcamp.com/album/x' })), { state: 'matched', releaseId: 'e3' }, 'stripped, same artist');
+console.log('ok stripped-artist guard');

@@ -9,6 +9,36 @@ export type MatchResult = { state: 'matched'; releaseId: string } | { state: 'am
 
 const albumKey = (s: string) => matchKey(stripEditionTags(s));
 
+/**
+ * A title with the noise Bandcamp and labels add stripped: bracketed and
+ * starred notes ("[PHONICA030]", "*BC Exclusive*"), catalogue numbers
+ * ("FTC03", "LÜÜD003"), a format word (EP/LP/single) and the artist's own name.
+ * Words that name a different record — "Remixes", "Vol. 2" — stay, which is why
+ * callers compare these for equality, never containment. Empty when nothing
+ * meaningful is left ("TEK-88").
+ */
+export function looseTitleKey(title: string, artist: string): string {
+  return looseTitle(title, artist).key;
+}
+
+/** `looseTitleKey` plus whether the artist's name had to be removed to get it. */
+export function looseTitle(title: string, artist: string): { key: string; artistStripped: boolean } {
+  const t = stripEditionTags(title)
+    .replace(/\[[^\]]*\]|\*[^*]*\*/g, ' ')
+    .replace(/(?<![\p{L}\p{N}])\p{L}{2,}[-\s]?\d{2,}(?![\p{L}\p{N}])/gu, ' ')
+    .replace(/(?<![\p{L}\p{N}])(?:ep|lp|single)(?![\p{L}\p{N}])/giu, ' ');
+  const whole = matchKey(t);
+  const a = matchKey(artist);
+  const key = a.length >= 3 && whole !== a ? whole.split(a).join('') : whole;
+  return key.length >= 3 ? { key, artistStripped: key !== whole } : { key: '', artistStripped: false };
+}
+
+/** Same artist, allowing "Lone" vs "Lone & Friend" and case/punctuation. */
+function artistsAgree(a: string, b: string): boolean {
+  const x = matchKey(a), y = matchKey(b);
+  return !!x && !!y && (x === y || x.includes(y) || y.includes(x));
+}
+
 function push<K, V>(m: Map<K, V[]>, k: K, v: V) {
   const list = m.get(k);
   if (list) list.push(v);
@@ -22,6 +52,8 @@ function push<K, V>(m: Map<K, V[]>, k: K, v: V) {
  *  2. (track purchases) artist + track title → that track's release.
  *  3. album title alone, only when exactly one candidate carries the
  *     purchase's host — covers "Various Artists" and label band names.
+ *  4. same host, loose title (see looseTitleKey); then, for track purchases,
+ *     same host + track title. Both require exactly one candidate.
  */
 export function buildMatcher(releases: MatchRelease[], tracks: MatchTrack[]): (p: BandcampPurchase) => MatchResult {
   const byArtistTitle = new Map<string, MatchRelease[]>();
@@ -31,10 +63,18 @@ export function buildMatcher(releases: MatchRelease[], tracks: MatchTrack[]): (p
     push(byArtistTitle, `${matchKey(r.artist)}|${albumKey(r.title)}`, r);
     push(byTitle, albumKey(r.title), r);
   }
+  // Same-host fallbacks: keyed by the Bandcamp host the release's files name.
+  const byHostLoose = new Map<string, { r: MatchRelease; artistStripped: boolean }[]>();
+  for (const r of releases) {
+    const lt = looseTitle(r.title, r.artist);
+    if (lt.key) for (const h of r.hosts) push(byHostLoose, `${h}|${lt.key}`, { r, artistStripped: lt.artistStripped });
+  }
+  const byHostTrack = new Map<string, MatchRelease[]>();
   const byTrack = new Map<string, MatchRelease[]>();
   for (const t of tracks) {
     const r = byId.get(t.releaseId);
     if (r) push(byTrack, `${matchKey(t.artist)}|${matchKey(t.title)}`, r);
+    if (r) for (const h of r.hosts) push(byHostTrack, `${h}|${matchKey(t.title)}`, r);
   }
 
   return (p) => {
@@ -59,6 +99,20 @@ export function buildMatcher(releases: MatchRelease[], tracks: MatchTrack[]): (p
       (album ? decide(byArtistTitle.get(`${artist}|${album}`), false) : null) ??
       (p.itemType === 'track' ? decide(byTrack.get(`${artist}|${matchKey(p.title)}`), false) : null) ??
       (album ? decide(byTitle.get(album), true) : null) ??
+      // Same host, looser titles: "Tidal Waves" vs "Tidal Waves EP", catalogue
+      // prefixes, a track bought from a compilation under a label's page.
+      (() => {
+        const lt = p.albumTitle ? looseTitle(p.albumTitle, p.artist) : null;
+        if (!lt?.key) return null;
+        // A key that only matched because an artist name was removed from one
+        // side ("Al-Tone Edits" / "Al Kent Edits" → "edits") needs the artists
+        // to agree as well.
+        const cands = (byHostLoose.get(`${host}|${lt.key}`) ?? [])
+          .filter((c) => !(lt.artistStripped || c.artistStripped) || artistsAgree(p.artist, c.r.artist))
+          .map((c) => c.r);
+        return decide(cands, true);
+      })() ??
+      (p.itemType === 'track' ? decide(byHostTrack.get(`${host}|${matchKey(p.title)}`), true) : null) ??
       { state: 'unmatched' }
     );
   };
