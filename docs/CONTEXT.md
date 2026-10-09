@@ -426,6 +426,14 @@ docs/
 - **No musical key yet.** The spec mentions BPM and key; no source in Booth carries key, so rows show BPM only.
 - Spec/plan: `docs/superpowers/specs/2026-10-07-gigs-design.md`, `docs/superpowers/plans/2026-10-07-gigs.md`.
 
+### CDJ USB export (spike, 2026-10-09)
+
+Goal: write a USB stick Pioneer players read, with no rekordbox in between. `scripts/spike-cdj-usb.ts --playlist NAME --out DIR` writes a booth playlist as a classic rekordbox export (the format pre-OneLibrary players such as the XDJ-1000MK2 read): audio under `/Contents`, `PIONEER/rekordbox/export.pdb` + `exportExt.pdb` (`src/lib/server/cdj/pdb.ts`), and per-track analysis under `PIONEER/USBANLZ` (`src/lib/server/cdj/anlz.ts`). **Not yet tried on a player.**
+- **Formats come from Deep Symmetry's crate-digger spec and rekordcrate's model.** Where a field's meaning is unknown, the writer uses what rekordbox writes into a *fresh* export, not an edited one: data pages flagged `0x24`, every row marked as touched by one transaction, empty index pages. The colour, menu-column, menu-layout and history tables and all of `exportExt.pdb` are fixed content, embedded as bytes captured from an empty rekordbox export.
+- **Validation without hardware:** rekordcrate (`dump-pdb`, `list-playlists`, `dump-anlz`; strict asserts on row counts and offsets) and the crate-digger Kaitai spec compiled to Python both parse the output, and the index pages and fixed tables are byte-identical to rekordbox's once page numbering is masked.
+- **Beat grids are borrowed from rekordbox.** Its local store (`~/Library/Pioneer/rekordbox/share/PIONEER/USBANLZ`) holds the same ANLZ files a USB gets, so they are copied with the PPTH (audio path) section rewritten. Two things found there: the local PPTH records only `?/<file name>` (the full path is in the encrypted `master.db`), so matching is by file name plus a beat grid that ends inside the track; and the local cue sections are **empty**, because rekordbox keeps hot and memory cues in `master.db`. Cues therefore need the rekordbox XML export (or a `master.db` read), which the spike does not do.
+- **Not written yet:** cues, musical key, artwork, labels, genres (no booth genre facet on the sampled tracks), and booth's own analysis for tracks rekordbox has never seen.
+
 ### URL state
 - Four params, mirrored by `explorerState.svelte.ts` singleton:
   - `?nav=<rail-item>` — e.g., `library:all`, `sources:discogs`, `add:discogs`, `playlist:<id>` (a playlist rail item; middle pane shows `PlaylistView`). Source of truth for which rail item is selected. Legacy `library:all-releases` / `library:all-tracks` URLs are redirected to `library:all` on hydrate, carrying their entity-kind through as `?entity=`.
