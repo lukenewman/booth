@@ -11,10 +11,6 @@ mkdir -p "$DATA"
 if [ ! -f "$DATA/settings.env" ]; then
   cp "$HERE/app/settings.env.example" "$DATA/settings.env"
 fi
-# No Discogs token yet: open the settings file so it can be pasted in.
-if ! grep -qE '^DISCOGS_TOKEN=.+' "$DATA/settings.env"; then
-  open -e "$DATA/settings.env"
-fi
 
 # Already running (another window, or a previous launch)? Just open it.
 if curl -fs -o /dev/null "$URL/api/sources"; then
@@ -32,5 +28,6 @@ echo "Starting booth at $URL — keep this window open while you use it."
 ) &
 
 cd "$DATA"
-export PORT HOST=127.0.0.1 BOOTH_MIGRATIONS_DIR="$HERE/app/migrations"
+# BOOTH_SETTINGS_PATH: where the onboarding screen saves the Discogs token.
+export PORT HOST=127.0.0.1 BOOTH_MIGRATIONS_DIR="$HERE/app/migrations" BOOTH_SETTINGS_PATH="$DATA/settings.env"
 exec "$HERE/app/runtime/bun" --env-file="$DATA/settings.env" "$HERE/app/build/index.js"

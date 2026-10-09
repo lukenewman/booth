@@ -1,8 +1,8 @@
 import { env } from '$lib/server/env';
 import type { ApiError } from '$lib/types';
 
-const BASE = 'https://api.discogs.com';
-const USER_AGENT = 'booth/0.1 +https://github.com/luke';
+export const BASE = 'https://api.discogs.com';
+export const USER_AGENT = 'booth/0.1 +https://github.com/luke';
 
 export class DiscogsError extends Error {
   constructor(public payload: ApiError, public status: number) {

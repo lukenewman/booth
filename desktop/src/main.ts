@@ -39,9 +39,9 @@ for (const line of readFileSync(settingsPath, "utf8").split("\n")) {
 	if (value) process.env[match[1]!] ??= value;
 }
 
-if (!process.env.DISCOGS_TOKEN) {
-	Bun.spawn(["open", "-e", settingsPath]);
-}
+// Without a Discogs token the page shows its onboarding screen, which saves
+// the token back to this file.
+process.env.BOOTH_SETTINGS_PATH = settingsPath;
 
 // --- Server -----------------------------------------------------------------
 

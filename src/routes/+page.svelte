@@ -11,6 +11,7 @@
   import { player } from '$lib/stores/player.svelte';
   import { playlists } from '$lib/stores/playlists.svelte';
   import PlaylistPicker from '$lib/components/PlaylistPicker.svelte';
+  import DiscogsOnboarding from '$lib/components/DiscogsOnboarding.svelte';
 
   // Which shell to mount. Decided from the viewport, which is why SSR is off
   // for this route (see +page.ts) — the server cannot know it, and rendering
@@ -33,10 +34,10 @@
     // an async function that also returns a cleanup).
     void (async () => {
       try {
-        const res = await fetch('/api/discogs/search?q=test');
+        const res = await fetch('/api/setup/discogs');
         const data = await res.json().catch(() => ({}));
-        if (data?.error === 'no_token' || data?.error === 'invalid_token') {
-          setupNeeded = data.error;
+        if (data?.status === 'no_token' || data?.status === 'invalid_token') {
+          setupNeeded = data.status;
         }
       } catch {
         // Treat as no setup error — endpoint failures surface via toast on use.
@@ -255,19 +256,7 @@
 {#if !probed}
   <!-- Initial blank to avoid setup-flash. -->
 {:else if setupNeeded}
-  <main class="setup">
-    <h1>Setup booth</h1>
-    <p>
-      booth needs a Discogs personal access token to talk to the Discogs API.
-      Generate one at <a href="https://www.discogs.com/settings/developers">discogs.com/settings/developers</a>,
-      then add it to <code>.env</code> (in the repo, or <code>~/.booth/settings.env</code> if you downloaded booth):
-    </p>
-    <pre><code>DISCOGS_TOKEN=your-token-here</code></pre>
-    <p>Restart booth after editing.</p>
-    {#if setupNeeded === 'invalid_token'}
-      <p class="error">The token in <code>.env</code> was rejected by Discogs (401). Double-check it's correct.</p>
-    {/if}
-  </main>
+  <DiscogsOnboarding reason={setupNeeded} onDone={() => (setupNeeded = null)} />
 {:else}
   {#if isMobile}
     <MobileShell />
@@ -280,29 +269,3 @@
   {/if}
 {/if}
 
-<style>
-  .setup {
-    max-width: 540px;
-    margin: 80px auto;
-    padding: 24px;
-    color: var(--text);
-  }
-  .setup h1 { font-size: 18px; font-weight: 600; margin-bottom: 12px; }
-  .setup p { margin-bottom: 12px; line-height: 1.5; }
-  .setup code {
-    background: var(--bg-raised);
-    border: 1px solid var(--border);
-    padding: 1px 5px;
-    border-radius: 3px;
-    font-family: var(--font-mono);
-    font-size: 12px;
-  }
-  .setup pre {
-    background: var(--bg-raised);
-    border: 1px solid var(--border);
-    padding: 12px;
-    border-radius: 4px;
-    overflow-x: auto;
-  }
-  .setup .error { color: var(--danger); }
-</style>

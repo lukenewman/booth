@@ -20,10 +20,8 @@ You only do this once.
 
 Connecting your Discogs account
 -------------------------------
-On the first run, a settings file opens in TextEdit. Make a token at
-https://www.discogs.com/settings/developers ("Generate new token"), paste it
-after DISCOGS_TOKEN=, save, close the booth window, and double-click
-booth.command again.
+On the first run, booth walks you through making a Discogs token and
+pasting it in. It checks the token with Discogs and saves it for next time.
 
 The settings file lives at ~/.booth/settings.env. In Finder use
 Go → Go to Folder… and type ~/.booth to find it later.

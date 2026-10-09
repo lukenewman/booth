@@ -15,12 +15,25 @@ import { env as dynPrivate } from '$env/dynamic/private';
  */
 const dyn = dynPrivate as Record<string, string | undefined>;
 
+/**
+ * Values set while the server runs (the onboarding screen saving a Discogs
+ * token). They win over both sources: the production adapter copies
+ * `process.env` into `$env/dynamic/private` once at startup, so writing
+ * `process.env` later would not reach a key that was present but empty.
+ */
+const overrides: Record<string, string> = {};
+
+export function setEnv(key: string, value: string): void {
+  overrides[key] = value;
+  process.env[key] = value;
+}
+
 export const env: Record<string, string | undefined> = new Proxy(
   {} as Record<string, string | undefined>,
   {
     get(_target, key) {
       if (typeof key !== 'string') return undefined;
-      return dyn[key] ?? process.env[key];
+      return overrides[key] ?? dyn[key] ?? process.env[key];
     },
   },
 );

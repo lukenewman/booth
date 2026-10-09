@@ -4,7 +4,7 @@
 
 ## What it is
 
-Single-user, local-only SvelteKit app for adding records to a personal Discogs collection, browsing the unified library, playing tracks, and **recording vinyl into the library**. Ways in: text search, webcam barcode scan, and recording a release from an audio interface. Keyboard-first, dark theme, no auth UI (token lives in `.env`). Data layer is a generic source-adapter system backed by local SQLite, with Discogs + a unified **`local`** file source (Apple Music.app import + vinyl rips) wired up and Rekordbox + Plex stubbed. Tracks backed by a local file play in-app through a built-in `<audio>` player.
+Single-user, local-only SvelteKit app for adding records to a personal Discogs collection, browsing the unified library, playing tracks, and **recording vinyl into the library**. Ways in: text search, webcam barcode scan, and recording a release from an audio interface. Keyboard-first, dark theme, no accounts; the Discogs token is pasted into a first-run onboarding screen, which saves it to the settings file. Data layer is a generic source-adapter system backed by local SQLite, with Discogs + a unified **`local`** file source (Apple Music.app import + vinyl rips) wired up. (Rekordbox and Plex stubs were removed; rekordbox is still BOO-5.) Tracks backed by a local file play in-app through a built-in `<audio>` player.
 
 ## Tech
 
@@ -15,7 +15,7 @@ Single-user, local-only SvelteKit app for adding records to a personal Discogs c
 - **External binary: `ffmpeg`** (`brew install ffmpeg`), required only by tempo analysis — the app runs fine without it and the analysis scripts exit with a clear message. It is the one non-Bun dependency; the bun-only property came from `bun:sqlite`, not from a general aversion to dependencies. Chosen over aubio, whose Homebrew build links libsndfile only (no ffmpeg/libav decoding), pulls in Python and numpy as required deps, and last had a stable release in 2019.
 - **No tests, no UI framework.** Session log is in-memory client-side.
 - **Dev:** `bun dev` (binds 5173, falls back upward). **Production:** `bun run build && bun start` — `adapter-node` output run under Bun (port 3000, override with `PORT`). The Bun runtime is not optional in either mode: the DB layer is `bun:sqlite`.
-- **Desktop app (Apple Silicon):** `desktop/` is an Electrobun 2 app. Its Bun main process imports Booth's production server in-process: same port logic as the zip (4747 upward), `BOOTH_MIGRATIONS_DIR` pointed at the bundled copy, config read from `~/.booth/settings.env` (template `desktop/settings.env.example`) and opened in TextEdit while the Discogs token is empty. The window is a Chromium view of the server. Build with `desktop/build.sh` (needs Hutch, Electrobun's build tool, on PATH; install it with `install.sh --no-modify-path` or it appends to `~/.zshrc`). The script stages the build, production `node_modules`, and migrations into `desktop/booth/`, draws the Dock icon with `scripts/gen-icons.ts --mac`, and runs `hutch electrobun build`. `desktop/build.sh dev` gives a quick unpackaged build with CEF remote debugging on 9222. Choices with non-obvious reasons:
+- **Desktop app (Apple Silicon):** `desktop/` is an Electrobun 2 app. Its Bun main process imports Booth's production server in-process: same port logic as the zip (4747 upward), `BOOTH_MIGRATIONS_DIR` pointed at the bundled copy, config read from `~/.booth/settings.env` (template `desktop/settings.env.example`), whose path it passes to the server as `BOOTH_SETTINGS_PATH` so the onboarding screen can save the Discogs token there. The window is a Chromium view of the server. Build with `desktop/build.sh` (needs Hutch, Electrobun's build tool, on PATH; install it with `install.sh --no-modify-path` or it appends to `~/.zshrc`). The script stages the build, production `node_modules`, and migrations into `desktop/booth/`, draws the Dock icon with `scripts/gen-icons.ts --mac`, and runs `hutch electrobun build`. `desktop/build.sh dev` gives a quick unpackaged build with CEF remote debugging on 9222. Choices with non-obvious reasons:
   - **Bun main process, not Electrobun's default Cottontail:** the server needs `bun:sqlite`. Electrobun pins Bun 1.4; Booth's verify scripts behave the same on 1.2 and 1.4.
   - **Bundled CEF, not the system WKWebView:** WKWebView never resolves `getUserMedia`, so recording and the barcode scanner would be dead.
   - **Self-update:** the app checks `release.baseUrl` (GitHub's `releases/latest/download`) 10s after launch and every 6h, and downloads in the background. Nothing pops up: the page's title bar shows a "Restart to Update ×" callout (BOO-72). Dismissing it lasts until next launch. It works unsigned, and in-app downloads carry no quarantine flag. Asset names in the newest release must stay as Electrobun writes them (`stable-macos-arm64-update.json`, `…booth.app.tar.zst`). Only the DMG may be renamed.
@@ -53,6 +53,8 @@ ITUNES_XML_PATH=
 # BOOTH_BACKUP_PATH=
 ```
 
+**Discogs onboarding.** With no token, or one Discogs rejects, the page shows `DiscogsOnboarding` instead of the shells (probe: `GET /api/setup/discogs`). Pasting a token `POST`s it there: the server checks it against `/oauth/identity`, writes `DISCOGS_TOKEN=` into `BOOTH_SETTINGS_PATH` (desktop app and Intel zip) or the repo `.env` (`bun dev`), and applies it in-process through `setEnv`, so no restart. `setEnv` keeps its own override map because adapter-node copies `process.env` into `$env/dynamic/private` once at startup; a key present-but-empty there (the zip's `--env-file` loads `DISCOGS_TOKEN=`) would otherwise shadow the new value. Tokens are restricted to letters and digits so nothing can inject a line into the settings file.
+
 `ITUNES_XML_PATH` feeds the Apple-Music import path of the **`local`** source; it gates whether the `local` source auto-syncs on boot. Server env is read through `src/lib/server/env.ts` — a small accessor that prefers `$env/dynamic/private` but falls back to `process.env`. This matters because the dev server runs `bunx --bun vite dev` (the `--bun` flag is mandatory for `bun:sqlite`), and **under the Bun runtime SvelteKit's `$env/dynamic/private` comes back empty** (its dev-time injection only runs under Node); Bun instead loads `.env` straight into `process.env`. So `$lib/server/env` is the one place that imports the real `$env`; everything else (`api.ts`, `hooks.server.ts`, `db/index.ts`, the source syncs, `recording/env.ts`) imports `env` from it. Recording modules stay pure: `recording/env.ts` is the only recording module that reads env; it resolves `BOOTH_RECORDINGS_PATH` and passes the root into the pure `recording/*` modules.
 
 ## File map
@@ -88,7 +90,7 @@ src/
       ArtistDetail.svelte                     right pane for an artist; per-source panels + list of releases (click-through to release detail)
       TrackNote.svelte                        a track's note: dimmed prose when idle, autogrowing textarea when editing. Lives outside the row <button> (a textarea inside one never gets its keystrokes) and stops all keydown propagation (bare s/v are global bindings).
       StarButton.svelte                       shared ★ toggle bound to the annotations store; hover-revealed in rows (always visible once set, and always visible in PlayerBar), 44×44 target below 768px
-      SourceGrid.svelte                       4-dot "D/L/R/P" indicator (Discogs / Local / Rekordbox / Plex)
+      SourceGrid.svelte                       2-dot "D/L" indicator (Discogs / Local)
       SourcePanel.svelte                      per-source detail block (facets + external link or stub placeholder)
       SyncChip.svelte                         last-synced timestamp + click-to-sync; disabled for stub sources
       SyncRunHistory.svelte                   right-pane sync_run list shown when a Sources rail item is selected with no entity; one row per run (relative time, duration, summary or error)
@@ -148,10 +150,6 @@ src/
           ingest_paths.ts                     pure: audio extensions, settle rule, target naming, collision suffixes
           ingest_env.ts                       resolves BOOTH_INBOX_PATH / BOOTH_LIBRARY_PATH (the only ingest module importing $env)
           index.ts                            localSource (id:'local', name:'Local'): MusicSource & Playable; resolveTrackStream → {kind:'file'} via the track's file_path match key (serves Apple-import, vinyl-rip and drop-folder files; .wav mime added)
-        rekordbox/
-          index.ts                            stub: isStub=true; sync() throws NotImplementedError
-        plex/
-          index.ts                            stub: isStub=true; sync() throws NotImplementedError
       library/
         normalize.ts                          normalization helpers for match keys (artist_album_year, file_path, artist_name)
         collate.ts                            post-sync: maps SyncResult → entity + source_link upserts; writes source_state. Exports upsertArtist(db, name) for callers outside collate (e.g. Discogs add path) that need to resolve an artist string to an artist row id.
@@ -228,7 +226,7 @@ docs/
 ### Library explorer (Slice 2 shell)
 - **Three panes**: left rail (Library / Sources / Add → Discogs sections), middle listview (paginated rows + toolbar), right detail (release or track).
 - **Library rail items**: `all` (label flips between "All tracks" / "All releases" based on the app-wide entity lens) and `in-multiple-sources` (entities contributed by ≥2 sources, supports both kinds).
-- **Sources rail items**: one per registered source (`discogs`, `local`, `rekordbox`, `plex`); stubs render `EmptyState`. (Discogs *does* index tracks — `hydrateDiscogsTracks` pulls tracklists post-sync — so the tracks lens is populated for Discogs releases.)
+- **Sources rail items**: one per registered source (`discogs`, `local`). (Discogs *does* index tracks — `hydrateDiscogsTracks` pulls tracklists post-sync — so the tracks lens is populated for Discogs releases.)
 - **Add rail item**: `add:discogs` — Discogs live search, release-only by nature (the search API doesn't return tracks); toolbar omits the entity toggle here. Results are **vinyl-only** and **master-grouped** (see Search below).
 - **Entity lens (releases ↔ tracks ↔ artists)**: app-wide viewing toggle, lives in the listview toolbar and is bound to `Tab` (cycles forward 3-way). Persists across rail switches (it's a lens, not a per-rail attribute). Detail pane keeps its open entity when the lens flips — the listview switches independently. URL: `?entity=releases|tracks|artists` (omitted when equal to the default `releases`).
 - **Listview**: lazy pagination via `IntersectionObserver` sentinel rooted on the scroll container (`?limit=200&offset=…`); row click selects + opens detail.
@@ -432,7 +430,7 @@ docs/
 - Updates use `history.replaceState`; reload restores the full view.
 
 ### Setup screen
-- On mount, `+page.svelte` probes `/api/discogs/search?q=test`. If the response says `no_token` or `invalid_token`, it renders a setup screen with instructions in place of the Explorer.
+- On mount, `+page.svelte` probes `/api/setup/discogs`. If it says `no_token` or `invalid_token`, it renders the Discogs onboarding screen in place of the Explorer (see Environment).
 
 ### Rate-limit handling
 - Discogs 429 → toast "Rate limited. Try again in Xs." (uses `Retry-After`). Surfaces for search and add/remove paths.
@@ -466,7 +464,6 @@ docs/
 - **Adapters:**
   - **Discogs** (`id: 'discogs'`) — real, full read+write via `CollectionWritable`. Syncs the entire collection folder via paginated Discogs API. Writes (add/remove) go through to both Discogs and the SQLite `source_link` table. Not `Playable` (release-only; no local audio).
   - **Local** (`id: 'local'`, formerly `itunes`) — real, file-backed, the unified home for on-disk audio. Track `external_id` is the XML's **`Persistent ID`**, never its `Track ID`: Music.app renumbers Track IDs when the library is purged or re-exported, and a changed `external_id` used to prune the link and cascade-delete the entity behind it (924 tracks lost on 2026-08-14 — see stale-input/relink notes). `parse.ts` surfaces both; `trackId` is diagnostics-only. Three ingest paths: (0) **the drop folder** — see below; (1) **Apple Music.app import** — `sync()` parses `ITUNES_XML_PATH` Library.xml via the `plist` package, contributing tracks with file-path match keys and emergent releases grouped by `(Album Artist || Artist, Album, Year)` (synthetic release `external_id`s are deterministic hashes of the normalized group key; track facets `rating`, `playCount`, `dateAdded`, `dateAddedReported`, `dateAddedOrigin`, `kind`, `bitRate`, `sampleRate`, `genre`); (2) **vinyl rips** — written by the recording feature (`commitRegions`), attaching a `local` source_link (`external_id` = absolute WAV path) + `file_path` match key + `origin:'vinyl'` facets onto the existing Discogs track entity. Implements `Playable` — `resolveTrackStream` returns `{ kind: 'file' }` from the `file_path` match key (serves both ingest paths). **Origin is inferred from the path** (under the recordings root → vinyl rip), and `collate`'s prune is scoped so an Apple-Music re-sync never deletes vinyl rips (which are absent from the XML).
-  - **Rekordbox** (`id: 'rekordbox'`) and **Plex** (`id: 'plex'`) — stubs. Registered in the source registry with correct `id`/`name`/`contributes` but `sync()` throws `NotImplementedError`, which the route translates to HTTP 501.
 
 - **Drop folder (BOO-70).** `BOOTH_INBOX_PATH` (default `~/.booth/inbox`) is a staging area; anything settled there is moved into `BOOTH_LIBRARY_PATH` (default `~/.booth/library`) as `<album artist>/<album>/<NN> <title>.<ext>`, read from the file's own tags. This is the only way to add a purchased file without going through Music.app.
 - **Why a move, not indexing in place.** An inbox that is never emptied becomes the library: you lose "what haven't I dealt with yet" at a glance, and every scan has to re-derive what it already saw. Emptying it makes "did it go in?" answerable without asking the database. Moving falls back to copy+verify+delete on `EXDEV`, since a Downloads folder and the library are commonly on different volumes.
