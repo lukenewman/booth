@@ -18,6 +18,7 @@
  */
 import { Database } from 'bun:sqlite';
 import { pinStyleColor } from '../src/lib/server/genres/colors';
+import { setManualTags } from '../src/lib/server/genres/manual';
 import { homedir } from 'os';
 import { join } from 'path';
 import { readEvents, replayEvents, nameKey } from '../src/lib/server/backup/journal';
@@ -110,7 +111,11 @@ for (const [id, ts] of target.stars) {
   else unmatched++;
 }
 const seenTracks = new Set(events.filter((e) => e.kind === 'track').map((e) => e.id));
-const seenReleases = new Set(events.filter((e) => e.kind === 'release').map((e) => e.id));
+// Only vet events count: a release whose only events are tag overrides was
+// never seen by the vetting journal, so --prune must not un-vet it.
+const seenReleases = new Set(
+  events.filter((e) => e.kind === 'release' && (e.action === 'vet' || e.action === 'unvet')).map((e) => e.id),
+);
 
 if (prune) {
   for (const id of liveStars) {
@@ -146,6 +151,25 @@ const toClearBpm = prune
 
 const toVet = [...target.vetted.keys()].filter((id) => !liveVetted.has(id));
 
+// Tag overrides: by id, else by the release's artist + title as journaled.
+const releaseByName = db.prepare(
+  `SELECT r.id FROM release r JOIN artist a ON a.id = r.artist_id WHERE a.name = ? AND r.title = ?`,
+);
+const liveTags = new Map(
+  (db.prepare(`SELECT release_id, genres, styles FROM release_tag_manual`).all() as { release_id: string; genres: string; styles: string }[])
+    .map((r) => [r.release_id, JSON.stringify({ genres: JSON.parse(r.genres), styles: JSON.parse(r.styles) })]),
+);
+const toTags: [string, string | null][] = [];
+for (const [id, value] of target.tags) {
+  let rid: string | undefined = db.prepare(`SELECT 1 FROM release WHERE id = ?`).get(id) ? id : undefined;
+  if (!rid) {
+    const ev = [...events].reverse().find((e) => e.id === id && e.action === 'tags');
+    rid = ev ? (releaseByName.get(ev.artist, ev.title) as { id: string } | undefined)?.id : undefined;
+  }
+  if (!rid) { unmatched++; continue; }
+  if ((liveTags.get(rid) ?? null) !== value) toTags.push([rid, value]);
+}
+
 // Colour pins: style names, so they need no id matching. Re-pin any that differ.
 const livePins = new Map(
   (db.prepare(`SELECT style, slot FROM style_color WHERE pinned = 1`).all() as { style: string; slot: number }[])
@@ -162,7 +186,7 @@ console.log(
     `+${toVet.length} vetted, -${toUnvet.length} vetted, ` +
     `~${toNote.length} notes, -${toClearNote.length} notes, ` +
     `~${toBpm.length} tapped BPMs, -${toClearBpm.length} tapped BPMs, ` +
-    `+${toPin.length} colour pins` +
+    `+${toPin.length} colour pins, ~${toTags.length} tag overrides` +
     (unmatched ? `, ${unmatched} unmatched (row gone, no name match)` : '') +
     (prune ? '' : '\n(additive only — pass --prune to also remove annotations the journal dropped)'),
 );
@@ -189,6 +213,7 @@ db.transaction(() => {
   for (const [id, value] of toBpm) setBpm.run(value, bpmMeasuredAt.get(id) ?? null, id);
   for (const id of toClearBpm) setBpm.run(null, null, id);
   for (const [style, slot] of toPin) pinStyleColor(db, style, slot);
+  for (const [rid, value] of toTags) setManualTags(db, rid, value ? JSON.parse(value) : null);
 })();
 
 const afterStars = (
