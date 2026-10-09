@@ -276,7 +276,7 @@
     padding: 7px 0;
     border-bottom: 1px solid var(--border);
   }
-  .row.errored .status { color: var(--accent, #c44); }
+  .row.errored .status { color: var(--danger); }
   .row.stale .status { color: var(--warn, #d69a2c); }
   /* A finished analysis is information, not a warning — same slot, quieter. */
   .warn.muted { color: var(--text-subtle); }
@@ -303,7 +303,7 @@
     white-space: nowrap;
   }
   .summary.err {
-    color: var(--accent, #c44);
+    color: var(--danger);
     white-space: normal;
   }
 

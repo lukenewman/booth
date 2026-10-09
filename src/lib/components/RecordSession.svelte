@@ -143,12 +143,12 @@
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.clearRect(0, 0, LW, LH);
-    ctx.fillStyle = '#161616';
+    ctx.fillStyle = getComputedStyle(canvas).getPropertyValue('--bg-sunken').trim();
     ctx.fillRect(0, 0, LW, LH);
     const peaks = recorder.livePeaks;
     const n = peaks.length;
     if (n === 0) return;
-    ctx.fillStyle = '#3a86ff';
+    ctx.fillStyle = getComputedStyle(canvas).getPropertyValue('--accent').trim();
 
     if (waveZoom === 'full') {
       // Compress the whole take-so-far across the full width.
@@ -362,7 +362,7 @@
   .record-overlay {
     position: fixed;
     inset: var(--titlebar-h) 0 0 0;
-    background: var(--bg, #111);
+    background: var(--bg);
     z-index: 50;
     display: flex;
     flex-direction: column;
@@ -372,7 +372,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid var(--border);
   }
   .body {
     display: flex;
@@ -390,7 +390,7 @@
   }
   .expected {
     flex: 1;
-    border-left: 1px solid #2a2a2a;
+    border-left: 1px solid var(--border);
     padding-left: 16px;
     font-size: 13px;
   }
@@ -424,7 +424,7 @@
     position: relative;
     flex: 1;
     height: 14px;
-    background: #222;
+    background: var(--bg-input);
     border-radius: 3px;
     overflow: hidden;
   }
@@ -441,7 +441,7 @@
     left: 0;
     top: 0;
     height: 100%;
-    background: #3a86ff;
+    background: var(--accent);
   }
   .hold {
     position: absolute;
@@ -498,8 +498,8 @@
     gap: 12px;
     flex-wrap: wrap;
     padding: 10px 12px;
-    border: 1px solid #5a4a1a;
-    background: #241f12;
+    border: 1px solid var(--warn-border);
+    background: var(--warn-bg);
     border-radius: 6px;
     font-size: 13px;
     max-width: 560px;
@@ -521,8 +521,8 @@
     gap: 4px;
   }
   .zoom-toggle button {
-    background: #1c1c1c;
-    border: 1px solid #2a2a2a;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
     color: inherit;
     font-size: 11px;
     padding: 3px 10px;
@@ -531,8 +531,8 @@
     opacity: 0.7;
   }
   .zoom-toggle button.active {
-    background: #2962ff;
-    border-color: #2962ff;
+    background: var(--accent);
+    border-color: var(--accent);
     color: #fff;
     opacity: 1;
   }
@@ -541,7 +541,7 @@
     max-width: 1000px;
     height: 72px;
     border-radius: 5px;
-    background: #161616;
+    background: var(--bg-sunken);
   }
   .actions {
     display: flex;
@@ -557,7 +557,7 @@
     cursor: pointer;
   }
   .primary {
-    background: #2962ff;
+    background: var(--accent);
     color: #fff;
     border: none;
     padding: 8px 16px;
@@ -575,7 +575,7 @@
     opacity: 0.8;
   }
   .error {
-    background: #4a1f1f;
+    background: var(--danger-border);
     color: #ffb4b4;
     padding: 8px 16px;
     font-size: 13px;
@@ -594,7 +594,7 @@
   }
   .icon-btn {
     background: none;
-    border: 1px solid #2a2a2a;
+    border: 1px solid var(--border);
     color: inherit;
     cursor: pointer;
     font-size: 16px;
@@ -607,7 +607,7 @@
     justify-content: center;
   }
   .icon-btn:hover {
-    background: #1c1c1c;
+    background: var(--bg-raised);
   }
   .confirm-close {
     display: flex;
@@ -615,8 +615,8 @@
     justify-content: space-between;
     gap: 16px;
     padding: 10px 16px;
-    background: #2a1414;
-    border-bottom: 1px solid #4a1f1f;
+    background: var(--danger-bg);
+    border-bottom: 1px solid var(--danger-border);
   }
   .confirm-msg {
     font-size: 13px;
@@ -641,7 +641,7 @@
     color: var(--text);
   }
   .confirm-keep:hover {
-    background: #1c1c1c;
+    background: var(--bg-raised);
   }
   .confirm-discard {
     background: #c0392b;

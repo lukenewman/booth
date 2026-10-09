@@ -42,7 +42,7 @@
   .undo:hover { text-decoration: underline; }
   .kbd {
     display: inline-block;
-    background: #222;
+    background: var(--bg-input);
     border: 1px solid var(--border-strong);
     border-radius: 3px;
     padding: 1px 5px;

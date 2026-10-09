@@ -49,9 +49,9 @@
     gap: 8px;
     max-width: 360px;
     padding: 8px 12px;
-    border: 1px solid var(--border-strong, #333);
+    border: 1px solid var(--border-strong);
     border-radius: 999px;
-    background: var(--bg-raised, #1c1c1c);
+    background: var(--bg-raised);
     color: inherit;
     font-family: inherit;
     font-size: 12px;

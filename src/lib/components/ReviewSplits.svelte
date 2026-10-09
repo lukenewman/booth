@@ -19,10 +19,12 @@
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = '#161616';
+    const css = getComputedStyle(canvas);
+    const accent = css.getPropertyValue('--accent').trim();
+    ctx.fillStyle = css.getPropertyValue('--bg-sunken').trim();
     ctx.fillRect(0, 0, W, H);
     // peaks
-    ctx.fillStyle = '#3a86ff';
+    ctx.fillStyle = accent;
     const n = take.peaks.length;
     for (let i = 0; i < n; i++) {
       const x = (i / n) * W;
@@ -33,8 +35,10 @@
     for (const r of take.regions) {
       const x1 = (r.startMs / take.durationMs) * W;
       const x2 = (r.endMs / take.durationMs) * W;
-      ctx.fillStyle = r.trackId ? 'rgba(58,134,255,0.12)' : 'rgba(255,255,255,0.04)';
+      ctx.fillStyle = r.trackId ? accent : '#fff';
+      ctx.globalAlpha = r.trackId ? 0.12 : 0.04;
       ctx.fillRect(x1, 0, x2 - x1, H);
+      ctx.globalAlpha = 1;
       ctx.fillStyle = r.confidence < 0.6 ? '#e0a23c' : '#2e7d32';
       ctx.fillRect(x1, 0, 2, H); // in-point
       ctx.fillStyle = r.confidence < 0.6 ? '#e0a23c' : '#c0392b';
@@ -258,26 +262,26 @@
     align-items: center;
     gap: 8px;
     padding: 6px 8px;
-    background: #1c1c1c;
+    background: var(--bg-raised);
     border-radius: 5px;
     border: 1px solid transparent;
   }
   .row.warn {
-    border-color: #5a4a1a;
-    background: #241f12;
+    border-color: var(--warn-border);
+    background: var(--warn-bg);
   }
   .title {
     flex: 1;
-    background: #111;
-    border: 1px solid #2a2a2a;
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
     color: inherit;
     padding: 4px 8px;
     border-radius: 4px;
   }
   select {
-    background: #111;
+    background: var(--bg-sunken);
     color: inherit;
-    border: 1px solid #2a2a2a;
+    border: 1px solid var(--border);
     border-radius: 4px;
     padding: 4px;
     max-width: 280px;
@@ -301,8 +305,8 @@
   }
   .play,
   .mini {
-    background: #222;
-    border: 1px solid #333;
+    background: var(--bg-input);
+    border: 1px solid var(--border-strong);
     color: inherit;
     border-radius: 4px;
     cursor: pointer;
@@ -312,7 +316,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    border-top: 1px solid #2a2a2a;
+    border-top: 1px solid var(--border);
     padding-top: 12px;
   }
   .confirm {

@@ -132,5 +132,5 @@
     display: block;
     flex-shrink: 0;
   }
-  .placeholder { background: #252525; }
+  .placeholder { background: var(--bg-input); }
 </style>
