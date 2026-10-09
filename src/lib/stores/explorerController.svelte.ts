@@ -14,6 +14,8 @@
   import { explorerState } from '$lib/stores/explorerState.svelte';
   import { collection } from '$lib/stores/collection.svelte';
   import { groupByMaster, type SearchHit } from '$lib/discogs/group';
+  import { matchRunout } from '$lib/discogs/runout';
+  import { runouts } from '$lib/stores/runouts.svelte';
   import { playlists } from '$lib/stores/playlists.svelte';
   import { session } from '$lib/stores/session.svelte';
   import { toast } from '$lib/stores/toast.svelte';
@@ -74,6 +76,9 @@ export function createExplorerController() {
   // kept separate from `listItems` (which serves library/sources views).
   let searchHits = $state<SearchHit[]>([]);
   let drillMasterId = $state<number | null>(null);
+  // Filters a drilled master's versions by what's etched in the dead wax.
+  // Belongs to one drill-in: entering or leaving a version list clears it.
+  let runoutQuery = $state('');
   // Non-reactive: read+written by loadList from inside the load-list $effect,
   // which would trip Svelte's effect_update_depth_exceeded if it were $state.
   let listLoading = false;
@@ -100,6 +105,7 @@ export function createExplorerController() {
         // derived from `searchHits` (see `addItems` below), so we only store
         // the raw hits here. /api/discogs/search wraps results as {results:[…]}.
         drillMasterId = null;
+        runoutQuery = '';
         const q = explorerState.q.trim();
         if (!q) {
           searchHits = [];
@@ -375,6 +381,8 @@ export function createExplorerController() {
     isMaster?: boolean;
     versionCount?: number;
     yearLabel?: string | null;
+    /** Runout lines that matched the version filter, for display. */
+    runoutMatch?: string[];
   }
 
   /** One Discogs search hit → the ReleaseItem shape the listview renders. */
@@ -406,7 +414,18 @@ export function createExplorerController() {
   // or a master's versions once drilled in. Owned state reads `collection` so it
   // stays live across add/remove without manual row patching.
   const addItems = $derived.by<AddItem[]>(() => {
-    if (drilledMaster) return drilledMaster.versions.map(mapVersion);
+    if (drilledMaster) {
+      if (!runoutQuery.trim()) return drilledMaster.versions.map(mapVersion);
+      // Versions whose runouts haven't loaded yet are left out rather than
+      // shown unfiltered; the status line says how many are still pending.
+      return drilledMaster.versions.flatMap((v) => {
+        const entry = runouts.get(v.id);
+        if (!entry?.ok) return [];
+        const matched = matchRunout(runoutQuery, entry.lines);
+        if (!matched) return [];
+        return [{ ...mapVersion(v), runoutMatch: matched.map((l) => l.value) }];
+      });
+    }
     return masterGroups.map((g) =>
       g.isMaster
         ? {
@@ -434,6 +453,7 @@ export function createExplorerController() {
   function onAddRowSelect(id: string) {
     if (id.startsWith('master:')) {
       drillMasterId = Number(id.slice('master:'.length));
+      runoutQuery = '';
       explorerState.setEntity(null);
     } else {
       explorerState.setEntity(id);
@@ -443,8 +463,43 @@ export function createExplorerController() {
   /** Leave a master's version list, back to the master-level results. */
   function popDrill() {
     drillMasterId = null;
+    runoutQuery = '';
     explorerState.setEntity(null);
   }
+
+  // Start loading every version's runouts as soon as a master is drilled into:
+  // matching the dead wax is nearly always why you drill in, so by the time a
+  // few characters are typed most of the list is ready. Leaving the list, or
+  // the add view, stops the load (what's loaded stays cached).
+  const drilledVersionIds = $derived(
+    isAddView && drilledMaster ? drilledMaster.versions.map((v) => v.id) : null,
+  );
+  $effect(() => {
+    const ids = drilledVersionIds;
+    untrack(() => (ids ? runouts.load(ids) : runouts.stop()));
+  });
+
+  const runoutStatus = $derived.by(() => {
+    if (!drilledVersionIds) return null;
+    let loaded = 0;
+    let failed = 0;
+    let bare = 0;
+    for (const id of drilledVersionIds) {
+      const e = runouts.get(id);
+      if (!e) continue;
+      loaded++;
+      if (!e.ok) failed++;
+      else if (e.lines.length === 0) bare++;
+    }
+    return {
+      total: drilledVersionIds.length,
+      loaded,
+      failed,
+      bare,
+      waiting: runouts.waiting,
+      shown: addItems.length,
+    };
+  });
 
   // The toggle is suppressed only for rail items where tracks aren't a
   // meaningful concept at all — currently just Add → Discogs (the Discogs
@@ -798,6 +853,9 @@ export function createExplorerController() {
     get libraryQuery() { return libraryQuery; },
     get drilledMaster() { return drilledMaster; },
     get addItems() { return addItems; },
+    get runoutQuery() { return runoutQuery; },
+    set runoutQuery(v: string) { runoutQuery = v; },
+    get runoutStatus() { return runoutStatus; },
     get showEntityToggle() { return showEntityToggle; },
     get showReleaseOnlySourceEmpty() { return showReleaseOnlySourceEmpty; },
     get toolbarPlaceholder() { return toolbarPlaceholder; },

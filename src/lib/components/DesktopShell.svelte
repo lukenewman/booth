@@ -18,6 +18,7 @@
   import Player from './Player.svelte';
   import PlayerBar from './PlayerBar.svelte';
   import RecordSession from './RecordSession.svelte';
+  import RunoutFilter from './RunoutFilter.svelte';
 import RecordingPill from './RecordingPill.svelte';
   import { explorerState } from '$lib/stores/explorerState.svelte';
   import { playlists } from '$lib/stores/playlists.svelte';
@@ -55,6 +56,7 @@ import RecordingPill from './RecordingPill.svelte';
   const libraryQuery = $derived(c.libraryQuery);
   const drilledMaster = $derived(c.drilledMaster);
   const addItems = $derived(c.addItems);
+  const runoutStatus = $derived(c.runoutStatus);
   const showEntityToggle = $derived(c.showEntityToggle);
   const showReleaseOnlySourceEmpty = $derived(c.showReleaseOnlySourceEmpty);
   const toolbarPlaceholder = $derived(c.toolbarPlaceholder);
@@ -63,6 +65,13 @@ import RecordingPill from './RecordingPill.svelte';
   const syncRunsReloadKey = $derived(c.syncRunsReloadKey);
   const sourceMetaForDetail = $derived(c.sourceMetaForDetail);
   const releaseDetailCta = $derived(c.releaseDetailCta);
+
+  const addEmptyTitle = $derived(
+    isAddView && !explorerState.q ? 'Search Discogs to add records'
+    : isAddView && drilledMaster && c.runoutQuery.trim()
+      ? (runoutStatus && runoutStatus.loaded < runoutStatus.total ? 'No match yet…' : 'No version matches that runout')
+    : 'No releases',
+  );
 
   const loadList = c.loadList;
   const openPlaylistEntity = c.openPlaylistEntity;
@@ -173,6 +182,7 @@ import RecordingPill from './RecordingPill.svelte';
       <button class="drill-back" onclick={popDrill}>
         ← {drilledMaster.versionCount} versions of “{drilledMaster.title}”
       </button>
+      <RunoutFilter bind:value={c.runoutQuery} status={runoutStatus} />
     {/if}
 
     {#if isSourcesView && selectedSource?.isStub}
@@ -195,7 +205,7 @@ import RecordingPill from './RecordingPill.svelte';
           selectedId={explorerState.id}
           onSelect={isAddView ? onAddRowSelect : (id) => explorerState.setEntity(id)}
           loadMore={() => loadList(false)}
-          emptyTitle={isAddView && !explorerState.q ? 'Search Discogs to add records' : 'No releases'}
+          emptyTitle={addEmptyTitle}
         />
       {:else}
         <ReleaseList
@@ -206,7 +216,7 @@ import RecordingPill from './RecordingPill.svelte';
           selectedId={explorerState.id}
           onSelect={isAddView ? onAddRowSelect : (id) => explorerState.setEntity(id)}
           loadMore={() => loadList(false)}
-          emptyTitle={isAddView && !explorerState.q ? 'Search Discogs to add records' : 'No releases'}
+          emptyTitle={addEmptyTitle}
         />
       {/if}
     {:else if currentEntity === 'tracks'}

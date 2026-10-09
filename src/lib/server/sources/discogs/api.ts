@@ -18,6 +18,14 @@ function getToken(): string {
   return token;
 }
 
+// Requests left in Discogs's moving one-minute window, as of the last response.
+// Lets bulk background work (the runout filter's identifier prefetch) back off
+// before it starves a user action like an add into a 429.
+let rateRemaining: number | null = null;
+export function discogsRateRemaining(): number | null {
+  return rateRemaining;
+}
+
 export async function discogsFetch(path: string, init: RequestInit = {}): Promise<unknown> {
   const token = getToken();
   const url = path.startsWith('http') ? path : `${BASE}${path}`;
@@ -32,6 +40,11 @@ export async function discogsFetch(path: string, init: RequestInit = {}): Promis
       ...init.headers,
     },
   });
+
+  const remaining = Number(res.headers.get('X-Discogs-Ratelimit-Remaining'));
+  if (Number.isFinite(remaining) && res.headers.has('X-Discogs-Ratelimit-Remaining')) {
+    rateRemaining = remaining;
+  }
 
   if (res.status === 401) {
     throw new DiscogsError(

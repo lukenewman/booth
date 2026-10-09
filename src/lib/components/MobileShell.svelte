@@ -10,6 +10,7 @@
   import CratePanel from './CratePanel.svelte';
   import PlaylistCover from './PlaylistCover.svelte';
   import EmptyState from './EmptyState.svelte';
+  import RunoutFilter from './RunoutFilter.svelte';
   import Scanner from './Scanner.svelte';
   import SyncRunHistory from './SyncRunHistory.svelte';
   import Player from './Player.svelte';
@@ -28,6 +29,8 @@
   const listTotal = $derived(c.listTotal);
   const listHasMore = $derived(c.listHasMore);
   const addItems = $derived(c.addItems);
+  const drilledMaster = $derived(c.drilledMaster);
+  const runoutStatus = $derived(c.runoutStatus);
   const currentEntity = $derived(c.currentEntity);
   const detailKind = $derived(c.detailKind);
   const detailData = $derived(c.detailData);
@@ -259,6 +262,12 @@
         </div>
       {/if}
     {:else if currentEntity === 'releases' || isAddView}
+      {#if isAddView && drilledMaster}
+        <button class="drill-back" onclick={c.popDrill}>
+          ← {drilledMaster.versionCount} versions of “{drilledMaster.title}”
+        </button>
+        <RunoutFilter bind:value={c.runoutQuery} status={runoutStatus} />
+      {/if}
       <ReleaseGrid
         items={isAddView ? addItems : listItems}
         total={isAddView ? addItems.length : listTotal}
@@ -295,6 +304,21 @@
 </div>
 
 <style>
+  .drill-back {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 10px 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .mtoolbar.sub { padding-top: 0; }
 
   .mshell {

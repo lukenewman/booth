@@ -62,8 +62,8 @@
           if (rows.length === 0) return;
           const active = document.activeElement;
           const search = document.querySelector<HTMLInputElement>('input.search');
-          // From search input → focus the first row.
-          if (active === search) {
+          // From search (or the runout filter) → focus the first row.
+          if (active === search || (active instanceof HTMLInputElement && active.classList.contains('runout-input'))) {
             rows[0].focus({ preventScroll: false });
             rows[0].scrollIntoView({ block: 'nearest' });
             return;
@@ -116,6 +116,19 @@
               return;
             }
             input.blur();
+            return;
+          }
+          // 2b. Same for the runout filter in a master's version list: clear,
+          //     then blur, and only then does Esc leave the list.
+          const runout = document.querySelector<HTMLInputElement>('input.runout-input');
+          if (runout && document.activeElement === runout) {
+            if (runout.value) {
+              const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+              setter?.call(runout, '');
+              runout.dispatchEvent(new Event('input', { bubbles: true }));
+              return;
+            }
+            runout.blur();
             return;
           }
           // 3. If drilled into a master's versions (Add → Discogs), go back.

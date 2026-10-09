@@ -22,6 +22,7 @@
     yearLabel?: string | null;
     starredCount?: number;
     vetted_at?: string | null;
+    runoutMatch?: string[];
   }
 
   let {
@@ -94,6 +95,9 @@
               ].filter(Boolean).join(' · ')}
             </div>
           {/if}
+          {#each item.runoutMatch ?? [] as line}
+            <div class="runout" title={line}>{line}</div>
+          {/each}
         </div>
         <span class="year">{item.year ?? '—'}</span>
       {/if}
@@ -183,6 +187,13 @@
   }
   .detail {
     color: var(--text-subtle);
+    font-size: 11px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    margin-top: 2px;
+  }
+  .runout {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
     font-size: 11px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     margin-top: 2px;

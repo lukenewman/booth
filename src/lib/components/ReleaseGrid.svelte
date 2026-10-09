@@ -13,6 +13,7 @@
     thumbUrl?: string | null;
     starredCount?: number;
     vetted_at?: string | null;
+    runoutMatch?: string[];
   }
 
   let {
@@ -82,6 +83,9 @@
             <div class="caption">
               <div class="title">{item.title}</div>
               <div class="artist">{item.artist}</div>
+              {#each item.runoutMatch ?? [] as line}
+                <div class="runout" title={line}>{line}</div>
+              {/each}
               <div class="bottom">
                 <span class="year">{item.year ?? '—'}</span>
                 <!-- Gold star count vs grey check: see ReleaseList. -->
@@ -173,6 +177,14 @@
   .artist {
     color: var(--text-muted);
     font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .runout {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
