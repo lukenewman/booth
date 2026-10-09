@@ -32,17 +32,19 @@
     onAddTrackToPlaylist,
     onCreateGig,
     onAddReleaseToPlaylist,
+    onCreateSmartPlaylist,
   }: {
     nav: NavValue;
     entity: 'releases' | 'tracks' | 'artists';
     sources: SourceWithState[];
     counts: Counts;
-    playlists?: { id: string; name: string; trackCount: number; coverUrl: string | null; mosaic: string[]; isGig?: boolean }[];
+    playlists?: { id: string; name: string; trackCount: number; coverUrl: string | null; mosaic: string[]; isGig?: boolean; rule?: unknown }[];
     onSelect?: (nav: NavValue) => void;
     onCreatePlaylist?: (name: string) => void;
     onAddTrackToPlaylist?: (playlistId: string, trackId: string) => void;
     onCreateGig?: (name: string, targetMinutes: number) => void;
     onAddReleaseToPlaylist?: (playlistId: string, releaseId: string) => void;
+    onCreateSmartPlaylist?: (name: string) => void;
   } = $props();
 
   const allCount = $derived(
@@ -72,11 +74,15 @@
   let newName = $state('');
   let dropTargetId = $state<string | null>(null);
 
+  // Which "＋ New" is open: a plain playlist or a smart one (same inline input).
+  let creatingSmart = $state(false);
+
   function submitNewPlaylist() {
     const name = newName.trim();
-    if (name) onCreatePlaylist?.(name);
+    if (name) (creatingSmart ? onCreateSmartPlaylist : onCreatePlaylist)?.(name);
     newName = '';
     creating = false;
+    creatingSmart = false;
   }
 
   function onPlaylistDrop(e: DragEvent, playlistId: string) {
@@ -126,12 +132,12 @@
     class:active={isActive('playlist', p.id)}
     class:drop-target={dropTargetId === p.id}
     onclick={() => onSelect?.({ section: 'playlist', item: p.id })}
-    ondragover={(e) => { e.preventDefault(); dropTargetId = p.id; }}
+    ondragover={(e) => { if (p.rule) return; e.preventDefault(); dropTargetId = p.id; }}
     ondragleave={() => { if (dropTargetId === p.id) dropTargetId = null; }}
-    ondrop={(e) => onPlaylistDrop(e, p.id)}
+    ondrop={(e) => { if (!p.rule) onPlaylistDrop(e, p.id); }}
   >
     <PlaylistCover coverUrl={p.coverUrl} mosaic={p.mosaic} size={22} />
-    <span class="pname">{p.name}</span>
+    <span class="pname">{#if p.rule}<span class="smart" title="Smart playlist">✦</span>{/if}{p.name}</span>
     <span class="count">{p.trackCount.toLocaleString()}</span>
   </button>
 {/snippet}
@@ -186,16 +192,19 @@
       <input
         class="new-playlist"
         bind:value={newName}
-        placeholder="Playlist name…"
+        placeholder={creatingSmart ? 'Smart playlist name…' : 'Playlist name…'}
         autofocus
         onkeydown={(e) => {
           if (e.key === 'Enter') submitNewPlaylist();
-          else if (e.key === 'Escape') { e.stopPropagation(); newName = ''; creating = false; }
+          else if (e.key === 'Escape') { e.stopPropagation(); newName = ''; creating = false; creatingSmart = false; }
         }}
         onblur={submitNewPlaylist}
       />
     {:else}
       <button class="new-btn" onclick={() => (creating = true)}>＋ New playlist</button>
+      {#if onCreateSmartPlaylist}
+        <button class="new-btn" onclick={() => { creatingSmart = true; creating = true; }}>＋ New smart playlist</button>
+      {/if}
     {/if}
   </div>
 
@@ -262,6 +271,7 @@
 </aside>
 
 <style>
+  .smart { color: var(--accent); margin-right: 5px; font-size: 10px; }
   .rail {
     border-right: 1px solid var(--border);
     padding: 14px 0;

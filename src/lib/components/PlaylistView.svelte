@@ -10,6 +10,9 @@
   import EmptyState from './EmptyState.svelte';
   import PlaylistCover from './PlaylistCover.svelte';
   import RemoveConfirm from './RemoveConfirm.svelte';
+  import GenreFilterBar from './GenreFilterBar.svelte';
+  import { explorerState } from '$lib/stores/explorerState.svelte';
+  import { isEmptyRule, ruleSummary, type SmartRule } from '$lib/smartRule';
 
   let {
     selectedId = null,
@@ -29,6 +32,29 @@
   // A plain playlist is exactly its Unsorted section; rendering entries (not
   // just present tracks) is what keeps a missing row visible here.
   const entries = $derived(open?.sections[0]?.entries ?? []);
+
+  // A smart playlist is read-only: its tracks come from its rule, so rows lose
+  // drag, grip and remove, and the header carries the rule instead.
+  const smart = $derived(!!open?.rule);
+  let editingRule = $state(false);
+  let ruleDraft = $state<SmartRule>({});
+  $effect(() => {
+    // New playlist: close the editor; an empty rule opens straight into it.
+    open?.id;
+    const rule = open?.rule;
+    editingRule = !!rule && isEmptyRule(rule);
+    ruleDraft = rule ? structuredClone($state.snapshot(rule)) : {};
+  });
+  async function saveRule() {
+    if (!open) return;
+    editingRule = false;
+    await playlists.setRule(open.id, ruleDraft);
+  }
+  async function copyToPlaylist() {
+    if (!open) return;
+    const created = await playlists.copySmart(open.id);
+    if (created) explorerState.setNav({ section: 'playlist', item: created.id });
+  }
 
   // Playing from a playlist queues that playlist, and keeps queueing it even
   // after you navigate away — the context is captured at play time.
@@ -229,11 +255,20 @@
       {:else}
         <button class="name" onclick={startRename} title="Rename">{open.name}</button>
       {/if}
+      {#if smart && open.rule}
+        <span class="rule-line" title="Smart playlist: tracks are found by this rule each time it opens">
+          <span class="smart-mark">✦</span>{ruleSummary(open.rule)}
+        </span>
+      {/if}
       <span class="meta">
         {open.tracks.length} {open.tracks.length === 1 ? 'track' : 'tracks'}
         {#if open.tracks.length > 0}<span class="sep">·</span>{formatTotal(totalMs, partialDuration)}{/if}
       </span>
       <div class="header-actions">
+        {#if smart}
+          <button class="link" onclick={() => (editingRule = !editingRule)}>{editingRule ? 'Close rule' : 'Edit rule'}</button>
+          <button class="link" onclick={copyToPlaylist} title="Make an editable playlist from what this rule finds now">Copy to playlist</button>
+        {/if}
         {#if open.coverUrl}
           <button class="link" onclick={() => open && playlists.removeCover(open.id)}>Remove custom cover</button>
         {/if}
@@ -250,6 +285,18 @@
     </div>
   </div>
 
+  {#if smart && editingRule}
+    <div class="rule-editor">
+      <GenreFilterBar value={ruleDraft} onchange={(v) => (ruleDraft = { ...v, starred: ruleDraft.starred })}>
+        {#snippet actions()}
+          <label class="starred-toggle"><input type="checkbox" checked={!!ruleDraft.starred}
+            onchange={(e) => (ruleDraft = { ...ruleDraft, starred: e.currentTarget.checked || undefined })} /> starred only</label>
+          <button class="rule-save" onclick={saveRule}>Save rule</button>
+        {/snippet}
+      </GenreFilterBar>
+    </div>
+  {/if}
+
   <div class="listview">
     <div class="cols" style="grid-template-columns: {gridTemplate}">
       <span></span>
@@ -263,7 +310,14 @@
     </div>
     <div class="body" bind:this={listEl}>
       {#if entries.length === 0}
-        <EmptyState title="No tracks yet" detail="Drag tracks here, or press a on a track to add it." />
+        {#if smart}
+          <EmptyState
+            title={open.rule && isEmptyRule(open.rule) ? 'Add a rule to fill this playlist' : 'No tracks match this rule'}
+            detail="Pick genres or styles above."
+          />
+        {:else}
+          <EmptyState title="No tracks yet" detail="Drag tracks here, or press a on a track to add it." />
+        {/if}
       {:else}
         {#each entries as entry (entry.entryId)}
           {#if !entry.track}
@@ -293,11 +347,11 @@
             class:drop-over={overId === t.id}
             data-id={t.id}
             type="button"
-            draggable="true"
-            ondragstart={(e) => onDragStart(e, t.id)}
-            ondragover={(e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; if (dragId && dragId !== t.id) overId = t.id; }}
+            draggable={smart ? 'false' : 'true'}
+            ondragstart={(e) => { if (!smart) onDragStart(e, t.id); }}
+            ondragover={(e) => { if (smart) return; e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; if (dragId && dragId !== t.id) overId = t.id; }}
             ondragleave={() => { if (overId === t.id) overId = null; }}
-            ondrop={(e) => { e.preventDefault(); overId = null; applyReorder(t.id); }}
+            ondrop={(e) => { if (smart) return; e.preventDefault(); overId = null; applyReorder(t.id); }}
             ondragend={() => { dragId = null; overId = null; }}
             onclick={(e) => { if (e.detail > 0) e.stopPropagation(); else onTrackSelect?.(t.id); }}
             ondblclick={() => { if (t.canPlay) player.playFrom(playlistCtx, t.id, { trackId: t.id, title: t.title, artist: t.artist, thumbUrl: t.thumb_url, releaseId: t.release_id, bpm: t.bpm ?? null }, playlistSeed); }}
@@ -334,6 +388,7 @@
               {/if}
               <span class="dur">{formatDuration(t.duration_ms)}</span>
               <StarButton trackId={t.id} />
+              {#if smart}<span></span><span></span>{:else}
               <span
                 class="remove"
                 role="button"
@@ -358,6 +413,7 @@
                   moveBy(t.id, e.key === 'ArrowUp' ? -1 : 1);
                 }}
               >⠿</span>
+              {/if}
             </span>
           </button>
           {/if}
@@ -370,6 +426,14 @@
 {/if}
 
 <style>
+  .rule-line { display: block; color: var(--text-muted); font-size: 12px; margin: 2px 0; }
+  .smart-mark { color: var(--accent); margin-right: 6px; }
+  .rule-editor { border-bottom: 1px solid var(--border); }
+  .starred-toggle { display: inline-flex; gap: 4px; align-items: center; color: var(--text-muted); cursor: pointer; }
+  .rule-save {
+    background: var(--accent); color: var(--bg-sunken); border: 0; border-radius: 4px;
+    padding: 3px 10px; font: inherit; cursor: pointer;
+  }
   .pl-header {
     display: flex;
     align-items: flex-start;

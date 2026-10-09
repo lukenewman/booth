@@ -44,7 +44,11 @@ const tx = db.transaction(() => {
   for (const p of state.values()) {
     if (!exists('playlist', p.id)) {
       plan.push(`create playlist "${p.name}"`);
-      db.prepare(`INSERT INTO playlist (id, name, target_minutes) VALUES (?, ?, ?)`).run(p.id, p.name, p.targetMinutes);
+      db.prepare(`INSERT INTO playlist (id, name, target_minutes, rule) VALUES (?, ?, ?, ?)`)
+        .run(p.id, p.name, p.rule ? null : p.targetMinutes, p.rule ? JSON.stringify(p.rule) : null);
+    } else if (p.rule && !(db.prepare(`SELECT rule FROM playlist WHERE id = ?`).get(p.id) as { rule: string | null }).rule) {
+      plan.push(`restore rule on "${p.name}"`);
+      db.prepare(`UPDATE playlist SET rule = ? WHERE id = ?`).run(JSON.stringify(p.rule), p.id);
     }
     p.sections.forEach((s, si) => {
       if (exists('playlist_section', s.id)) return;

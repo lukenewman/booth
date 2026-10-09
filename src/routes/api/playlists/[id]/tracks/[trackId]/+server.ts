@@ -1,10 +1,12 @@
 import { json } from '@sveltejs/kit';
+import { refuseSmart } from '$lib/server/library/smartGuard';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { removeTrack, listPlaylists } from '$lib/server/library/playlists';
 import { recordPlaylistEvent } from '$lib/server/backup';
 
 export const DELETE: RequestHandler = async ({ params }) => {
+  refuseSmart(params.id);
   const db = getDb();
   const row = db
     .prepare(`SELECT id FROM playlist_track WHERE playlist_id = ? AND track_id = ?`)

@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'fs';
 import { dirname } from 'path';
 import type { PlaylistDetail } from '$lib/server/library/playlists';
+import type { SmartRule } from '$lib/smartRule';
 
 /**
  * Append-only journal of playlist mutations — the sketch and crate for a gig
@@ -12,7 +13,8 @@ import type { PlaylistDetail } from '$lib/server/library/playlists';
 
 export type PlaylistEventBody =
   | { action: 'baseline'; state: BaselineState }
-  | { action: 'create'; targetMinutes: number | null }
+  | { action: 'create'; targetMinutes: number | null; rule?: SmartRule | null }
+  | { action: 'rule'; rule: SmartRule | null }
   | { action: 'rename'; name: string }
   | { action: 'delete' }
   | { action: 'target'; minutes: number | null }
@@ -30,7 +32,7 @@ export type PlaylistEvent = { at: string; playlistId: string; playlistName: stri
 export interface ReplayedEntry { entryId: string; trackId: string | null; artist: string; title: string; album: string | null; position: string | null }
 export interface ReplayedSection { id: string; name: string; isUnsorted: boolean; entryIds: string[] }
 export interface ReplayedCrate { entryId: string; releaseId: string | null; artist: string; title: string; year: number | null }
-export interface ReplayedPlaylist { id: string; name: string; targetMinutes: number | null; sections: ReplayedSection[]; entries: Record<string, ReplayedEntry>; crate: ReplayedCrate[] }
+export interface ReplayedPlaylist { id: string; name: string; targetMinutes: number | null; rule?: SmartRule | null; sections: ReplayedSection[]; entries: Record<string, ReplayedEntry>; crate: ReplayedCrate[] }
 export type BaselineState = Omit<ReplayedPlaylist, 'id'>;
 
 export function appendPlaylistEvent(logPath: string, e: PlaylistEvent): void {
@@ -57,13 +59,17 @@ export function readPlaylistEvents(logPath: string): PlaylistEvent[] {
 
 export function baselineFromDetail(d: PlaylistDetail): BaselineState {
   const entries: Record<string, ReplayedEntry> = {};
-  for (const s of d.sections) for (const e of s.entries) {
+  // A smart playlist's entries are evaluated, not stored: its baseline is the
+  // rule alone, or a replay would turn them into membership.
+  const smart = !!d.rule;
+  if (!smart) for (const s of d.sections) for (const e of s.entries) {
     entries[e.entryId] = { entryId: e.entryId, trackId: e.track?.id ?? null, ...e.snapshot };
   }
   return {
     name: d.name,
     targetMinutes: d.targetMinutes,
-    sections: d.sections.map((s) => ({ id: s.id, name: s.name, isUnsorted: s.isUnsorted, entryIds: s.entries.map((e) => e.entryId) })),
+    rule: d.rule ?? null,
+    sections: d.sections.map((s) => ({ id: s.id, name: s.name, isUnsorted: s.isUnsorted, entryIds: smart ? [] : s.entries.map((e) => e.entryId) })),
     entries,
     crate: d.crate.map((c) => ({ entryId: c.entryId, releaseId: c.releaseId, artist: c.artist, title: c.title, year: c.year })),
   };
@@ -104,7 +110,8 @@ export function replayPlaylistEvents(events: PlaylistEvent[], asOf?: string): Ma
     if (!p) { p = fresh(e); out.set(e.playlistId, p); }
     p.name = e.playlistName;
     switch (e.action) {
-      case 'create': p.targetMinutes = e.targetMinutes; break;
+      case 'create': p.targetMinutes = e.targetMinutes; p.rule = e.rule ?? null; break;
+      case 'rule': p.rule = e.rule; break;
       case 'rename': p.name = e.name; break;
       case 'target': p.targetMinutes = e.minutes; break;
       case 'section-add': sectionFor(p, e.sectionId, e.name); break;

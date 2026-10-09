@@ -1,9 +1,12 @@
 import type { ResolvedBpm } from '$lib/bpm';
 import { annotations } from '$lib/stores/annotations.svelte';
+import type { SmartRule } from '$lib/smartRule';
 export interface PlaylistSummary {
   id: string; name: string; trackCount: number; coverUrl: string | null; mosaic: string[];
   isGig: boolean;
   targetMinutes: number | null;
+  /** Set for a smart playlist — its tracks are evaluated from this rule. */
+  rule?: SmartRule | null;
 }
 
 export interface PlaylistTrack {
@@ -32,6 +35,7 @@ export interface PlaylistDetail {
   id: string; name: string; coverUrl: string | null; mosaic: string[]; tracks: PlaylistTrack[];
   targetMinutes: number | null;
   isGig: boolean;
+  rule?: SmartRule | null;
   sections: PlaylistSection[];
   crate: CrateEntry[];
 }
@@ -97,6 +101,38 @@ class PlaylistsStore {
     return created;
   }
 
+  /** Create a smart playlist; its tracks come from `rule`. */
+  async createSmart(name: string, rule: SmartRule): Promise<PlaylistSummary | null> {
+    const res = await fetch('/api/playlists', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name, rule }),
+    });
+    if (!res.ok) return null;
+    const created = (await res.json()) as PlaylistSummary;
+    this.items = [...this.items, created].sort((a, b) => a.name.localeCompare(b.name));
+    return created;
+  }
+
+  async setRule(id: string, rule: SmartRule) {
+    const res = await fetch(`/api/playlists/${id}/rule`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ rule }),
+    });
+    if (!res.ok) return;
+    await Promise.all([this.loadPlaylist(id), this.loadList()]);
+  }
+
+  /** Freeze a smart playlist into an editable plain copy. */
+  async copySmart(id: string): Promise<PlaylistSummary | null> {
+    const res = await fetch(`/api/playlists/${id}/copy`, { method: 'POST' });
+    if (!res.ok) return null;
+    const created = (await res.json()) as PlaylistSummary;
+    this.items = [...this.items, created].sort((a, b) => a.name.localeCompare(b.name));
+    return created;
+  }
+
   async rename(id: string, name: string) {
     const res = await fetch(`/api/playlists/${id}`, {
       method: 'PATCH',
@@ -152,6 +188,8 @@ class PlaylistsStore {
 
   /** Ask for confirmation before removing a track (both × button and Delete key). */
   requestRemove(playlistId: string, trackId: string, trackTitle: string) {
+    // A smart playlist's tracks come from its rule; there is nothing to remove.
+    if (this.openPlaylist?.id === playlistId && this.openPlaylist.rule) return;
     this.pendingRemove = { playlistId, trackId, trackTitle };
   }
 

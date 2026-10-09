@@ -2,6 +2,7 @@
   import Rail from './Rail.svelte';
   import ListviewToolbar from './ListviewToolbar.svelte';
   import GenreFilterBar from './GenreFilterBar.svelte';
+  import { isEmptyGenreFilter } from '$lib/genreFilter';
   import ReleaseList from './ReleaseList.svelte';
   import ReleaseGrid from './ReleaseGrid.svelte';
   import TrackList from './TrackList.svelte';
@@ -96,6 +97,21 @@ import RecordingPill from './RecordingPill.svelte';
   let recordingMinimized = $state(false);
 
   onMount(() => void musicLibrary.load());
+
+  // "Save as smart playlist": the current genre/style filter (plus starred,
+  // when browsing Starred) becomes a playlist that keeps itself up to date.
+  let savingSmart = $state(false);
+  let smartName = $state('');
+  async function saveSmart() {
+    const name = smartName.trim();
+    savingSmart = false;
+    if (!name) return;
+    const { genres, styles } = explorerState.genre;
+    const starred = explorerState.nav.section === 'library' && explorerState.nav.item === 'starred';
+    const created = await playlists.createSmart(name, { genres, styles, ...(starred ? { starred: true } : {}) });
+    if (created) explorerState.setNav({ section: 'playlist', item: created.id });
+    else toast.show('Couldn’t create the smart playlist');
+  }
   // Where the Music library offer appears: once in the library (it can be
   // dismissed), and for good under Sources → Local, which it fills.
   const musicOffer = $derived(
@@ -127,6 +143,10 @@ import RecordingPill from './RecordingPill.svelte';
     }}
     onCreateGig={async (name, minutes) => {
       const created = await playlists.createGig(name, minutes);
+      if (created) explorerState.setNav({ section: 'playlist', item: created.id });
+    }}
+    onCreateSmartPlaylist={async (name) => {
+      const created = await playlists.createSmart(name, {});
       if (created) explorerState.setNav({ section: 'playlist', item: created.id });
     }}
     onAddReleaseToPlaylist={async (playlistId, releaseId) => {
@@ -178,7 +198,20 @@ import RecordingPill from './RecordingPill.svelte';
     />
 
     {#if !isAddView && currentEntity !== 'artists' && !(isSourcesView && selectedSource?.isStub)}
-      <GenreFilterBar value={explorerState.genre} onchange={(f) => explorerState.setGenreFilter(f)} />
+      <GenreFilterBar value={explorerState.genre} onchange={(f) => explorerState.setGenreFilter(f)}>
+        {#snippet actions()}
+          {#if !isEmptyGenreFilter(explorerState.genre)}
+            {#if savingSmart}
+              <!-- svelte-ignore a11y_autofocus -->
+              <input class="smart-name" bind:value={smartName} placeholder="Smart playlist name…" autofocus
+                onkeydown={(e) => { e.stopPropagation(); if (e.key === 'Enter') saveSmart(); else if (e.key === 'Escape') savingSmart = false; }}
+                onblur={() => (savingSmart = false)} />
+            {:else}
+              <button class="save-smart" onclick={() => { smartName = ''; savingSmart = true; }}>✦ save as smart playlist</button>
+            {/if}
+          {/if}
+        {/snippet}
+      </GenreFilterBar>
     {/if}
 
     {#if scannerOpen}
@@ -388,6 +421,15 @@ import RecordingPill from './RecordingPill.svelte';
 {/if}
 
 <style>
+  .save-smart {
+    background: transparent; border: 1px solid var(--accent-border); border-radius: 4px;
+    color: var(--text); padding: 2px 8px; font: inherit; font-size: 11px; cursor: pointer;
+  }
+  .save-smart:hover { background: var(--accent-bg); }
+  .smart-name {
+    height: 22px; width: 180px; padding: 0 8px; background: var(--bg-input);
+    border: 1px solid var(--border-strong); border-radius: 4px; font: inherit; font-size: 11px; color: var(--text);
+  }
   /* Touch targets: rows are mouse-sized by default. 44px is the platform
      minimum, applied only below the mobile breakpoint. */
   @media (max-width: 768px) {

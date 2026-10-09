@@ -1,10 +1,12 @@
 import { error } from '@sveltejs/kit';
+import { refuseSmart } from '$lib/server/library/smartGuard';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { renameSection, deleteSection, sectionOf } from '$lib/server/library/playlists';
 import { recordPlaylistEvent } from '$lib/server/backup';
 
 export const PATCH: RequestHandler = async ({ params, request }) => {
+  refuseSmart(params.id);
   const body = await request.json().catch(() => ({}));
   const name = typeof body.name === 'string' ? body.name.trim() : '';
   if (!name) throw error(400, 'name required');
@@ -16,6 +18,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 };
 
 export const DELETE: RequestHandler = async ({ params }) => {
+  refuseSmart(params.id);
   const db = getDb();
   const s = sectionOf(db, params.id, params.sectionId);
   if (!s) throw error(404, `section not found: ${params.sectionId}`);

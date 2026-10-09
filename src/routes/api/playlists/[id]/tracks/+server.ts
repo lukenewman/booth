@@ -1,4 +1,5 @@
 import { json, error } from '@sveltejs/kit';
+import { refuseSmart } from '$lib/server/library/smartGuard';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { addTrack, reorderTracks, listPlaylists, getPlaylist, sectionOf } from '$lib/server/library/playlists';
@@ -9,6 +10,7 @@ function trackCount(id: string): number {
 }
 
 export const POST: RequestHandler = async ({ params, request }) => {
+  refuseSmart(params.id);
   const body = await request.json().catch(() => ({}));
   const trackId = typeof body.trackId === 'string' ? body.trackId : '';
   const sectionId = typeof body.sectionId === 'string' ? body.sectionId : undefined;
@@ -35,6 +37,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 };
 
 export const PATCH: RequestHandler = async ({ params, request }) => {
+  refuseSmart(params.id);
   const body = await request.json().catch(() => ({}));
   const order = Array.isArray(body.order)
     ? (body.order as unknown[]).filter((x): x is string => typeof x === 'string')

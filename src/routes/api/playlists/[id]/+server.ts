@@ -1,4 +1,5 @@
 import { json, error } from '@sveltejs/kit';
+import { refuseSmart } from '$lib/server/library/smartGuard';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { getPlaylist, renamePlaylist, deletePlaylist, setTargetMinutes, parseTarget } from '$lib/server/library/playlists';
@@ -18,6 +19,8 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
   const target = parseTarget(body.targetMinutes);
   if (target === 'invalid') throw error(400, 'targetMinutes must be a positive integer or null');
   if (name === undefined && target === undefined) throw error(400, 'name or targetMinutes required');
+  // A smart playlist can be renamed, but a set length would make it a gig.
+  if (target !== undefined) refuseSmart(params.id);
   if (name !== undefined) {
     if (!name) throw error(400, 'name required');
     renamePlaylist(db, params.id, name);

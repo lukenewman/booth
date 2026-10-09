@@ -1,10 +1,12 @@
 import { json, error } from '@sveltejs/kit';
+import { refuseSmart } from '$lib/server/library/smartGuard';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { removeCrateEntry, getPlaylist, listPlaylists } from '$lib/server/library/playlists';
 import { recordPlaylistEvent } from '$lib/server/backup';
 
 export const DELETE: RequestHandler = async ({ params }) => {
+  refuseSmart(params.id);
   const db = getDb();
   const before = getPlaylist(db, params.id);
   if (!before) throw error(404, `playlist not found: ${params.id}`);

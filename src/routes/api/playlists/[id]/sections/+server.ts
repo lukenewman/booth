@@ -1,10 +1,12 @@
 import { json, error } from '@sveltejs/kit';
+import { refuseSmart } from '$lib/server/library/smartGuard';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { createSection, reorderSections, getPlaylist } from '$lib/server/library/playlists';
 import { recordPlaylistEvent, crateEntryIds, recordNewCrateRows } from '$lib/server/backup';
 
 export const POST: RequestHandler = async ({ params, request }) => {
+  refuseSmart(params.id);
   const body = await request.json().catch(() => ({}));
   const name = typeof body.name === 'string' ? body.name.trim() : '';
   if (!name) throw error(400, 'name required');
@@ -18,6 +20,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 };
 
 export const PATCH: RequestHandler = async ({ params, request }) => {
+  refuseSmart(params.id);
   const body = await request.json().catch(() => ({}));
   const order = Array.isArray(body.order) ? (body.order as unknown[]).filter((x): x is string => typeof x === 'string') : null;
   if (!order) throw error(400, 'order array required');

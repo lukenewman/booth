@@ -1,10 +1,12 @@
 import { json, error } from '@sveltejs/kit';
+import { refuseSmart } from '$lib/server/library/smartGuard';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { addRelease, getPlaylist } from '$lib/server/library/playlists';
 import { crateEntryIds, recordNewCrateRows } from '$lib/server/backup';
 
 export const POST: RequestHandler = async ({ params, request }) => {
+  refuseSmart(params.id);
   const body = await request.json().catch(() => ({}));
   const releaseId = typeof body.releaseId === 'string' ? body.releaseId : '';
   if (!releaseId) throw error(400, 'releaseId required');

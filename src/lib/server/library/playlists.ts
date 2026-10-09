@@ -1,6 +1,7 @@
 import type { Database } from 'bun:sqlite';
 import { ulid } from 'ulid';
-import { getTracksByIds, type TrackRow } from './queries';
+import { getTracksByIds, listFilteredTrackIds, type TrackRow } from './queries';
+import { isEmptyRule, ruleToFilter, validateRule, type SmartRule } from '$lib/smartRule';
 
 export interface PlaylistSummary {
   id: string;
@@ -13,6 +14,8 @@ export interface PlaylistSummary {
   mosaic: string[];
   isGig: boolean;
   targetMinutes: number | null;
+  /** Set for a smart playlist: tracks are evaluated from it on open. */
+  rule: SmartRule | null;
 }
 
 export type PlaylistTrack = TrackRow & { sources: string[]; canPlay: boolean; artist_id: string };
@@ -57,6 +60,7 @@ export interface PlaylistDetail {
   mosaic: string[];
   targetMinutes: number | null;
   isGig: boolean;
+  rule: SmartRule | null;
   /** Present tracks, flattened in section order — what playback queues. */
   tracks: PlaylistTrack[];
   sections: PlaylistSection[];
@@ -64,6 +68,38 @@ export interface PlaylistDetail {
 }
 
 const NOW = `strftime('%Y-%m-%dT%H:%M:%fZ','now')`;
+
+/**
+ * Thrown by every membership/sketch/crate mutation on a smart playlist. A smart
+ * playlist's tracks come from its rule, so there is nothing to add, move or
+ * remove — and refusing these is what guarantees one can never become a gig.
+ */
+export class SmartPlaylistError extends Error {
+  constructor() {
+    super('smart playlists are read-only');
+    this.name = 'SmartPlaylistError';
+  }
+}
+
+function parseRule(raw: string | null): SmartRule | null {
+  if (raw == null) return null;
+  try { return validateRule(JSON.parse(raw)) ?? {}; } catch { return {}; }
+}
+
+export function isSmart(db: Database, playlistId: string): boolean {
+  const row = db.prepare(`SELECT rule FROM playlist WHERE id = ?`).get(playlistId) as { rule: string | null } | undefined;
+  return row?.rule != null;
+}
+
+function assertNotSmart(db: Database, playlistId: string): void {
+  if (isSmart(db, playlistId)) throw new SmartPlaylistError();
+}
+
+/** A smart playlist's tracks, newest added first. An empty rule matches nothing. */
+function smartTrackIds(db: Database, rule: SmartRule): string[] {
+  if (isEmptyRule(rule)) return [];
+  return listFilteredTrackIds(db, { genre: ruleToFilter(rule), starred: rule.starred || undefined, sort: 'added-desc' });
+}
 
 /**
  * A playlist is a gig once it has a crate, a second section, or a target
@@ -103,27 +139,56 @@ export function listPlaylists(db: Database): PlaylistSummary[] {
     .prepare(
       `SELECT playlist.id, playlist.name, playlist.cover_url AS coverUrl,
               playlist.target_minutes AS targetMinutes,
+              playlist.rule AS rule,
               ${IS_GIG} AS isGig,
               (SELECT COUNT(*) FROM playlist_track
                 WHERE playlist_id = playlist.id AND track_id IS NOT NULL) AS trackCount
          FROM playlist
          ORDER BY playlist.name COLLATE NOCASE`,
     )
-    .all() as (Omit<PlaylistSummary, 'mosaic' | 'isGig'> & { isGig: number })[];
-  return rows.map((r) => ({ ...r, isGig: !!r.isGig, mosaic: mosaicFor(db, r.id) }));
+    .all() as (Omit<PlaylistSummary, 'mosaic' | 'isGig' | 'rule'> & { isGig: number; rule: string | null })[];
+  return rows.map((r) => {
+    const rule = parseRule(r.rule);
+    if (!rule) return { ...r, rule, isGig: !!r.isGig, mosaic: mosaicFor(db, r.id) };
+    const ids = smartTrackIds(db, rule);
+    return { ...r, rule, isGig: false, trackCount: ids.length, mosaic: smartMosaic(db, ids) };
+  });
 }
 
-export function createPlaylist(db: Database, name: string, targetMinutes: number | null = null): PlaylistSummary {
+/** Up to four distinct covers from the first tracks a smart playlist shows. */
+function smartMosaic(db: Database, ids: string[]): string[] {
+  const out: string[] = [];
+  const first = ids.slice(0, 60);
+  const byId = getTracksByIds(db, first);
+  for (const id of first) {
+    const thumb = byId.get(id)?.thumb_url;
+    if (thumb && !out.includes(thumb)) out.push(thumb);
+    if (out.length === 4) break;
+  }
+  return out;
+}
+
+export function createPlaylist(
+  db: Database,
+  name: string,
+  targetMinutes: number | null = null,
+  rule: SmartRule | null = null,
+): PlaylistSummary {
   const clean = name.trim();
   if (!clean) throw new Error('playlist name required');
   const id = ulid();
   db.transaction(() => {
-    db.prepare(`INSERT INTO playlist (id, name, target_minutes) VALUES (?, ?, ?)`).run(id, clean, targetMinutes);
+    db.prepare(`INSERT INTO playlist (id, name, target_minutes, rule) VALUES (?, ?, ?, ?)`)
+      .run(id, clean, rule ? null : targetMinutes, rule ? JSON.stringify(rule) : null);
     db.prepare(
       `INSERT INTO playlist_section (id, playlist_id, name, position, is_unsorted) VALUES (?, ?, 'Unsorted', 0, 1)`,
     ).run(ulid(), id);
   })();
-  return { id, name: clean, trackCount: 0, coverUrl: null, mosaic: [], isGig: targetMinutes != null, targetMinutes };
+  if (rule) {
+    const ids = smartTrackIds(db, rule);
+    return { id, name: clean, trackCount: ids.length, coverUrl: null, mosaic: smartMosaic(db, ids), isGig: false, targetMinutes: null, rule };
+  }
+  return { id, name: clean, trackCount: 0, coverUrl: null, mosaic: [], isGig: targetMinutes != null, targetMinutes, rule: null };
 }
 
 export function setPlaylistCover(db: Database, id: string, coverUrl: string): void {
@@ -141,6 +206,7 @@ export function renamePlaylist(db: Database, id: string, name: string): void {
 }
 
 export function setTargetMinutes(db: Database, id: string, minutes: number | null): void {
+  assertNotSmart(db, id);
   db.transaction(() => {
     db.prepare(`UPDATE playlist SET target_minutes = ?, updated_at = ${NOW} WHERE id = ?`).run(minutes, id);
     if (minutes != null) backfillCrate(db, id);
@@ -175,11 +241,44 @@ export function sectionOf(
 export function getPlaylist(db: Database, id: string): PlaylistDetail | null {
   const playlist = db
     .prepare(
-      `SELECT id, name, cover_url AS coverUrl, target_minutes AS targetMinutes, ${IS_GIG} AS isGig
+      `SELECT id, name, cover_url AS coverUrl, target_minutes AS targetMinutes, rule, ${IS_GIG} AS isGig
          FROM playlist WHERE id = ?`,
     )
-    .get(id) as { id: string; name: string; coverUrl: string | null; targetMinutes: number | null; isGig: number } | undefined;
+    .get(id) as { id: string; name: string; coverUrl: string | null; targetMinutes: number | null; rule: string | null; isGig: number } | undefined;
   if (!playlist) return null;
+
+  const rule = parseRule(playlist.rule);
+  if (rule) {
+    // One synthetic Unsorted section holding the evaluated tracks, so the
+    // plain playlist view renders it unchanged. Entry ids are the track ids:
+    // nothing ever mutates a smart entry, so it needs no stored id.
+    const ids = smartTrackIds(db, rule);
+    const byId = getTracksByIds(db, ids);
+    const tracks = ids.flatMap((t) => (byId.has(t) ? [byId.get(t)!] : []));
+    const sectionId = unsortedSectionId(db, id);
+    return {
+      id: playlist.id,
+      name: playlist.name,
+      coverUrl: playlist.coverUrl,
+      mosaic: smartMosaic(db, ids),
+      targetMinutes: null,
+      isGig: false,
+      rule,
+      tracks,
+      sections: [{
+        id: sectionId,
+        name: 'Unsorted',
+        isUnsorted: true,
+        entries: tracks.map((t) => ({
+          entryId: t.id,
+          sectionId,
+          track: t,
+          snapshot: { artist: t.artist, title: t.title, album: t.album, position: t.position },
+        })),
+      }],
+      crate: [],
+    };
+  }
 
   const sectionRows = db
     .prepare(
@@ -248,6 +347,7 @@ export function getPlaylist(db: Database, id: string): PlaylistDetail | null {
     mosaic: mosaicFor(db, id),
     targetMinutes: playlist.targetMinutes,
     isGig: !!playlist.isGig,
+    rule: null,
     tracks,
     sections,
     crate,
@@ -336,6 +436,7 @@ export function addTrack(
   trackId: string,
   sectionId?: string,
 ): { added: boolean; entryId: string; sectionName: string } {
+  assertNotSmart(db, playlistId);
   return db.transaction(() => {
     const existing = db
       .prepare(
@@ -362,6 +463,7 @@ export function addTrack(
 }
 
 export function removeEntry(db: Database, playlistId: string, entryId: string): void {
+  assertNotSmart(db, playlistId);
   db.transaction(() => {
     const row = db
       .prepare(`SELECT section_id FROM playlist_track WHERE id = ? AND playlist_id = ?`)
@@ -374,6 +476,7 @@ export function removeEntry(db: Database, playlistId: string, entryId: string): 
 }
 
 export function removeTrack(db: Database, playlistId: string, trackId: string): void {
+  assertNotSmart(db, playlistId);
   const row = db
     .prepare(`SELECT id FROM playlist_track WHERE playlist_id = ? AND track_id = ?`)
     .get(playlistId, trackId) as { id: string } | undefined;
@@ -388,6 +491,7 @@ export function removeTrack(db: Database, playlistId: string, trackId: string): 
  * row that relinks later reappears where it was rather than at the bottom.
  */
 export function reorderTracks(db: Database, playlistId: string, orderedTrackIds: string[]): void {
+  assertNotSmart(db, playlistId);
   db.transaction(() => {
     const sectionId = unsortedSectionId(db, playlistId);
     const rows = db
@@ -405,6 +509,7 @@ export function reorderTracks(db: Database, playlistId: string, orderedTrackIds:
 
 /** Move an entry to `index` within `sectionId` (same or different section). */
 export function moveEntry(db: Database, playlistId: string, entryId: string, sectionId: string, index: number): void {
+  assertNotSmart(db, playlistId);
   db.transaction(() => {
     const entry = db
       .prepare(`SELECT section_id FROM playlist_track WHERE id = ? AND playlist_id = ?`)
@@ -426,6 +531,7 @@ export function moveEntry(db: Database, playlistId: string, entryId: string, sec
 }
 
 export function createSection(db: Database, playlistId: string, name: string): { id: string; name: string } {
+  assertNotSmart(db, playlistId);
   const clean = name.trim();
   if (!clean) throw new Error('section name required');
   const id = ulid();
@@ -440,6 +546,7 @@ export function createSection(db: Database, playlistId: string, name: string): {
 }
 
 export function renameSection(db: Database, playlistId: string, sectionId: string, name: string): void {
+  assertNotSmart(db, playlistId);
   const clean = name.trim();
   if (!clean) throw new Error('section name required');
   db.prepare(`UPDATE playlist_section SET name = ? WHERE id = ? AND playlist_id = ?`).run(clean, sectionId, playlistId);
@@ -448,6 +555,7 @@ export function renameSection(db: Database, playlistId: string, sectionId: strin
 
 /** Delete a section. Its tracks move to the end of Unsorted — never removed. */
 export function deleteSection(db: Database, playlistId: string, sectionId: string): void {
+  assertNotSmart(db, playlistId);
   db.transaction(() => {
     const section = sectionOf(db, playlistId, sectionId);
     if (!section) throw new Error(`section not in playlist: ${sectionId}`);
@@ -478,6 +586,7 @@ function reorderSectionsInner(db: Database, playlistId: string, orderedSectionId
 }
 
 export function reorderSections(db: Database, playlistId: string, orderedSectionIds: string[]): void {
+  assertNotSmart(db, playlistId);
   db.transaction(() => {
     reorderSectionsInner(db, playlistId, orderedSectionIds);
     touch(db, playlistId);
@@ -485,6 +594,7 @@ export function reorderSections(db: Database, playlistId: string, orderedSection
 }
 
 export function addRelease(db: Database, playlistId: string, releaseId: string): { added: boolean; entryId: string } {
+  assertNotSmart(db, playlistId);
   return db.transaction(() => {
     const r = addReleaseInner(db, playlistId, releaseId);
     backfillCrate(db, playlistId);
@@ -498,6 +608,7 @@ export function addRelease(db: Database, playlistId: string, releaseId: string):
  * confirms first when there are any (the count is on the CrateEntry).
  */
 export function removeCrateEntry(db: Database, playlistId: string, entryId: string): { removedTracks: number } {
+  assertNotSmart(db, playlistId);
   return db.transaction(() => {
     const row = db
       .prepare(`SELECT release_id FROM playlist_release WHERE id = ? AND playlist_id = ?`)
@@ -531,4 +642,24 @@ export function parseTarget(raw: unknown): number | null | undefined | 'invalid'
   if (raw === null) return null;
   if (typeof raw === 'number' && Number.isInteger(raw) && raw > 0 && raw <= 24 * 60) return raw;
   return 'invalid';
+}
+
+/** Replace a smart playlist's rule. Not for plain playlists — that would empty them. */
+export function setPlaylistRule(db: Database, id: string, rule: SmartRule): void {
+  if (!isSmart(db, id)) throw new Error(`not a smart playlist: ${id}`);
+  db.prepare(`UPDATE playlist SET rule = ?, updated_at = ${NOW} WHERE id = ?`).run(JSON.stringify(rule), id);
+}
+
+/**
+ * Freeze a smart playlist into a plain one holding its current tracks in its
+ * current order — the way to start editing what a rule found.
+ */
+export function copySmartPlaylist(db: Database, id: string): PlaylistSummary {
+  const source = getPlaylist(db, id);
+  if (!source?.rule) throw new Error(`not a smart playlist: ${id}`);
+  return db.transaction(() => {
+    const created = createPlaylist(db, `${source.name} (copy)`);
+    for (const t of source.tracks) addTrack(db, created.id, t.id);
+    return { ...created, trackCount: source.tracks.length, mosaic: mosaicFor(db, created.id) };
+  })();
 }

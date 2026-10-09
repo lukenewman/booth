@@ -553,6 +553,26 @@ export interface ArtistRow {
  * tracks that can actually play. Unpaginated by design: the queue's whole
  * purpose is to run past the 200 rows the client has loaded.
  */
+/**
+ * Every track id matching the filters, playable or not, in list order. What a
+ * smart playlist shows: a vinyl-only track belongs in "all electronic" even
+ * though it can't be queued.
+ */
+export function listFilteredTrackIds(db: Database, args: TrackFilterArgs): string[] {
+  const { whereSql, params, addedJoin, orderSql } = buildTrackQuery(args);
+  const rows = db
+    .prepare(
+      `SELECT track.id
+         FROM track
+         JOIN artist ON artist.id = track.artist_id
+         ${addedJoin}
+         ${whereSql}
+         ORDER BY ${orderSql}`,
+    )
+    .all(...params) as { id: string }[];
+  return rows.map((r) => r.id);
+}
+
 export function listTrackIds(db: Database, args: TrackFilterArgs): string[] {
   const { whereSql, params, addedJoin, orderSql } = buildTrackQuery(args);
 

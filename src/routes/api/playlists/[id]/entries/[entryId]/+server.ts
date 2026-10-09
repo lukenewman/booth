@@ -1,4 +1,5 @@
 import { json, error } from '@sveltejs/kit';
+import { refuseSmart } from '$lib/server/library/smartGuard';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { moveEntry, removeEntry, sectionOf, listPlaylists } from '$lib/server/library/playlists';
@@ -9,6 +10,7 @@ function entryExists(playlistId: string, entryId: string): boolean {
 }
 
 export const PATCH: RequestHandler = async ({ params, request }) => {
+  refuseSmart(params.id);
   const body = await request.json().catch(() => ({}));
   const sectionId = typeof body.sectionId === 'string' ? body.sectionId : '';
   const index = typeof body.index === 'number' && Number.isInteger(body.index) ? body.index : -1;
@@ -23,6 +25,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 };
 
 export const DELETE: RequestHandler = async ({ params }) => {
+  refuseSmart(params.id);
   const db = getDb();
   if (!entryExists(params.id, params.entryId)) throw error(404, `entry not found: ${params.entryId}`);
   removeEntry(db, params.id, params.entryId);
