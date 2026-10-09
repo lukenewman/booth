@@ -206,6 +206,8 @@
           const trackId = active.dataset.id;
           if (!trackId) return;
           // Only meaningful for track rows: the tracks lens, or inside a playlist.
+          // Add → Discogs rows are search hits whatever the stored lens says.
+          if (explorerState.nav.section === 'add') return;
           if (explorerState.entity !== 'tracks' && explorerState.nav.section !== 'playlist') return;
           pickerTarget = { kind: 'track', id: trackId };
         },

@@ -254,7 +254,12 @@ export function createExplorerController() {
 
     if (explorerState.nav.section === 'add' && explorerState.nav.item === 'discogs') {
       // Detail comes from the in-memory search result, not a library fetch.
-      const hit = addItems.find((it) => it.id === explorerState.id);
+      // Look in every hit, not just the rows on screen: a version folded into
+      // an undrilled master row (a deep link, or a reload) is still a valid
+      // selection, and reading the displayed rows would also re-run this on
+      // every keystroke in the runout filter.
+      const raw = searchHits.find((h) => String(h.id) === explorerState.id);
+      const hit = raw ? mapVersion(raw) : null;
       if (hit) {
         detailKind = 'release';
         detailData = {
@@ -349,9 +354,15 @@ export function createExplorerController() {
   // everywhere — the only divergence is in render fallback below, when a
   // release-only source happens to be selected in tracks-mode (we still
   // *show* tracks-mode in the toolbar; the listview reports empty).
-  const currentEntity = $derived<'releases' | 'tracks' | 'artists'>(explorerState.entity);
-
+  //
+  // Add → Discogs is the exception: Discogs search returns releases only and
+  // the view hides the toggle, so it always reads as releases. The stored lens
+  // is left alone (and stays in the URL), so leaving Add restores it — but
+  // honouring it here showed the library's tracks with no switcher to escape.
   const isAddView = $derived(explorerState.nav.section === 'add');
+  const currentEntity = $derived<'releases' | 'tracks' | 'artists'>(
+    isAddView ? 'releases' : explorerState.entity,
+  );
   const isSourcesView = $derived(explorerState.nav.section === 'sources');
   const isPlaylistView = $derived(explorerState.nav.section === 'playlist');
 
