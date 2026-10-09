@@ -25,9 +25,19 @@ jobs:
         run: |
           curl -fsSL https://hutch.blackboard.sh/hutch/install.sh | sh -s -- --no-modify-path
           echo "$HOME/.hutch/bin" >> "$GITHUB_PATH"
+      # booth's own signing certificate, so installed copies keep their macOS
+      # privacy grants (the Music folder) across updates. See desktop/scripts/sign.ts.
+      - name: Signing certificate
+        env:
+          P12_BASE64: ${{ secrets.BOOTH_SIGNING_P12_BASE64 }}
+        run: |
+          if [ -z "$P12_BASE64" ]; then echo "::warning::no signing certificate; booth.app will be signed ad hoc"; exit 0; fi
+          echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/booth.p12"
+          echo "BOOTH_SIGNING_P12=$RUNNER_TEMP/booth.p12" >> "$GITHUB_ENV"
       - run: desktop/build.sh
         env:
           BOOTH_VERSION: ${{ github.ref_name }}
+          BOOTH_SIGNING_PASSWORD: ${{ secrets.BOOTH_SIGNING_PASSWORD }}
       - name: Name the installer for people
         run: mv desktop/artifacts/macos-arm64-booth.dmg "desktop/artifacts/booth-${GITHUB_REF_NAME}-apple-silicon.dmg"
       - uses: actions/upload-artifact@v4
