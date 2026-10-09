@@ -25,6 +25,8 @@ export interface ITunesTrack {
   rating?: number;       // 0..100 in iTunes; 100 = 5 stars
   playCount?: number;
   genre?: string;
+  /** Bandcamp downloads say "Visit https://<artist>.bandcamp.com" here. */
+  comment?: string;
   kind?: string;
   bitRate?: number;
   sampleRate?: number;
@@ -79,6 +81,7 @@ export function parseITunesLibrary(xmlPath: string): ITunesLibrary {
       rating: t['Rating'] as number | undefined,
       playCount: t['Play Count'] as number | undefined,
       genre: t['Genre'] as string | undefined,
+      comment: t['Comments'] as string | undefined,
       kind: t['Kind'] as string | undefined,
       bitRate: t['Bit Rate'] as number | undefined,
       sampleRate: t['Sample Rate'] as number | undefined,

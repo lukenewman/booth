@@ -1,6 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { readTags, type FileTags } from '../../library/tags';
+import { bandcampHostFrom } from '../../genres/bandcampHost';
 import type { SourceRelease, SourceTrack } from '../types';
 import { dedupePath, ingestTargetPath, isAudioFile, pickStable } from './ingest_paths';
 import {
@@ -206,6 +207,7 @@ export async function scanIngestedLibrary(
           [DATE_ADDED_ORIGIN_KEY]: 'witnessed',
           bpm: tags.bpm,
           genre: tags.genre,
+          bandcampHost: bandcampHostFrom(tags.comment),
           rating: tags.rating,
         }),
       });

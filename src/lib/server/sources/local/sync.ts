@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { parseFile as parseAudioFile } from 'music-metadata';
 import { runInboxIngest, scanIngestedLibrary } from './ingest';
+import { bandcampHostFrom } from '../../genres/bandcampHost';
 import { resolvedInboxRoot, resolvedLibraryRoot } from './ingest_env';
 import { env } from '$lib/server/env';
 import { getDb } from '../../db';
@@ -142,6 +143,7 @@ export async function syncITunesLibrary(): Promise<SyncResult> {
         bitRate: t.bitRate,
         sampleRate: t.sampleRate,
         genre: t.genre,
+        bandcampHost: bandcampHostFrom(t.comment),
       }),
     };
   });

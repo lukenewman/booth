@@ -16,6 +16,8 @@ interface DiscogsCollectionItem {
     formats?: { name: string }[];
     thumb?: string;
     cover_image?: string;
+    genres?: string[];
+    styles?: string[];
   };
 }
 
@@ -87,6 +89,9 @@ export async function syncDiscogsCollection(): Promise<SyncResult> {
         coverImage: bi.cover_image ?? null,
         format,
         instanceIds: instancesByRelease.get(releaseId) ?? [],
+        // The collection response already carries both; keeping them costs nothing.
+        genres: bi.genres ?? [],
+        styles: bi.styles ?? [],
       },
     });
   }

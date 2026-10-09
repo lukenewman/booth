@@ -9,6 +9,7 @@
     <dict>
       <key>Track ID</key><integer>12345</integer>
       <key>Name</key><string>Around the World</string>
+      <key>Comments</key><string>Visit https://daftpunk.bandcamp.com</string>
       <key>Artist</key><string>Daft Punk</string>
       <key>Album Artist</key><string>Daft Punk</string>
       <key>Album</key><string>Homework</string>
