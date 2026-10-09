@@ -118,6 +118,31 @@ assert(
   'every ingested track is marked as a download, distinct from a vinyl rip',
 );
 
+// --- Acquisition date is witnessed, and holds still -----------------
+// Date-added is the library's default sort, so a dropped file with no date
+// sorts as though it has no age — and a date recomputed on every scan would
+// leave it permanently "just added".
+for (const t of scanned.tracks) {
+  const f = t.facets as any;
+  assert(typeof f.dateAdded === 'string', `every ingested track carries a date: ${t.title}`);
+  assert(!Number.isNaN(Date.parse(f.dateAdded)), `the date parses: ${f.dateAdded}`);
+  assert(f.dateAddedOrigin === 'witnessed', `marked witnessed, got ${f.dateAddedOrigin}`);
+  // Nothing reported a date for these — that absence is what distinguishes a
+  // witnessed date from one grafted on from the old library.
+  assert(f.dateAddedReported === undefined, 'no reported date is invented');
+}
+const datesFirst = scanned.tracks.map((t) => (t.facets as any).dateAdded);
+// Space the scans out. Back to back they land in the same millisecond, and a
+// date stamped with the clock on every scan then looks identical to one read
+// off the file — which is exactly the bug this assertion exists to catch.
+await new Promise((r) => setTimeout(r, 25));
+const rescanned = await scanIngestedLibrary(library, releaseIdForTags);
+const datesAgain = rescanned.tracks.map((t) => (t.facets as any).dateAdded);
+assert(
+  JSON.stringify(datesFirst) === JSON.stringify(datesAgain),
+  'the date is stable across scans, not re-stamped each sync',
+);
+
 const db = new Database(':memory:');
 runMigrations(db);
 const first = collate(db, 'local', { tracks: scanned.tracks, releases: scanned.releases });

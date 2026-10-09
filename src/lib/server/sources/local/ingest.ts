@@ -3,6 +3,10 @@ import { dirname, join } from 'node:path';
 import { readTags, type FileTags } from '../../library/tags';
 import type { SourceRelease, SourceTrack } from '../types';
 import { dedupePath, ingestTargetPath, isAudioFile, pickStable } from './ingest_paths';
+import {
+  DATE_ADDED_KEY,
+  DATE_ADDED_ORIGIN_KEY,
+} from './date_overlay';
 
 /**
  * The drop folder: files land in the inbox, and ingest moves them into Booth's
@@ -198,6 +202,8 @@ export async function scanIngestedLibrary(
         releaseExternalId,
         facets: pickDefined({
           origin: 'download',
+          [DATE_ADDED_KEY]: acquiredAt(path),
+          [DATE_ADDED_ORIGIN_KEY]: 'witnessed',
           bpm: tags.bpm,
           genre: tags.genre,
           rating: tags.rating,
@@ -207,6 +213,38 @@ export async function scanIngestedLibrary(
   }
 
   return { releases: [...releaseOf.values()], tracks };
+}
+
+/**
+ * When this file arrived — the acquisition date for anything that came through
+ * the drop folder.
+ *
+ * Read from the filesystem rather than stamped at ingest, because the scan
+ * re-derives every facet on every sync: a `Date.now()` here would rewrite the
+ * date each time and the track would be perpetually "just added". Birth time
+ * survives a retag, so it stays put.
+ *
+ * It is also the more honest number. A move within a volume carries the
+ * original's birth time across, so a file keeps the moment it landed on this
+ * machine rather than the moment a six-hourly sync happened to notice it.
+ * Across volumes the copy gets a fresh one, which is the same thing to within
+ * the time it took to copy.
+ *
+ * `dateAddedReported` is deliberately absent: nothing external reported a date
+ * for these, which is what distinguishes a witnessed date from a grafted one.
+ * The tag write (see the file-owned library slices) will later put this in the
+ * file itself, at which point it stops depending on the filesystem at all.
+ */
+function acquiredAt(path: string): string | undefined {
+  try {
+    const st = statSync(path);
+    const birth = st.birthtime.getTime();
+    // Filesystems that don't record a birth time report 0 or the epoch.
+    const when = birth > 0 ? st.birthtime : st.mtime;
+    return when.toISOString();
+  } catch {
+    return undefined;
+  }
 }
 
 function pickDefined<T extends Record<string, unknown>>(o: T): Partial<T> {
