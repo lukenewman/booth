@@ -17,6 +17,7 @@
  *   bun verify scripts/restore-annotations.ts --as-of <iso> --prune --apply
  */
 import { Database } from 'bun:sqlite';
+import { pinStyleColor } from '../src/lib/server/genres/colors';
 import { homedir } from 'os';
 import { join } from 'path';
 import { readEvents, replayEvents, nameKey } from '../src/lib/server/backup/journal';
@@ -144,6 +145,13 @@ const toClearBpm = prune
   : [];
 
 const toVet = [...target.vetted.keys()].filter((id) => !liveVetted.has(id));
+
+// Colour pins: style names, so they need no id matching. Re-pin any that differ.
+const livePins = new Map(
+  (db.prepare(`SELECT style, slot FROM style_color WHERE pinned = 1`).all() as { style: string; slot: number }[])
+    .map((r) => [r.style, r.slot]),
+);
+const toPin = [...target.colors].filter(([style, slot]) => livePins.get(style) !== slot);
 const toUnvet = prune
   ? [...liveVetted].filter((id) => !target.vetted.has(id) && seenReleases.has(id))
   : [];
@@ -153,7 +161,8 @@ console.log(
     `plan: +${toStar.length} stars, -${toUnstar.length} stars, ` +
     `+${toVet.length} vetted, -${toUnvet.length} vetted, ` +
     `~${toNote.length} notes, -${toClearNote.length} notes, ` +
-    `~${toBpm.length} tapped BPMs, -${toClearBpm.length} tapped BPMs` +
+    `~${toBpm.length} tapped BPMs, -${toClearBpm.length} tapped BPMs, ` +
+    `+${toPin.length} colour pins` +
     (unmatched ? `, ${unmatched} unmatched (row gone, no name match)` : '') +
     (prune ? '' : '\n(additive only — pass --prune to also remove annotations the journal dropped)'),
 );
@@ -179,6 +188,7 @@ db.transaction(() => {
   for (const id of toClearNote) setNote.run(null, id);
   for (const [id, value] of toBpm) setBpm.run(value, bpmMeasuredAt.get(id) ?? null, id);
   for (const id of toClearBpm) setBpm.run(null, null, id);
+  for (const [style, slot] of toPin) pinStyleColor(db, style, slot);
 })();
 
 const afterStars = (

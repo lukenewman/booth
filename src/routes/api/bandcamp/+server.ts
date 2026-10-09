@@ -7,6 +7,7 @@ import { BandcampFanNotFound, fetchFanCollection } from '$lib/server/genres/band
 import { bandcampStatus, fetchPendingPages, storePurchases } from '$lib/server/genres/bandcampSync';
 import { bandcampUsername } from '$lib/server/genres/bandcamp_env';
 import { resolveGenres } from '$lib/server/genres/resolve';
+import { assignStyleColors } from '$lib/server/genres/colors';
 
 /** GET → { username, purchases, matched, ambiguous, unmatched, pagesPending }. */
 export const GET: RequestHandler = async () => json(bandcampStatus(getDb(), bandcampUsername()));
@@ -36,6 +37,7 @@ export const POST: RequestHandler = async ({ request }) => {
   const db = getDb();
   storePurchases(db, purchases);
   resolveGenres(db);
-  void fetchPendingPages(db).catch((e) => console.warn('[bandcamp] page fetch failed:', e));
+  assignStyleColors(db);
+  void fetchPendingPages(db, { onResolved: () => assignStyleColors(db) }).catch((e) => console.warn('[bandcamp] page fetch failed:', e));
   return json(bandcampStatus(db, username));
 };

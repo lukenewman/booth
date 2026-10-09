@@ -3,6 +3,7 @@ import { ulid } from 'ulid';
 import { collate, type CollateSummary } from './collate';
 import { relinkMissing, type RelinkSummary } from './relink';
 import { resolveGenres } from '../genres/resolve';
+import { assignStyleColors } from '../genres/colors';
 import { refreshBandcamp, fetchPendingPages, type BandcampSummary } from '../genres/bandcampSync';
 import { bandcampUsername } from '../genres/bandcamp_env';
 import { getSource } from '../sources/registry';
@@ -148,9 +149,10 @@ async function runSyncNow(db: Database, sourceId: string): Promise<SyncRunRow> {
     if (bcUser) summary.bandcamp = await refreshBandcamp(db, bcUser);
 
     summary.genres = resolveGenres(db);
+    assignStyleColors(db);
 
     if (summary.bandcamp && !('error' in summary.bandcamp) && summary.bandcamp.pagesPending) {
-      void fetchPendingPages(db)
+      void fetchPendingPages(db, { onResolved: () => assignStyleColors(db) })
         .then((r) => console.log(`[bandcamp] pages ${JSON.stringify(r)}`))
         .catch((e) => console.warn('[bandcamp] page fetch failed:', e));
     }

@@ -134,6 +134,24 @@ export function recordAnnotation(
   }
 }
 
+/** Colour pins are hand-made; journal them like stars. `id` and `title` are the style name. */
+export function recordStyleColor(style: string, slot: number | null): void {
+  try {
+    appendEvent(journalPath(), {
+      at: new Date().toISOString(),
+      kind: 'style',
+      id: style,
+      action: 'color',
+      value: slot == null ? null : String(slot),
+      artist: '',
+      title: style,
+      album: null,
+    });
+  } catch (e) {
+    console.warn('[backup] journal append failed:', e);
+  }
+}
+
 /**
  * Take a whole-database snapshot if one is due.
  *
