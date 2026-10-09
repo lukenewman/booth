@@ -66,6 +66,11 @@ class ExplorerState {
   entity = $state<EntityKind>('releases');
   /** Listview ordering. Like `entity`, an app-wide lens rather than a per-rail attribute. */
   sort = $state<SortKey>(DEFAULT_SORT);
+  // Unlike the lens, the query belongs to its section: a Discogs search typed
+  // in Add means nothing as a library filter, and the reverse. Each section
+  // keeps the last query it had while you're elsewhere. Not persisted — only
+  // the current section's query is in the URL.
+  private queries = new Map<NavSection, string>();
 
   hydrate(params: URLSearchParams) {
     const parsed = parseNav(params.get('nav'));
@@ -100,9 +105,14 @@ class ExplorerState {
    * Switch rail item. Clears the selected entity (different rail = different
    * list, so the old id rarely makes sense). Crucially does NOT touch
    * `entity` — the tracks/releases lens is app-wide, so it persists across
-   * rail switches.
+   * rail switches. The query is swapped for the new section's own (see
+   * `queries`); moving between items within a section keeps it.
    */
   setNav(nav: NavValue) {
+    if (nav.section !== this.nav.section) {
+      this.queries.set(this.nav.section, this.q);
+      this.q = this.queries.get(nav.section) ?? '';
+    }
     this.nav = nav;
     this.id = null;
     // parseNav's hint covers deep links and reloads; this covers rail clicks.
