@@ -55,7 +55,17 @@ export async function writeTags(
     const tagInput: Record<string, unknown> = { ...write.custom };
     if (write.comment !== undefined) tagInput.comment = write.comment;
     if (write.bpm !== undefined) tagInput.bpm = write.bpm;
-    const tagged = await applyTags(sourcePath, tagInput as Parameters<typeof applyTags>[1]);
+
+    // Copy first, and tag the copy. `applyTags` rewrites the file it is handed
+    // as well as returning the tagged bytes, so handing it `sourcePath` edits
+    // the original — even when the caller asked for a separate destination.
+    // That silently broke the guarantee this whole design rests on: the
+    // migration writes a tagged copy into Booth's tree and must leave the
+    // irreplaceable original untouched, so that a bad write is a copy to throw
+    // away rather than damage. Writing in place still works: source and dest
+    // being equal just means the temp file is renamed back over it.
+    await Bun.write(tmpPath, Bun.file(sourcePath));
+    const tagged = await applyTags(tmpPath, tagInput as Parameters<typeof applyTags>[1]);
 
     let bytes = new Uint8Array(tagged);
     if (write.ratingStars !== undefined) {

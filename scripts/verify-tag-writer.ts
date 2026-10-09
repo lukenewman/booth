@@ -8,7 +8,7 @@
  *
  * Run: bun verify scripts/verify-tag-writer.ts
  */
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeTags, TagWriteError } from '../src/lib/server/library/tag_writer';
@@ -56,9 +56,21 @@ const FACTS = {
 for (const [label, codec, ext] of [['mp3', 'libmp3lame', 'mp3'], ['m4a', 'aac', 'm4a']] as const) {
   const src = await tone(`s.${ext}`, codec);
   const before = await audioFingerprint(src);
+  const srcMtimeBefore = statSync(src).mtimeMs;
   const dest = join(tmp, `d.${ext}`);
 
   const returned = await writeTags(src, FACTS, dest);
+
+  // The guarantee the migration rests on: writing to a destination leaves the
+  // source completely alone, so a bad write is a copy to discard rather than
+  // damage to an irreplaceable original. `applyTags` rewrites whatever path it
+  // is handed, so this used to tag the source as well — invisibly, because
+  // every other assertion here only ever looked at the destination.
+  check(`${label}: source file is not rewritten`, statSync(src).mtimeMs, srcMtimeBefore);
+  const sourceAfter = await readTags(src);
+  check(`${label}: source gains no Booth fields`, Object.keys(sourceAfter.booth).length, 0);
+  check(`${label}: source gains no rating`, sourceAfter.rating, undefined);
+  check(`${label}: source keeps its own comment`, sourceAfter.comment, undefined);
   check(`${label}: audio is untouched`, await audioFingerprint(dest), before);
   check(`${label}: returns the written file's fingerprint`, returned, before);
 
