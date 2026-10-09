@@ -311,6 +311,7 @@ import RecordingPill from './RecordingPill.svelte';
             onArtistSelect={(id) => openPlaylistEntity('artist', id)}
             onAddTrack={isGig ? addToGig : undefined}
             onSaveTags={c.tagPlaylistRelease}
+            onSetCover={c.setReleaseCover}
             stylesFilter={false}
           />
         {:else}
@@ -354,6 +355,7 @@ import RecordingPill from './RecordingPill.svelte';
         onArtistSelect={(id) => explorerState.setEntity(id)}
         onVet={c.vetAndAdvance}
         onSaveTags={c.tagAndAdvance}
+        onSetCover={c.setReleaseCover}
         autoEditTags={explorerState.nav.section === 'library' && explorerState.nav.item === 'untagged'}
         recordDisabled={recordingRelease !== null}
         onRecord={() => {

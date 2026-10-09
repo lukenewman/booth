@@ -890,6 +890,32 @@ export function createExplorerController() {
     if (advancing && listItems.length < 20 && listHasMore) void loadList(false);
   }
   /**
+   * Set (file) or clear (null) a release's hand-picked cover, then show the
+   * result wherever the release is on screen: the detail pane, a playlist's
+   * link pane, and its row/card in the list.
+   */
+  async function setReleaseCover(releaseId: string, file: File | null) {
+    let url: string | null = null;
+    if (file) {
+      const body = new FormData();
+      body.append('file', file);
+      const res = await fetch(`/api/library/releases/${encodeURIComponent(releaseId)}/cover`, { method: 'POST', body });
+      if (!res.ok) { toast.show(res.status === 413 ? 'Image too large (max 10MB)' : 'Couldn’t set the cover'); return; }
+      url = (await res.json()).coverUrl;
+    } else {
+      const res = await fetch(`/api/library/releases/${encodeURIComponent(releaseId)}/cover`, { method: 'DELETE' });
+      if (!res.ok) { toast.show('Couldn’t remove the cover'); return; }
+    }
+    const patch = { thumb_url: url, cover_url: url, cover_override: url };
+    if (detailData?.release?.id === releaseId) detailData = { ...detailData, release: { ...detailData.release, ...patch } };
+    if (plDetail?.kind === 'release' && plDetail.data?.release?.id === releaseId) {
+      plDetail = { kind: 'release', data: { ...plDetail.data, release: { ...plDetail.data.release, ...patch } } };
+    }
+    listItems = listItems.map((it) => (it.id === releaseId ? { ...it, thumbUrl: url, coverUrl: url, thumb_url: url, cover_url: url } : it));
+    if (!file) toast.show('Custom cover removed — the original returns on the next sync');
+  }
+
+  /**
    * Tag a release from the playlist view's detail pane (plDetail), which has
    * no queue to advance — save, then reload that pane.
    */
@@ -996,5 +1022,6 @@ export function createExplorerController() {
     vetAndAdvance,
     tagAndAdvance,
     tagPlaylistRelease,
+    setReleaseCover,
   };
 }

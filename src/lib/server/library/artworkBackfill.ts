@@ -59,7 +59,7 @@ export async function backfillArtwork(
   const candidates = db.prepare(
     `SELECT r.id, l.external_id AS ext FROM release r
        JOIN source_link l ON l.entity_kind = 'release' AND l.entity_id = r.id AND l.source = 'local'
-      WHERE r.thumb_url IS NULL AND l.external_id LIKE 'itunes-album:%'`,
+      WHERE r.thumb_url IS NULL AND r.cover_override IS NULL AND l.external_id LIKE 'itunes-album:%'`,
   ).all() as { id: string; ext: string }[];
   const set = db.prepare(`UPDATE release SET thumb_url = ?, cover_url = ? WHERE id = ? AND thumb_url IS NULL`);
   const bcArt = db.prepare(`SELECT art_id FROM bandcamp_item WHERE release_id = ? AND art_id IS NOT NULL LIMIT 1`);

@@ -19,6 +19,8 @@
 import { Database } from 'bun:sqlite';
 import { pinStyleColor } from '../src/lib/server/genres/colors';
 import { setManualTags } from '../src/lib/server/genres/manual';
+import { setReleaseCover } from '../src/lib/server/library/releaseCover';
+import { existsSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import { readEvents, replayEvents, nameKey } from '../src/lib/server/backup/journal';
@@ -170,6 +172,15 @@ for (const [id, value] of target.tags) {
   if ((liveTags.get(rid) ?? null) !== value) toTags.push([rid, value]);
 }
 
+// Hand-set covers: re-applied by id only, and only when the image file is still
+// in the artwork cache — a URL to a deleted file would just show a broken image.
+const toCovers = [...target.covers].filter(([id, url]) => {
+  const row = db.prepare(`SELECT cover_override FROM release WHERE id = ?`).get(id) as { cover_override: string | null } | undefined;
+  if (!row || row.cover_override === url) return false;
+  if (!url) return true;
+  return existsSync(join(homedir(), '.booth', 'artwork', url.replace('/api/artwork/', '').replace(/\?.*$/, '')));
+});
+
 // Colour pins: style names, so they need no id matching. Re-pin any that differ.
 const livePins = new Map(
   (db.prepare(`SELECT style, slot FROM style_color WHERE pinned = 1`).all() as { style: string; slot: number }[])
@@ -186,7 +197,7 @@ console.log(
     `+${toVet.length} vetted, -${toUnvet.length} vetted, ` +
     `~${toNote.length} notes, -${toClearNote.length} notes, ` +
     `~${toBpm.length} tapped BPMs, -${toClearBpm.length} tapped BPMs, ` +
-    `+${toPin.length} colour pins, ~${toTags.length} tag overrides` +
+    `+${toPin.length} colour pins, ~${toTags.length} tag overrides, ~${toCovers.length} covers` +
     (unmatched ? `, ${unmatched} unmatched (row gone, no name match)` : '') +
     (prune ? '' : '\n(additive only — pass --prune to also remove annotations the journal dropped)'),
 );
@@ -213,6 +224,7 @@ db.transaction(() => {
   for (const [id, value] of toBpm) setBpm.run(value, bpmMeasuredAt.get(id) ?? null, id);
   for (const id of toClearBpm) setBpm.run(null, null, id);
   for (const [style, slot] of toPin) pinStyleColor(db, style, slot);
+  for (const [id, url] of toCovers) setReleaseCover(db, id, url);
   for (const [rid, value] of toTags) setManualTags(db, rid, value ? JSON.parse(value) : null);
 })();
 

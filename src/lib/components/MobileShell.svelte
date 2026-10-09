@@ -197,6 +197,7 @@
           onArtistSelect={(id) => explorerState.setEntity(id)}
           recordDisabled={true}
           onSaveTags={c.tagAndAdvance}
+          onSetCover={c.setReleaseCover}
         />
       {:else if detailKind === 'track' && detailData}
         <TrackDetail

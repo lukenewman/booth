@@ -21,7 +21,7 @@ export interface AnnotationEvent {
   kind: 'track' | 'release' | 'style';
   /** Entity ULID — exact replay onto the same database. For `style` events, the style name. */
   id: string;
-  action: 'star' | 'unstar' | 'vet' | 'unvet' | 'note' | 'bpm' | 'tags' | 'color';
+  action: 'star' | 'unstar' | 'vet' | 'unvet' | 'note' | 'bpm' | 'tags' | 'color' | 'cover';
   /**
    * The resulting value: an ISO8601 timestamp for star/vet, the note text
    * itself for `note`, or the tempo as a decimal string for `bpm`. Null when
@@ -48,6 +48,8 @@ export interface ReplayResult {
   tags: Map<string, string | null>;
   /** style name -> pinned palette slot. */
   colors: Map<string, number>;
+  /** releaseId -> hand-set cover URL, or null when cleared. */
+  covers: Map<string, string | null>;
   /** "artist title" -> starred_at, for matching against a rebuilt database. */
   byName: Map<string, string>;
 }
@@ -71,6 +73,7 @@ export function replayEvents(events: AnnotationEvent[], asOf?: string): ReplayRe
   const byName = new Map<string, string>();
   const tags = new Map<string, string | null>();
   const colors = new Map<string, number>();
+  const covers = new Map<string, string | null>();
 
   for (const e of events) {
     if (asOf && e.at > asOf) continue;
@@ -109,6 +112,9 @@ export function replayEvents(events: AnnotationEvent[], asOf?: string): ReplayRe
         // Nulls are kept: a cleared override must restore as cleared.
         tags.set(e.id, e.value);
         break;
+      case 'cover':
+        covers.set(e.id, e.value);
+        break;
       case 'color': {
         const slot = e.value == null ? NaN : Number(e.value);
         if (Number.isInteger(slot)) colors.set(e.id, slot);
@@ -118,7 +124,7 @@ export function replayEvents(events: AnnotationEvent[], asOf?: string): ReplayRe
     }
   }
 
-  return { stars, vetted, notes, bpms, tags, colors, byName };
+  return { stars, vetted, notes, bpms, tags, colors, covers, byName };
 }
 
 /** Append one event. Creates the directory and file on first write. */

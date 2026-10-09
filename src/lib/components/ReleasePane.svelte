@@ -7,7 +7,7 @@
    * Callers pass only what genuinely differs by context: the actions.
    *
    * A Discogs search hit is not a library release yet, so library-only actions
-   * (vet, tag, record) are dropped for it here rather than at each call site.
+   * (vet, tag, record, cover) are dropped for it here rather than at each call site.
    */
   import type { ComponentProps } from 'svelte';
   import ReleaseDetail from './ReleaseDetail.svelte';
@@ -35,4 +35,5 @@
   onVet={searchHit ? undefined : actions.onVet}
   onSaveTags={searchHit ? undefined : actions.onSaveTags}
   onRecord={searchHit ? undefined : actions.onRecord}
+  onSetCover={searchHit ? undefined : actions.onSetCover}
 />

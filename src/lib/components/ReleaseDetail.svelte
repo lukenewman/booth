@@ -34,6 +34,8 @@
     year: number | null;
     thumb_url?: string | null;
     cover_url?: string | null;
+    /** Set when the cover was chosen by hand. */
+    cover_override?: string | null;
     country?: string | null;
     label?: string | null;
     catno?: string | null;
@@ -61,6 +63,7 @@
     onSaveTags,
     autoEditTags = false,
     stylesFilter = true,
+    onSetCover,
   }: {
     release: Release;
     sources: SourceLink[];
@@ -90,7 +93,12 @@
     autoEditTags?: boolean;
     /** Pill clicks filter the library list. Off where there is no list to filter (a playlist's pane). */
     stylesFilter?: boolean;
+    /** Set (a file) or clear (null) a hand-picked cover. Absent where covers can't be changed. */
+    onSetCover?: (releaseId: string, file: File | null) => void;
   } = $props();
+
+  let coverInput: HTMLInputElement | undefined = $state();
+  let coverDropOver = $state(false);
 
   const ORIGIN_LABEL = { manual: 'set by hand', discogs: 'from discogs', bandcamp: 'from bandcamp', file: 'from file tags' } as const;
   let editingTags = $state(false);
@@ -195,7 +203,30 @@
       ← {release.artist}
     </button>
   {/if}
-  {#if release.cover_url}
+  {#if onSetCover}
+    <!-- Click or drop an image to set the cover by hand; it survives syncs. -->
+    <button
+      class="cover-btn"
+      class:drop-over={coverDropOver}
+      title={release.cover_url ? 'Replace the cover' : 'Add a cover'}
+      onclick={() => coverInput?.click()}
+      ondragover={(e) => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); coverDropOver = true; } }}
+      ondragleave={() => (coverDropOver = false)}
+      ondrop={(e) => { e.preventDefault(); coverDropOver = false; const f = e.dataTransfer?.files?.[0]; if (f) onSetCover(release.id, f); }}
+    >
+      {#if release.cover_url}
+        <img class="cover" src={release.cover_url} alt="{release.title} cover" loading="lazy">
+      {:else}
+        <div class="cover empty-cover"><span>Add a cover</span></div>
+      {/if}
+      <span class="cover-edit">{release.cover_url ? 'Change cover' : ''}</span>
+    </button>
+    <input class="cover-file" type="file" accept="image/png,image/jpeg,image/webp" bind:this={coverInput}
+      onchange={(e) => { const f = e.currentTarget.files?.[0]; if (f) onSetCover(release.id, f); e.currentTarget.value = ''; }} />
+    {#if release.cover_override}
+      <button class="cover-reset" onclick={() => onSetCover(release.id, null)}>Remove custom cover</button>
+    {/if}
+  {:else if release.cover_url}
     <img class="cover" src={release.cover_url} alt="{release.title} cover" loading="lazy">
   {:else}
     <div class="cover"></div>
@@ -498,6 +529,30 @@
     display: block;
   }
   .breadcrumb:hover { color: var(--text); }
+  .cover-btn {
+    position: relative; display: block; width: 100%; padding: 0; border: 0;
+    background: none; cursor: pointer; text-align: left;
+  }
+  .cover-btn.drop-over .cover { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .cover-edit {
+    position: absolute; right: 8px; bottom: 8px; padding: 2px 8px; border-radius: 4px;
+    background: rgb(0 0 0 / 0.6); color: var(--text); font-size: 11px; opacity: 0; transition: opacity 0.15s;
+  }
+  .cover-edit:empty { display: none; }
+  .cover-btn:hover .cover-edit { opacity: 1; }
+  .empty-cover { display: flex; align-items: center; justify-content: center; color: var(--text-subtle); font-size: 12px; }
+  .cover-btn:hover .empty-cover { color: var(--text); border-color: var(--text-subtle); }
+  .cover-file { display: none; }
+  /* The cover's own bottom margin would sit inside the button and cover the
+     link below it, so the spacing moves outside. */
+  .cover-btn .cover { margin-bottom: 0; }
+  .cover-btn { margin-bottom: 14px; }
+  .cover-btn:has(+ .cover-file + .cover-reset) { margin-bottom: 6px; }
+  .cover-reset {
+    display: block; margin: 0 0 12px; padding: 0; border: 0; background: none;
+    color: var(--text-subtle); font: inherit; font-size: 11px; text-decoration: underline; cursor: pointer;
+  }
+  .cover-reset:hover { color: var(--text); }
   .cover {
     width: 100%;
     aspect-ratio: 1;

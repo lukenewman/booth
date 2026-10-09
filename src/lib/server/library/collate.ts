@@ -293,8 +293,9 @@ function upsertRelease(
     db.prepare(
       `UPDATE release
          SET title=?, artist_id=?, year=?, country=?, label=?, catno=?,
-             thumb_url=COALESCE(?, thumb_url),
-             cover_url=COALESCE(?, cover_url),
+             -- A hand-set cover (cover_override) outranks any source's.
+             thumb_url=CASE WHEN cover_override IS NOT NULL THEN thumb_url ELSE COALESCE(?, thumb_url) END,
+             cover_url=CASE WHEN cover_override IS NOT NULL THEN cover_url ELSE COALESCE(?, cover_url) END,
              updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
        WHERE id=?`,
     ).run(r.title, artistId, r.year ?? null, r.country ?? null, r.label ?? null, r.catno ?? null, r.thumbUrl ?? null, r.coverUrl ?? null, entityId);
