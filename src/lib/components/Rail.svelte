@@ -89,6 +89,9 @@
 
   // New gig: a name and a set length. An empty length means the default three
   // hours; a length that doesn't parse keeps the form open rather than guess.
+  const plainPlaylists = $derived(playlists.filter((p) => !p.isGig));
+  const gigs = $derived(playlists.filter((p) => p.isGig));
+
   const DEFAULT_GIG_MINUTES = 180;
   let creatingGig = $state(false);
   let gigName = $state('');
@@ -115,6 +118,22 @@
     else if (e.key === 'Escape') cancelGig();
   }
 </script>
+
+{#snippet playlistItem(p: (typeof playlists)[number])}
+  <button
+    class="item"
+    class:active={isActive('playlist', p.id)}
+    class:drop-target={dropTargetId === p.id}
+    onclick={() => onSelect?.({ section: 'playlist', item: p.id })}
+    ondragover={(e) => { e.preventDefault(); dropTargetId = p.id; }}
+    ondragleave={() => { if (dropTargetId === p.id) dropTargetId = null; }}
+    ondrop={(e) => onPlaylistDrop(e, p.id)}
+  >
+    <PlaylistCover coverUrl={p.coverUrl} mosaic={p.mosaic} size={22} />
+    <span class="pname">{p.name}</span>
+    <span class="count">{p.trackCount.toLocaleString()}</span>
+  </button>
+{/snippet}
 
 <aside class="rail">
   <div class="section">
@@ -149,21 +168,8 @@
 
   <div class="section">
     <div class="label">Playlists</div>
-    {#each playlists as p (p.id)}
-      <button
-        class="item"
-        class:active={isActive('playlist', p.id)}
-        class:drop-target={dropTargetId === p.id}
-        onclick={() => onSelect?.({ section: 'playlist', item: p.id })}
-        ondragover={(e) => { e.preventDefault(); dropTargetId = p.id; }}
-        ondragleave={() => { if (dropTargetId === p.id) dropTargetId = null; }}
-        ondrop={(e) => onPlaylistDrop(e, p.id)}
-      >
-        <PlaylistCover coverUrl={p.coverUrl} mosaic={p.mosaic} size={22} />
-        <span class="pname">{p.name}</span>
-        {#if p.isGig}<span class="gig-tag">gig</span>{/if}
-        <span class="count">{p.trackCount.toLocaleString()}</span>
-      </button>
+    {#each plainPlaylists as p (p.id)}
+      {@render playlistItem(p)}
     {/each}
     {#if creating}
       <!-- svelte-ignore a11y_autofocus -->
@@ -181,6 +187,15 @@
     {:else}
       <button class="new-btn" onclick={() => (creating = true)}>＋ New playlist</button>
     {/if}
+  </div>
+
+  <!-- Gigs get their own section. Gig-ness is derived (a crate, a second
+       section or a set length), so a playlist that gains one moves here. -->
+  <div class="section">
+    <div class="label">Gigs</div>
+    {#each gigs as p (p.id)}
+      {@render playlistItem(p)}
+    {/each}
     {#if creatingGig}
       <!-- Blur only submits when focus leaves the whole form, so tabbing from
            name to length doesn't create a half-filled gig. -->
@@ -295,7 +310,6 @@
   }
   .item.drop-target .pname { color: var(--accent); }
   .pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .gig-tag { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-subtle); border: 1px solid var(--border-strong); border-radius: 3px; padding: 0 3px; }
   .new-playlist[aria-invalid='true'] { border-color: var(--danger); }
   .new-btn {
     background: transparent;

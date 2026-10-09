@@ -252,15 +252,21 @@
       {:else if playlists.items.length === 0}
         <EmptyState title="No playlists" detail="Create one from the desktop app." />
       {:else}
-        <div class="pl-list">
-          {#each playlists.items as p (p.id)}
-            <button class="pl-row" onclick={() => explorerState.setNav({ section: 'playlist', item: p.id })}>
-              <PlaylistCover coverUrl={p.coverUrl} mosaic={p.mosaic} size={44} />
-              <span class="pl-name">{p.name}</span>
-              <span class="pl-count">{p.trackCount}</span>
-            </button>
-          {/each}
-        </div>
+        <!-- Same split as the desktop rail: gigs get their own group. -->
+        {#each [{ label: 'Gigs', items: playlists.items.filter((p) => p.isGig) }, { label: 'Playlists', items: playlists.items.filter((p) => !p.isGig) }] as group (group.label)}
+          {#if group.items.length}
+            <div class="pl-group">{group.label}</div>
+            <div class="pl-list">
+              {#each group.items as p (p.id)}
+                <button class="pl-row" onclick={() => explorerState.setNav({ section: 'playlist', item: p.id })}>
+                  <PlaylistCover coverUrl={p.coverUrl} mosaic={p.mosaic} size={44} />
+                  <span class="pl-name">{p.name}</span>
+                  <span class="pl-count">{p.trackCount}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        {/each}
       {/if}
     {:else if currentEntity === 'releases' || isAddView}
       {#if isAddView && drilledMaster}
@@ -372,6 +378,7 @@
   .mbody { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .sheet { max-height: 45vh; overflow-y: auto; border-bottom: 1px solid var(--border); flex: none; }
   .pl-list { display: flex; flex-direction: column; }
+  .pl-group { padding: 14px 16px 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-subtle); }
   .pl-row {
     display: flex; align-items: center; gap: 12px;
     padding: 8px 12px; min-height: 60px;
