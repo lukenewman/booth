@@ -65,12 +65,27 @@ export interface SyncRunRow {
   error: string | null;
 }
 
+const inFlight = new Map<string, Promise<SyncRunRow>>();
+
 /**
  * Run one source's sync end-to-end (adapter.sync → collate) and log the
  * outcome to sync_run. Returns the run row. NotImplementedError is rethrown
  * so the caller can map it to HTTP 501.
+ *
+ * One run per source at a time: a call while that source is syncing joins
+ * the run in progress. The boot sync, the scheduler and the sync button each
+ * start runs independently, and connecting the Music library set off two at
+ * once (the setup screen's import, plus the boot sync the path newly allowed).
  */
-export async function runSync(db: Database, sourceId: string): Promise<SyncRunRow> {
+export function runSync(db: Database, sourceId: string): Promise<SyncRunRow> {
+  const running = inFlight.get(sourceId);
+  if (running) return running;
+  const run = runSyncNow(db, sourceId).finally(() => inFlight.delete(sourceId));
+  inFlight.set(sourceId, run);
+  return run;
+}
+
+async function runSyncNow(db: Database, sourceId: string): Promise<SyncRunRow> {
   const source = getSource(sourceId);
   if (!source) throw new Error(`unknown source: ${sourceId}`);
 
