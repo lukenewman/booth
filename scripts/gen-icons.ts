@@ -72,7 +72,7 @@ function encodePng(width: number, height: number, rgba: Uint8Array): Uint8Array 
   return out;
 }
 
-/** A record on the app's ground: fine grooves out to the edge, accent label, spindle hole. */
+/** A record on the app's ground: fine grooves out to the corners, accent label, spindle hole. */
 function drawIcon(size: number, scale = 1): Uint8Array {
   const px = new Uint8Array(size * size * 4);
   const c = size / 2;
@@ -80,9 +80,11 @@ function drawIcon(size: number, scale = 1): Uint8Array {
   const ring = [0xe6, 0xe3, 0xdc];
   const label = [0xa5, 0x8c, 0xf0];
 
-  const rOuter = size * scale * 0.47;
-  const rLabel = size * scale * 0.155;
-  const rHole = size * scale * 0.035;
+  // Out past the tile's corners (√½ of its width), so the grooves cover the
+  // whole tile and the mask clips them rather than leaving bare corners.
+  const rOuter = size * scale * 0.71;
+  const rLabel = size * scale * 0.21;
+  const rHole = size * scale * 0.042;
 
   // Evenly spaced grooves from just outside the label to the rim. Small sizes
   // get fewer so each groove keeps ~3px of ground either side instead of
@@ -90,7 +92,7 @@ function drawIcon(size: number, scale = 1): Uint8Array {
   const grooveW = Math.max(1, size * scale * 0.007);
   const firstGroove = rLabel + size * scale * 0.045;
   const span = rOuter - firstGroove;
-  const grooves = Math.max(2, Math.min(9, Math.floor(span / (grooveW + 3)) + 1));
+  const grooves = Math.max(2, Math.min(16, Math.floor(span / (grooveW + 3)) + 1));
   const grooveRadii = Array.from({ length: grooves }, (_, k) => firstGroove + (span * k) / (grooves - 1));
   const grooveAlpha = 0.6;
 
