@@ -70,6 +70,11 @@ export function installKeyboard(actions: KeyboardActions, guards: KeyboardGuards
       return;
     }
 
+    // Every other shortcut is a bare key. With ⌘/Ctrl/⌥ held the key belongs
+    // to the browser or the OS: ⌘C used to be taken as "add to crate", so text
+    // could never be copied (and ⌘S / ⌘V would star or vet).
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
     // Tab toggles the tracks/releases lens app-wide. Skip when:
     //   - any modifier is held (Shift+Tab = reverse focus traversal, etc.)
     //   - focus is inside an input/textarea (preserve standard tabbing
