@@ -234,7 +234,6 @@
         {#if open.tracks.length > 0}<span class="sep">·</span>{formatTotal(totalMs, partialDuration)}{/if}
       </span>
       <div class="header-actions">
-        <button class="link" title="Split this playlist into sections — turns it into a gig" onclick={() => open && playlists.addSection(open.id, 'New section')}>＋ Section</button>
         {#if open.coverUrl}
           <button class="link" onclick={() => open && playlists.removeCover(open.id)}>Remove custom cover</button>
         {/if}
