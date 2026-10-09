@@ -10,6 +10,9 @@ const playableSources = new Set(
 );
 
 import { countStarredByRelease } from './annotations';
+import { genreWhere, stylesByRelease } from '../genres/filter';
+import type { GenreFilter } from '$lib/genreFilter';
+import type { GenreOrigin } from '../genres/resolve';
 import { resolveBpm, resolveBpmForTracks, tappedBpmFacets, type ResolvedBpm } from './bpm';
 
 export function getMembershipExternalIds(
@@ -112,12 +115,13 @@ interface ListReleasesArgs {
   sort?: SortKey;
   vetted?: boolean;
   hasStarred?: boolean;
+  genre?: GenreFilter;
 }
 
 export function listReleases(
   db: Database,
   args: ListReleasesArgs,
-): PagedResult<ReleaseRow & { sources: string[]; starredCount: number }> {
+): PagedResult<ReleaseRow & { sources: string[]; starredCount: number; styles: string[] }> {
   const where: string[] = [];
   const params: string[] = [];
 
@@ -156,6 +160,9 @@ export function listReleases(
     where.push(`(release.title LIKE ? OR artist.name LIKE ?)`);
     params.push(`%${args.q}%`, `%${args.q}%`);
   }
+  const g = genreWhere('release.id', args.genre);
+  where.push(...g.where);
+  params.push(...g.params);
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
@@ -226,12 +233,14 @@ export function listReleases(
   // than a correlated subquery per row, and it leaves the ORDER BY … LIMIT
   // query untouched.
   const starCounts = countStarredByRelease(db, ids);
+  const styleMap = stylesByRelease(db, ids);
 
   return {
     items: rows.map((r) => ({
       ...r,
       sources: sourceMap.get(r.id) ?? [],
       starredCount: starCounts.get(r.id) ?? 0,
+      styles: styleMap.get(r.id) ?? [],
     })),
     total: totalRow.n,
     hasMore: args.offset + rows.length < totalRow.n,
@@ -244,6 +253,7 @@ export interface TrackFilterArgs {
   multiSource?: boolean;
   sort?: SortKey;
   starred?: boolean;
+  genre?: GenreFilter;
 }
 
 /**
@@ -283,6 +293,9 @@ function buildTrackQuery(args: TrackFilterArgs): {
     where.push(`(track.title LIKE ? OR artist.name LIKE ? OR track.album LIKE ?)`);
     params.push(`%${args.q}%`, `%${args.q}%`, `%${args.q}%`);
   }
+  const g = genreWhere('track.release_id', args.genre);
+  where.push(...g.where);
+  params.push(...g.params);
 
   const sort = args.sort ?? DEFAULT_SORT;
   const addedJoin =
@@ -312,7 +325,7 @@ interface ListTracksArgs extends TrackFilterArgs {
 export function listTracks(
   db: Database,
   args: ListTracksArgs,
-): PagedResult<TrackRow & { sources: string[]; canPlay: boolean }> {
+): PagedResult<TrackRow & { sources: string[]; canPlay: boolean; styles: string[] }> {
   const { whereSql, params, addedJoin, orderSql } = buildTrackQuery(args);
 
   const totalRow = db
@@ -357,6 +370,7 @@ export function listTracks(
   }
 
   const bpmMap = resolveBpmForTracks(db, ids);
+  const styleMap = stylesByRelease(db, rows.map((r) => r.release_id).filter((x): x is string => !!x));
 
   return {
     items: rows.map((r) => {
@@ -366,6 +380,7 @@ export function listTracks(
         sources,
         canPlay: sources.some((s) => playableSources.has(s)),
         bpm: bpmMap.get(r.id) ?? null,
+        styles: r.release_id ? styleMap.get(r.release_id) ?? [] : [],
       };
     }),
     total: totalRow.n,
@@ -381,6 +396,9 @@ export function getReleaseDetail(
   sources: SourceLinkRow[];
   facets: SourceFacetRow[];
   tracks: Array<TrackRow & { sources: string[]; canPlay: boolean }>;
+  genres: string[];
+  styles: string[];
+  genreOrigin: GenreOrigin | null;
 } | null {
   const release = db
     .prepare(
@@ -440,10 +458,17 @@ export function getReleaseDetail(
 
   const trackBpm = resolveBpmForTracks(db, trackIds);
 
+  const genreRows = db
+    .prepare(`SELECT kind, name, origin FROM release_genre WHERE release_id = ? ORDER BY kind, position`)
+    .all(id) as { kind: 'genre' | 'style'; name: string; origin: GenreOrigin }[];
+
   return {
     release,
     sources,
     facets,
+    genres: genreRows.filter((r) => r.kind === 'genre').map((r) => r.name),
+    styles: genreRows.filter((r) => r.kind === 'style').map((r) => r.name),
+    genreOrigin: genreRows[0]?.origin ?? null,
     tracks: tracks.map((t) => {
       const sources = trackSourceMap.get(t.id) ?? [];
       return {

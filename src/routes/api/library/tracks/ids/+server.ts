@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { listTrackIds, parseSort } from '$lib/server/library/queries';
+import { parseGenreFilter } from '$lib/genreFilter';
 
 /**
  * Tri-state: absent means "no filter", so it must not collapse to a boolean —
@@ -18,5 +19,8 @@ export const GET: RequestHandler = async ({ url }) => {
   const sort = parseSort(url.searchParams.get('sort'));
   const starred = triState(url.searchParams.get('starred'));
 
-  return json({ ids: listTrackIds(getDb(), { source, q, multiSource, sort, starred }) });
+  // "Play all" from a filtered view must queue the filtered set.
+  const genre = parseGenreFilter(url.searchParams);
+
+  return json({ ids: listTrackIds(getDb(), { source, q, multiSource, sort, starred, genre }) });
 };

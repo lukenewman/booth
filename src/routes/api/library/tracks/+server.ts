@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { listTracks, parseSort } from '$lib/server/library/queries';
+import { parseGenreFilter } from '$lib/genreFilter';
 
 /**
  * Tri-state: absent means "no filter", so it must not collapse to a boolean —
@@ -27,6 +28,8 @@ export const GET: RequestHandler = async ({ url }) => {
   const sort = parseSort(url.searchParams.get('sort'));
   const starred = triState(url.searchParams.get('starred'));
 
-  const result = listTracks(getDb(), { source, q, limit, offset, multiSource, sort, starred });
+  const genre = parseGenreFilter(url.searchParams);
+
+  const result = listTracks(getDb(), { source, q, limit, offset, multiSource, sort, starred, genre });
   return json(result);
 };
