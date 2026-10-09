@@ -20,6 +20,9 @@
   import RecordSession from './RecordSession.svelte';
   import RunoutFilter from './RunoutFilter.svelte';
 import RecordingPill from './RecordingPill.svelte';
+  import MusicLibraryBanner from './MusicLibraryBanner.svelte';
+  import { musicLibrary } from '$lib/stores/musicLibrary.svelte';
+  import { onMount } from 'svelte';
   import { explorerState } from '$lib/stores/explorerState.svelte';
   import { playlists } from '$lib/stores/playlists.svelte';
   import { toast } from '$lib/stores/toast.svelte';
@@ -90,6 +93,15 @@ import RecordingPill from './RecordingPill.svelte';
   // While a session is open it can be minimized to a floating pill so the user
   // can keep browsing; the recorder store keeps capturing regardless.
   let recordingMinimized = $state(false);
+
+  onMount(() => void musicLibrary.load());
+  // Where the Music library offer appears: once in the library (it can be
+  // dismissed), and for good under Sources → Local, which it fills.
+  const musicOffer = $derived(
+    explorerState.nav.section === 'library' ? 'nudge'
+    : explorerState.nav.section === 'sources' && explorerState.nav.item === 'local' ? 'local'
+    : null,
+  );
 </script>
 
 <Player />
@@ -181,6 +193,12 @@ import RecordingPill from './RecordingPill.svelte';
         ← {drilledMaster.versionCount} versions of “{drilledMaster.title}”
       </button>
       <RunoutFilter bind:value={c.runoutQuery} status={runoutStatus} />
+    {/if}
+
+    {#if musicOffer}
+      {#key musicOffer}
+        <MusicLibraryBanner dismissible={musicOffer === 'nudge'} onConnected={c.reloadAfterSync} />
+      {/key}
     {/if}
 
     {#if isSourcesView && selectedSource?.isStub}

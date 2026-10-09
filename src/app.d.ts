@@ -21,6 +21,8 @@ declare global {
 				restartToUpdate(): void;
 				/** Do what a native title bar does on double-click (System Settings decides). */
 				titlebarDoubleClick(): void;
+				/** The native Open dialog, starting in the Music folder; null if cancelled. */
+				chooseMusicLibrary(): Promise<string | null>;
 		  }
 		| undefined;
 }

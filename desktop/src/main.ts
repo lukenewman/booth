@@ -77,6 +77,15 @@ let pendingUpdate: { version: string } | null = null;
 		else if (win.isMaximized()) win.unmaximize();
 		else win.maximize();
 	},
+	chooseMusicLibrary: async () => {
+		const [path] = await Utils.openFileDialog({
+			startingFolder: join(homedir(), "Music"),
+			allowedFileTypes: "xml",
+			canChooseDirectory: false,
+			allowsMultipleSelection: false,
+		});
+		return path || null;
+	},
 };
 
 await import(join(boothDir, "build", "index.js"));

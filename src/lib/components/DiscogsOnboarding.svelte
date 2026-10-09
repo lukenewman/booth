@@ -3,7 +3,11 @@
    * First-run screen for connecting Discogs: how to make a personal access
    * token, then a field to paste it. The server checks the token with Discogs
    * and saves it to the settings file, so booth carries on without a restart.
+   * Once connected, an optional last step brings in the Apple Music library.
    */
+  import MusicLibraryConnect from './MusicLibraryConnect.svelte';
+  import { musicLibrary } from '$lib/stores/musicLibrary.svelte';
+
   let {
     reason,
     onDone,
@@ -26,6 +30,16 @@
   let input: HTMLInputElement | undefined = $state();
 
   const connected = $derived(phase.kind === 'connected');
+  // Offered only to someone whose Music library isn't connected already (a
+  // replaced Discogs token brings people back here too). Decided when Discogs
+  // connects, not derived: connecting Music flips the store mid-import, and
+  // the step must stay to show how the import went.
+  let offerMusic = $state(false);
+  let musicDone = $state(false);
+
+  $effect(() => {
+    void musicLibrary.load();
+  });
 
   const ERRORS: Record<string, string> = {
     malformed: 'That doesn’t look like a Discogs token. It’s a long run of letters and numbers, with no spaces.',
@@ -50,6 +64,7 @@
         input?.select();
         return;
       }
+      offerMusic = musicLibrary.connected === false;
       phase = { kind: 'connected', username: data.username, savedTo: data.savedTo };
       // Pull the collection in while the person reads the confirmation.
       void fetch('/api/sources/discogs/sync', { method: 'POST' }).catch(() => {});
@@ -157,7 +172,9 @@
             <div class="success" role="status">
               <p>Connected as <strong>{phase.username}</strong>. Your collection is syncing now.</p>
               <p class="saved">Saved to {phase.savedTo}</p>
-              <button class="button primary" onclick={onDone}>Open your library</button>
+              {#if !offerMusic}
+                <button class="button primary" onclick={onDone}>Open your library</button>
+              {/if}
             </div>
           {:else}
             <form onsubmit={(e) => { e.preventDefault(); void connect(); }}>
@@ -188,7 +205,29 @@
           {/if}
         </div>
       </li>
+
+      {#if offerMusic}
+        <li class:done={musicDone} class:current={!musicDone}>
+          <span class="marker">{musicDone ? '✓' : '4'}</span>
+          <div class="body">
+            <h2>Bring in your Apple Music library <span class="optional">optional</span></h2>
+            <MusicLibraryConnect onConnected={() => (musicDone = true)} />
+          </div>
+        </li>
+      {/if}
     </ol>
+
+    {#if offerMusic}
+      <div class="finish">
+        <!-- Skipping here counts as having seen the offer: no library nudge later. -->
+        <button
+          class="button {musicDone ? 'primary' : 'secondary'}"
+          onclick={() => { if (!musicDone) void musicLibrary.dismissNudge(); onDone(); }}
+        >
+          {musicDone ? 'Open your library' : 'Skip for now'}
+        </button>
+      </div>
+    {/if}
   </section>
 </main>
 
@@ -291,6 +330,8 @@
   li.done .marker { background: var(--accent); border-color: var(--accent); color: var(--bg-sunken); }
 
   h2 { font-size: 15px; font-weight: 600; margin: 4px 0 4px; }
+  .optional { font-size: 12px; font-weight: 400; color: var(--text-subtle); margin-left: 6px; }
+  .finish { padding-left: 42px; }
   .body p { margin: 0 0 10px; line-height: 1.5; color: var(--text-muted); }
   .body em { font-style: normal; color: var(--text); }
 

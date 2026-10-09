@@ -55,6 +55,12 @@ ITUNES_XML_PATH=
 
 **Discogs onboarding.** With no token, or one Discogs rejects, the page shows `DiscogsOnboarding` instead of the shells (probe: `GET /api/setup/discogs`). Pasting a token `POST`s it there: the server checks it against `/oauth/identity`, writes `DISCOGS_TOKEN=` into `BOOTH_SETTINGS_PATH` (desktop app and Intel zip) or the repo `.env` (`bun dev`), and applies it in-process through `setEnv`, so no restart. `setEnv` keeps its own override map because adapter-node copies `process.env` into `$env/dynamic/private` once at startup; a key present-but-empty there (the zip's `--env-file` loads `DISCOGS_TOKEN=`) would otherwise shadow the new value. Tokens are restricted to letters and digits so nothing can inject a line into the settings file.
 
+**Apple Music onboarding.** `MusicLibraryConnect` saves `ITUNES_XML_PATH` the same way (`POST /api/setup/music`, then `setEnv`) and then runs the first `local` sync itself so it can show the result. It appears in three places: as an optional fourth step once Discogs connects, as a dismissible one-time banner in Library (for people set up before the step existed; dismissing writes `BOOTH_MUSIC_NUDGE_DISMISSED=1`, and so does skipping the onboarding step), and as a standing banner under Sources → Local. Choices with non-obvious reasons:
+  - **Nothing reads the library file until a click.** The Music folder is privacy-protected on macOS, so the first read raises a permission prompt; reading it on page load would raise that prompt with no context. `GET /api/setup/music` only reports the saved setting. A blocked read surfaces as `EPERM` and is reported as `no_permission`, with the System Settings path to fix it.
+  - **Only the shared-export locations are auto-detected** (`~/Music/Music/Library.xml`, then iTunes' `~/Music/iTunes/iTunes Library.xml`), never `~/Music/Library.xml`, which is only ever a frozen manual export.
+  - **The file picker is native, through the desktop bridge** (`chooseMusicLibrary`): a web page can't learn a chosen file's path. Outside the desktop app the screen takes a typed path instead.
+  - **Both containers decide once whether to show the offer.** Connecting flips the store partway through the import; deriving visibility from it unmounted the panel mid-import and lost the result.
+
 `ITUNES_XML_PATH` feeds the Apple-Music import path of the **`local`** source; it gates whether the `local` source auto-syncs on boot. Server env is read through `src/lib/server/env.ts` — a small accessor that prefers `$env/dynamic/private` but falls back to `process.env`. This matters because the dev server runs `bunx --bun vite dev` (the `--bun` flag is mandatory for `bun:sqlite`), and **under the Bun runtime SvelteKit's `$env/dynamic/private` comes back empty** (its dev-time injection only runs under Node); Bun instead loads `.env` straight into `process.env`. So `$lib/server/env` is the one place that imports the real `$env`; everything else (`api.ts`, `hooks.server.ts`, `db/index.ts`, the source syncs, `recording/env.ts`) imports `env` from it. Recording modules stay pure: `recording/env.ts` is the only recording module that reads env; it resolves `BOOTH_RECORDINGS_PATH` and passes the root into the pure `recording/*` modules.
 
 ## File map
@@ -430,7 +436,7 @@ docs/
 - Updates use `history.replaceState`; reload restores the full view.
 
 ### Setup screen
-- On mount, `+page.svelte` probes `/api/setup/discogs`. If it says `no_token` or `invalid_token`, it renders the Discogs onboarding screen in place of the Explorer (see Environment).
+- On mount, `+page.svelte` probes `/api/setup/discogs`. If it says `no_token` or `invalid_token`, it renders the Discogs onboarding screen in place of the Explorer (see Environment), which ends with the optional Apple Music step.
 
 ### Rate-limit handling
 - Discogs 429 → toast "Rate limited. Try again in Xs." (uses `Retry-After`). Surfaces for search and add/remove paths.

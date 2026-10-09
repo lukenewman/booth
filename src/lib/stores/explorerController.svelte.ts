@@ -767,6 +767,13 @@ export function createExplorerController() {
     }
   }
 
+  /** After a sync started elsewhere (connecting the Music library) finishes. */
+  async function reloadAfterSync() {
+    await loadSourcesAndCounts();
+    await loadList(true);
+    syncRunsReloadKey++;
+  }
+
   // ----- Scanner popover -----------------------------------------------------
 
   // Grid is the default for releases — cover art is the fastest way to find a
@@ -898,6 +905,7 @@ export function createExplorerController() {
     popDrill,
     handleUndo,
     handleSync,
+    reloadAfterSync,
     vetAndAdvance,
   };
 }
