@@ -37,6 +37,8 @@ function arg(name: string): string | undefined {
 }
 const playlistName = arg('playlist');
 const outRoot = arg('out');
+// Offsets analysis folder names (hex), so a test can share a stick with a rekordbox export.
+const anlzBase = parseInt(arg('anlz-base') ?? '0', 16);
 if (!playlistName || !outRoot) {
 	console.error('usage: bun scripts/spike-cdj-usb.ts --playlist NAME --out DIR');
 	process.exit(1);
@@ -129,7 +131,7 @@ for (const r of rows) {
 	const f = facets(r.id);
 	const id = tracks.length + 1;
 	const usbPath = `/Contents/${fat(r.artist)}/${fat(r.album ?? 'Unknown Album')}/${fat(basename(r.path))}`;
-	const anlzDir = `/PIONEER/USBANLZ/P${(id >> 12).toString(16).toUpperCase().padStart(3, '0')}/${id.toString(16).toUpperCase().padStart(8, '0')}`;
+	const anlzDir = `/PIONEER/USBANLZ/P${(id >> 12).toString(16).toUpperCase().padStart(3, '0')}/${(anlzBase + id).toString(16).toUpperCase().padStart(8, '0')}`;
 
 	// Audio
 	mkdirSync(dirname(join(outRoot, usbPath)), { recursive: true });
