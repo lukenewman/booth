@@ -285,8 +285,6 @@
   }
   .dot.discogs   { background: var(--src-discogs); }
   .dot.local    { background: var(--src-local); }
-  .dot.rekordbox { background: var(--src-rekordbox); }
-  .dot.plex      { background: var(--src-plex); }
   .dot.dim { opacity: 0.35; }
 
   .item.drop-target {

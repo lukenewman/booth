@@ -22,8 +22,3 @@ registerSource(discogsSource);
 
 import { localSource } from './local';
 registerSource(localSource);
-
-import { rekordboxSource } from './rekordbox';
-import { plexSource } from './plex';
-registerSource(rekordboxSource);
-registerSource(plexSource);

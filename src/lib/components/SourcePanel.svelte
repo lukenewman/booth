@@ -83,8 +83,6 @@
   }
   .dot.discogs   { background: var(--src-discogs); }
   .dot.local    { background: var(--src-local); }
-  .dot.rekordbox { background: var(--src-rekordbox); opacity: 0.45; }
-  .dot.plex      { background: var(--src-plex);      opacity: 0.45; }
 
   .body { padding: 8px 11px 10px; font-size: 12px; }
   .row {

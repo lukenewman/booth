@@ -73,7 +73,7 @@
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }
 
-  const ALL_SOURCE_IDS = ['discogs', 'local', 'rekordbox', 'plex'];
+  const ALL_SOURCE_IDS = ['discogs', 'local'];
 
   const sourcesById = $derived(new Map(sources.map((s) => [s.source, s])));
   const metaById = $derived(new Map(sourceMeta.map((m) => [m.id, m])));
@@ -135,10 +135,8 @@
     {@const link = sourcesById.get(sid)}
     {@const meta = metaById.get(sid)}
     {#if meta}
-      <!-- Only sources that actually contribute. Stubs used to render a
-           "not implemented" card each, which meant Rekordbox and Plex took up
-           half the pane to say nothing. Written as a link check rather than a
-           name blocklist, so an implemented source appears on its own. -->
+      <!-- Only sources that actually link this track; an empty card per
+           unlinked source fills the pane to say nothing. -->
       {#if link}
         <SourcePanel
           sourceId={sid}

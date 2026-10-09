@@ -38,7 +38,7 @@
       .map((f) => ({ key: f.key.toLowerCase(), value: f.value, mono: false }));
   }
 
-  const ALL_SOURCE_IDS = ['discogs', 'local', 'rekordbox', 'plex'];
+  const ALL_SOURCE_IDS = ['discogs', 'local'];
   const sourcesById = $derived(new Map(sources.map((s) => [s.source, s])));
   const metaById = $derived(new Map(sourceMeta.map((m) => [m.id, m])));
 </script>
