@@ -49,4 +49,18 @@ db.prepare(`INSERT INTO bandcamp_item (item_id, url, item_type, artist, title, t
             VALUES ('a3', 'u', 'album', 'A', 't', '["lo-fi house"]', 'rBc2', 'matched')`).run();
 resolveGenres(db);
 eq(rows('rBc2'), [{ kind: 'genre', name: 'Electronic', origin: 'bandcamp' }, { kind: 'style', name: 'Lo-Fi House', origin: 'bandcamp' }], 'learned style');
+// Bandcamp's own primary genre is the genre. Tags that name a genre ("hip hop"
+// on an Ilian Tape record means hip-hop-influenced) only count when the
+// primary genre is missing or maps to nothing.
+db.prepare(`INSERT INTO release (id, title, artist_id) VALUES ('rIss', 'ISS010', 'a'), ('rExp', 'x', 'a'), ('rNone2', 'y', 'a')`).run();
+const bc = db.prepare(`INSERT INTO bandcamp_item (item_id, url, item_type, artist, title, primary_genre, tags, release_id, match_state) VALUES (?, 'u', 'album', 'A', 't', ?, ?, ?, 'matched')`);
+bc.run('b1', 'electronic', '["ambient","breakbeat","drum & bass","electronic","hip hop","techno","Munich"]', 'rIss');
+bc.run('b2', 'experimental', '["jazz","spiritual jazz"]', 'rExp');
+bc.run('b3', null, '["hip hop","boom bap"]', 'rNone2');
+resolveGenres(db);
+const genresOf = (id: string) => (db.prepare(`SELECT name FROM release_genre WHERE release_id = ? AND kind = 'genre' ORDER BY position`).all(id) as { name: string }[]).map((r) => r.name);
+eq(genresOf('rIss'), ['Electronic'], 'primary genre wins over genre-named tags');
+eq((db.prepare(`SELECT COUNT(*) AS n FROM release_genre WHERE release_id = 'rIss' AND kind = 'style'`).get() as { n: number }).n, 4, 'tags still give styles');
+eq(genresOf('rExp'), ['Jazz'], 'unmapped primary falls back to tag genres');
+eq(genresOf('rNone2'), ['Hip Hop'], 'missing primary falls back to tag genres');
 console.log('ok verify-genre-resolve');

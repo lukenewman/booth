@@ -890,6 +890,23 @@ export function createExplorerController() {
     if (advancing && listItems.length < 20 && listHasMore) void loadList(false);
   }
   /**
+   * Tag a release from the playlist view's detail pane (plDetail), which has
+   * no queue to advance — save, then reload that pane.
+   */
+  async function tagPlaylistRelease(releaseId: string, tags: { genres: string[]; styles: string[] } | null) {
+    const res = await fetch(`/api/library/releases/${encodeURIComponent(releaseId)}/genres`, {
+      method: tags ? 'PUT' : 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: tags ? JSON.stringify(tags) : undefined,
+    });
+    if (!res.ok) { toast.show('Couldn’t save tags'); return; }
+    void genresStore.load(true);
+    if (plDetail?.kind === 'release' && plDetail.data?.release?.id === releaseId) {
+      plDetail = { kind: 'release', data: { ...plDetail.data, ...(await res.json()) } };
+    }
+  }
+
+  /**
    * Save a release's hand-set genres/styles and, when working the Untagged
    * queue, open the next release — the same shape as `vetAndAdvance`, for the
    * same reasons. Only a save that gives the release a genre takes it out of
@@ -978,5 +995,6 @@ export function createExplorerController() {
     reloadAfterSync,
     vetAndAdvance,
     tagAndAdvance,
+    tagPlaylistRelease,
   };
 }

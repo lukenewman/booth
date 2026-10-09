@@ -80,7 +80,11 @@ export function resolveGenres(db: Database, releaseIds?: string[]): { tagged: nu
       // Experimental style. It counts only through mapBandcampGenre.
       const mapped = mapTerms(bc.flatMap((b) => b.tags), v);
       const primary = bc.map((b) => (b.genre ? mapBandcampGenre(b.genre) : null)).filter((g): g is string => !!g);
-      const genres = inferGenres([...new Set([...mapped.genres, ...primary])], mapped.styles, v);
+      // Bandcamp's own primary genre is the genre. A tag that names a genre is
+      // an influence, not a classification ("hip hop" on an Ilian Tape record),
+      // so tag genres count only when the primary genre is missing or maps to
+      // nothing (experimental, ambient…).
+      const genres = inferGenres(primary.length ? [...new Set(primary)] : mapped.genres, mapped.styles, v);
       if (genres.length || mapped.styles.length) return { genres, styles: mapped.styles, origin: 'bandcamp' };
     }
     const f = fileGenres.get(id);

@@ -312,6 +312,11 @@ import RecordingPill from './RecordingPill.svelte';
             tracks={plDetail.data.tracks ?? []}
             onArtistSelect={(id) => openPlaylistEntity('artist', id)}
             onAddTrack={isGig ? addToGig : undefined}
+            genres={plDetail.data.genres ?? []}
+            styles={plDetail.data.styles ?? []}
+            genreOrigin={plDetail.data.genreOrigin ?? null}
+            onSaveTags={c.tagPlaylistRelease}
+            stylesFilter={false}
           />
         {:else}
           <ArtistDetail

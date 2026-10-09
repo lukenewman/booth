@@ -60,6 +60,7 @@
     genreOrigin = null,
     onSaveTags,
     autoEditTags = false,
+    stylesFilter = true,
   }: {
     release: Release;
     sources: SourceLink[];
@@ -87,6 +88,8 @@
     onSaveTags?: (releaseId: string, tags: { genres: string[]; styles: string[] } | null) => void;
     /** Open the tag editor on arrival (the Untagged queue). */
     autoEditTags?: boolean;
+    /** Pill clicks filter the library list. Off where there is no list to filter (a playlist's pane). */
+    stylesFilter?: boolean;
   } = $props();
 
   const ORIGIN_LABEL = { manual: 'set by hand', discogs: 'from discogs', bandcamp: 'from bandcamp', file: 'from file tags' } as const;
@@ -230,7 +233,7 @@
         </div>
         {#if styles.length && !editingTags}
           <div class="genre-styles">
-            {#each styles as st (st)}<StylePill style={st} onclick={(x) => explorerState.toggleStyle(x)} />{/each}
+            {#each styles as st (st)}<StylePill style={st} onclick={stylesFilter ? (x) => explorerState.toggleStyle(x) : undefined} />{/each}
           </div>
         {/if}
         {#if editingTags}
