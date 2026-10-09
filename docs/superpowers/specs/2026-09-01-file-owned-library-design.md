@@ -112,8 +112,10 @@ Ordered so the premise is proved before anything is written or moved.
 
 ## Open questions
 
+> Captured when this was written (2026-09-01). Struck through as resolved, but `docs/CONTEXT.md` is the source of truth for what is still open.
+
 - **Which tag-writing library.** Booth's current one is read-only. ffmpeg (already a dependency) handles custom fields and tempo correctly, but wrote the comment field to the wrong frame in testing — and the standard frames are exactly the ones rekordbox reads. Resolved in slice 2 by a spike, not by assumption.
-- **Does rekordbox read the standard rating field?** Determines whether stars survive the trip. Confirm before committing stars to it.
+- ~~**Does rekordbox read the standard rating field?**~~ **Resolved in slice 2, re-confirmed 2026-10-09:** yes on MP3 — five stars show in rekordbox 7. No on M4A, because `taglib-wasm` does not write the rating there at all, which is why `BOOTH_STARRED` is the only carrier for those 175 files. Current state lives in `docs/CONTEXT.md`; **this section is a historical record and is not maintained** — do not read it as the open set.
 - **Hashing cost across 50GB.** Shapes whether migration is one pass or batched. Measured in slice 1.
 - **M4A tag writing is fiddlier than MP3.** 175 files, worth a targeted check rather than an assumption.
 
