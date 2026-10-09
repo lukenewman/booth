@@ -2,7 +2,8 @@
  * gen-icons.ts — generate the PWA install icons.
  *
  * Written as a script rather than committing opaque binaries: the icons are
- * derived from `--bg` (#0a0a0a) and can be regenerated if the palette moves.
+ * derived from `--bg`, `--text` and `--accent` in app.css and can be
+ * regenerated if the palette moves.
  * Hand-rolled PNG encoding keeps it dependency-free — Bun supplies the zlib.
  *
  * Run: bun verify scripts/gen-icons.ts
@@ -71,12 +72,13 @@ function encodePng(width: number, height: number, rgba: Uint8Array): Uint8Array 
   return out;
 }
 
-/** A record on a dark ground: outer ring, label ring, spindle hole. */
+/** A record on the app's ground: outer ring, accent label, spindle hole. */
 function drawIcon(size: number, scale = 1): Uint8Array {
   const px = new Uint8Array(size * size * 4);
   const c = size / 2;
-  const bg = [0x0a, 0x0a, 0x0a];
-  const fg = [0xe8, 0xe8, 0xe8];
+  const bg = [0x26, 0x26, 0x24];
+  const ring = [0xe6, 0xe3, 0xdc];
+  const label = [0xa5, 0x8c, 0xf0];
 
   const rOuter = size * scale * 0.40;
   const ringW = size * scale * 0.045;
@@ -89,14 +91,13 @@ function drawIcon(size: number, scale = 1): Uint8Array {
       // Coverage-based antialiasing: how far inside the shape edge this pixel sits.
       const edge = (dist: number, r: number) => Math.max(0, Math.min(1, r - dist + 0.5));
 
-      let a = 0;
-      a = Math.max(a, Math.min(edge(d, rOuter), 1 - edge(d, rOuter - ringW)));
-      a = Math.max(a, Math.min(edge(d, rLabel), 1 - edge(d, rHole)));
+      const aRing = Math.min(edge(d, rOuter), 1 - edge(d, rOuter - ringW));
+      const aLabel = Math.min(edge(d, rLabel), 1 - edge(d, rHole));
 
       const i = (y * size + x) * 4;
-      px[i] = Math.round(bg[0] + (fg[0] - bg[0]) * a);
-      px[i + 1] = Math.round(bg[1] + (fg[1] - bg[1]) * a);
-      px[i + 2] = Math.round(bg[2] + (fg[2] - bg[2]) * a);
+      for (let ch = 0; ch < 3; ch++) {
+        px[i + ch] = Math.round(bg[ch] + (ring[ch] - bg[ch]) * aRing + (label[ch] - bg[ch]) * aLabel);
+      }
       px[i + 3] = 255;
     }
   }
