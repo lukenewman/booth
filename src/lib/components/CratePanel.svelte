@@ -95,7 +95,20 @@
   .crate-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
   .crate-head { display: flex; justify-content: space-between; padding: 14px 14px 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-subtle); }
   .crate-search { position: relative; padding: 0 14px 10px; }
-  .crate-search input { width: 100%; }
+  /* Matches the library search bar, so it reads as part of the dark UI. */
+  .crate-search input {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    padding: 5px 9px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+  }
+  .crate-search input:focus { border-color: var(--accent-border); }
+  .crate-search input::placeholder { color: var(--text-subtle); }
   .results { position: absolute; left: 14px; right: 14px; z-index: 5; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 4px; }
   .result { display: flex; gap: 8px; align-items: center; width: 100%; padding: 6px 8px; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; }
   .result:hover { background: var(--bg-row-hover); }

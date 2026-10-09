@@ -296,7 +296,21 @@
   .sep { margin: 0 6px; }
   .actions { margin-left: auto; font-size: 13px; }
   .meta .link { background: none; border: 0; color: inherit; padding: 0; cursor: pointer; font: inherit; text-decoration: underline dotted; }
-  .target-input { width: 64px; }
+  .target-input, .band-input {
+    background: var(--bg-input);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    padding: 5px 9px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+  }
+  .target-input { width: 64px; padding: 2px 6px; font-size: 12px; }
+  .band-input { padding: 2px 6px; font-size: 14px; font-weight: 600; }
+  .band-input.new { font-weight: 400; font-size: 13px; padding: 5px 9px; }
+  .target-input:focus, .band-input:focus { border-color: var(--accent-border); }
+  .target-input::placeholder, .band-input::placeholder { color: var(--text-subtle); }
   .sketch { overflow-y: auto; flex: 1; padding-bottom: 40px; }
   .band { border-bottom: 1px solid var(--border); }
   .band.drop-over { outline: 1px solid var(--accent); outline-offset: -1px; }
