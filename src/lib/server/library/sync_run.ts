@@ -4,6 +4,10 @@ import { collate, type CollateSummary } from './collate';
 import { relinkMissing, type RelinkSummary } from './relink';
 import { resolveGenres } from '../genres/resolve';
 import { assignStyleColors } from '../genres/colors';
+import { backfillArtwork } from './artworkBackfill';
+import { artworkDeps } from './artworkSources';
+
+let artworkRunning = false;
 import { refreshBandcamp, fetchPendingPages, type BandcampSummary } from '../genres/bandcampSync';
 import { bandcampUsername } from '../genres/bandcamp_env';
 import { getSource } from '../sources/registry';
@@ -150,6 +154,16 @@ async function runSyncNow(db: Database, sourceId: string): Promise<SyncRunRow> {
 
     summary.genres = resolveGenres(db);
     assignStyleColors(db);
+
+    // Covers for releases whose files have none (iTunes Store and Bandcamp
+    // purchases), behind the sync: one lookup per album, cached forever.
+    if (sourceId === 'local' && !artworkRunning) {
+      artworkRunning = true;
+      void backfillArtwork(db, artworkDeps())
+        .then((r) => { if (r.apple || r.bandcamp) console.log(`[artwork] ${JSON.stringify(r)}`); })
+        .catch((e) => console.warn('[artwork] backfill failed:', e))
+        .finally(() => { artworkRunning = false; });
+    }
 
     if (summary.bandcamp && !('error' in summary.bandcamp) && summary.bandcamp.pagesPending) {
       void fetchPendingPages(db, { onResolved: () => assignStyleColors(db) })

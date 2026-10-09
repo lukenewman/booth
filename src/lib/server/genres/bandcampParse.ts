@@ -16,6 +16,8 @@ export interface BandcampPurchase {
   albumTitle: string | null;
   primaryGenre: string | null;
   purchasedAt: string | null;
+  /** Bandcamp's image id for the cover. */
+  artId?: string | null;
 }
 
 export function parseCollectionItem(raw: Record<string, unknown>, genreNames = BANDCAMP_GENRE_IDS): BandcampPurchase {
@@ -34,6 +36,7 @@ export function parseCollectionItem(raw: Record<string, unknown>, genreNames = B
     albumTitle,
     primaryGenre: typeof raw.genre_id === 'number' ? genreNames.get(raw.genre_id) ?? null : null,
     purchasedAt: purchased && !isNaN(purchased.getTime()) ? purchased.toISOString() : null,
+    artId: typeof raw.item_art_id === 'number' || typeof raw.item_art_id === 'string' ? String(raw.item_art_id) : null,
   };
 }
 

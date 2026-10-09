@@ -522,6 +522,15 @@ Goal: write a USB stick Pioneer players read, with no rekordbox in between. `scr
   - **Three facets, not one:** `dateAdded` is the effective date (recovered where available), `dateAddedReported` is always what Music.app said, and `dateAddedOrigin` is `'recovered'`/`'reported'`. Consumers keep reading `dateAdded` and need no changes; the other two make a grafted date distinguishable from a real one, and writing origin unconditionally means a rebuilt overlay self-corrects rather than leaving stale markers.
   - **Music.app cannot be made the source of truth for this.** `date added` is read-only in its scripting interface — the only such property in that area (`played count`, `played date`, `rating`, `comment` are all writable). The XML is export-only and never read back. Booth is the custodian by necessity, not by preference.
 
+### Missing artwork
+- **The local sync only reads art embedded in a file**, and two common sources ship without it. iTunes Store purchases: Music.app shows a cover from its own cache, which no export exposes — but every purchased file carries Apple's album id (`plID` atom), and Apple's public lookup (`itunes.apple.com/lookup?id=`) returns that exact album's artwork, served at any size (`/1000x1000bb.jpg`). Bandcamp purchases: the fan collection list carries the cover's image id (`bandcamp_item.art_id`, migration 015; `_10` = ~1200px).
+- `backfillArtwork` runs behind each local sync for releases with no cover and writes the image under the sync's own cache name (`~/.booth/artwork/itunes-<hash>`), so later syncs find it there and never refetch. A cover set any other way wins (it only fills NULLs; collate's `COALESCE` keeps it).
+- **Exact ids only, no searching.** Measured 2026-10-09: 50 art-less releases → 18. 13 of the rest are purchases Apple has withdrawn under their original album id in every storefront (many were reissued under new ids — a name search finds e.g. both *LOVEBEAT* and its 2021 remaster with a different cover, which is a guess); the others have no source at all.
+- **Drop-folder releases never extract embedded art** (`ingest.ts` builds releases without a thumb). Latent: no dropped release exists yet.
+
+### Compilations
+- Releases group by album artist, falling back to the track artist, so a compilation tagged without an album artist split into one release per track artist (the 2MR 2017 Label Sampler was 15 records). `withCompilationArtist` groups Music.app-flagged compilations under "Various Artists" — **only when the album (title + year) really has several artists**; a one-artist "compilation" keeps its artist. The regroup re-parents tracks (stars, notes and playlist entries live on tracks, so they move with them) and prunes the old per-artist releases.
+
 ### Audio fingerprints (slice 1 of the file-owned library, 2026-09-04)
 
 Measured groundwork for `docs/superpowers/specs/2026-09-01-file-owned-library-design.md`, which moves the library's truth out of this database and into the audio files. Everything here is read-only — no audio file and no DB row was modified to produce it.

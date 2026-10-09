@@ -13,12 +13,13 @@ export type BandcampSummary = (BandcampCounts & { pagesPending: number }) | { er
  */
 export function storePurchases(db: Database, purchases: BandcampPurchase[]): BandcampCounts {
   const up = db.prepare(
-    `INSERT INTO bandcamp_item (item_id, url, item_type, artist, title, album_title, primary_genre, purchased_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO bandcamp_item (item_id, url, item_type, artist, title, album_title, primary_genre, purchased_at, art_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(item_id) DO UPDATE SET url = excluded.url, artist = excluded.artist, title = excluded.title,
        album_title = excluded.album_title,
        primary_genre = COALESCE(bandcamp_item.primary_genre, excluded.primary_genre),
-       purchased_at = excluded.purchased_at`,
+       purchased_at = excluded.purchased_at,
+       art_id = COALESCE(excluded.art_id, bandcamp_item.art_id)`,
   );
   const { releases, tracks } = loadMatchInputs(db);
   const match = buildMatcher(releases, tracks);
@@ -26,7 +27,7 @@ export function storePurchases(db: Database, purchases: BandcampPurchase[]): Ban
   const out: BandcampCounts = { purchases: purchases.length, matched: 0, ambiguous: 0, unmatched: 0 };
   db.transaction(() => {
     for (const p of purchases) {
-      up.run(p.itemId, p.url, p.itemType, p.artist, p.title, p.albumTitle, p.primaryGenre, p.purchasedAt);
+      up.run(p.itemId, p.url, p.itemType, p.artist, p.title, p.albumTitle, p.primaryGenre, p.purchasedAt, p.artId ?? null);
       const r = match(p);
       out[r.state]++;
       set.run(r.state === 'matched' ? r.releaseId : null, r.state, p.itemId);
