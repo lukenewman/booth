@@ -19,7 +19,7 @@ rm -rf "$STAGE" && mkdir -p "$STAGE/app"
 cp -R build "$STAGE/app/build"
 cp package.json bun.lock "$STAGE/app/"
 cp -R src/lib/server/db/migrations "$STAGE/app/migrations"
-cp packaging/settings.env.example "$STAGE/app/"
+cp desktop/settings.env.example "$STAGE/app/"
 (cd "$STAGE/app" && bun install --production --frozen-lockfile --ignore-scripts)
 rm "$STAGE/app/package.json" "$STAGE/app/bun.lock"
 if find "$STAGE/app/node_modules" -name '*.node' | grep -q .; then

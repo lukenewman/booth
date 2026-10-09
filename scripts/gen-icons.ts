@@ -6,6 +6,7 @@
  * Hand-rolled PNG encoding keeps it dependency-free — Bun supplies the zlib.
  *
  * Run: bun verify scripts/gen-icons.ts
+ *      bun scripts/gen-icons.ts --mac <dir>.iconset   (desktop app icon set)
  */
 import { deflateSync } from 'node:zlib';
 
@@ -71,16 +72,16 @@ function encodePng(width: number, height: number, rgba: Uint8Array): Uint8Array 
 }
 
 /** A record on a dark ground: outer ring, label ring, spindle hole. */
-function drawIcon(size: number): Uint8Array {
+function drawIcon(size: number, scale = 1): Uint8Array {
   const px = new Uint8Array(size * size * 4);
   const c = size / 2;
   const bg = [0x0a, 0x0a, 0x0a];
   const fg = [0xe8, 0xe8, 0xe8];
 
-  const rOuter = size * 0.40;
-  const ringW = size * 0.045;
-  const rLabel = size * 0.155;
-  const rHole = size * 0.035;
+  const rOuter = size * scale * 0.40;
+  const ringW = size * scale * 0.045;
+  const rLabel = size * scale * 0.155;
+  const rHole = size * scale * 0.035;
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -102,8 +103,45 @@ function drawIcon(size: number): Uint8Array {
   return px;
 }
 
-for (const size of [192, 512]) {
-  const png = encodePng(size, size, drawIcon(size));
-  await Bun.write(`static/icon-${size}.png`, png);
-  console.log(`✓ static/icon-${size}.png (${png.length} bytes)`);
+/**
+ * The same record on a macOS app tile: transparent canvas, the dark ground
+ * shrunk to Apple's 824/1024 rounded square so it sits in the Dock at the
+ * same visual size as other apps (a full-bleed square looks oversized there).
+ */
+function drawMacIcon(size: number): Uint8Array {
+  const tile = 824 / 1024;
+  const px = drawIcon(size, tile);
+  const c = size / 2;
+  const half = (size * tile) / 2;
+  const radius = (size * 185) / 1024;
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      // Signed distance to the rounded square, for an antialiased edge.
+      const qx = Math.abs(x + 0.5 - c) - (half - radius);
+      const qy = Math.abs(y + 0.5 - c) - (half - radius);
+      const dist = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - radius;
+      px[(y * size + x) * 4 + 3] = Math.round(255 * Math.max(0, Math.min(1, 0.5 - dist)));
+    }
+  }
+  return px;
+}
+
+const macFlag = process.argv.indexOf('--mac');
+if (macFlag !== -1) {
+  const dir = process.argv[macFlag + 1];
+  for (const base of [16, 32, 128, 256, 512]) {
+    for (const scale of [1, 2]) {
+      const size = base * scale;
+      const name = `icon_${base}x${base}${scale === 2 ? '@2x' : ''}.png`;
+      await Bun.write(`${dir}/${name}`, encodePng(size, size, drawMacIcon(size)));
+    }
+  }
+  console.log(`✓ ${dir}`);
+} else {
+  for (const size of [192, 512]) {
+    const png = encodePng(size, size, drawIcon(size));
+    await Bun.write(`static/icon-${size}.png`, png);
+    console.log(`✓ static/icon-${size}.png (${png.length} bytes)`);
+  }
 }

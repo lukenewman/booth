@@ -1,0 +1,7 @@
+{
+	"name": "booth-desktop",
+	"private": true,
+	"devDependencies": {
+		"@types/bun": "1.4.0"
+	}
+}

@@ -1,0 +1,16 @@
+{
+	"extends": "./.hutch/devkit/tsconfig.json",
+	"compilerOptions": {
+		"lib": ["ESNext", "DOM"],
+		"target": "ESNext",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"verbatimModuleSyntax": true,
+		"noEmit": true,
+		"strict": true,
+		"skipLibCheck": true,
+		"ignoreDeprecations": "6.0",
+		"types": ["bun"]
+	},
+	"include": ["src/**/*", "electrobun.config.ts"]
+}

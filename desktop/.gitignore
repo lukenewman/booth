@@ -1,0 +1,7 @@
+.hutch/
+node_modules/
+build/
+artifacts/
+# Staged by build.sh from the repo's production build
+booth/
+icon.iconset/
