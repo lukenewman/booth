@@ -15,6 +15,42 @@ import {
 
 const UNKNOWN_ARTIST_NAME = '(unknown)';
 
+/**
+ * One source record that could not take its link. Two kinds:
+ *  - "id held by another record": this source id is already linked to a
+ *    different entity than the one it resolved to now (`heldBy` names it).
+ *  - "entity already linked": the entity it resolved to already holds a
+ *    different id from this source (`heldBy` is that id) — typically two
+ *    source records competing for one entity, e.g. two album groups that
+ *    differ only by year.
+ */
+export interface ConflictDetail {
+  kind: EntityKind;
+  externalId: string;
+  /** The source record's own name, as the adapter reported it. */
+  name: string;
+  reason: 'id held by another record' | 'entity already linked';
+  /** The entity it resolved to. */
+  entity: string;
+  heldBy: string;
+}
+
+const MAX_CONFLICT_DETAILS = 20;
+
+function entityName(db: Database, kind: EntityKind, id: string): string {
+  const row = (kind === 'artist'
+    ? db.prepare(`SELECT name AS title, NULL AS artist FROM artist WHERE id = ?`)
+    : db.prepare(`SELECT x.title, a.name AS artist FROM ${kind} x JOIN artist a ON a.id = x.artist_id WHERE x.id = ?`)
+  ).get(id) as { title: string; artist: string | null } | null;
+  return row ? (row.artist ? `${row.artist} — ${row.title}` : row.title) : id;
+}
+
+function noteConflict(summary: CollateSummary, d: ConflictDetail): void {
+  summary.conflicts++;
+  const list = (summary.conflictDetails ??= []);
+  if (list.length < MAX_CONFLICT_DETAILS) list.push(d);
+}
+
 export interface CollateSummary {
   rowsIn: number;
   releasesUpserted: number;
@@ -22,6 +58,8 @@ export interface CollateSummary {
   releasesDeleted: number;
   tracksDeleted: number;
   conflicts: number;
+  /** What each conflict was about, first 20 only. Absent when there were none. */
+  conflictDetails?: ConflictDetail[];
   /**
    * Links whose external_id was rewritten in place because an authoritative
    * match proved the source had renumbered the same entity. Distinct from
@@ -301,7 +339,8 @@ function upsertRelease(
     ).run(r.title, artistId, r.year ?? null, r.country ?? null, r.label ?? null, r.catno ?? null, r.thumbUrl ?? null, r.coverUrl ?? null, entityId);
   }
 
-  upsertSourceLink(db, 'release', entityId, sourceId, r.externalId, r.externalUrl, method, summary);
+  upsertSourceLink(db, 'release', entityId, sourceId, r.externalId, r.externalUrl, method, summary,
+    `${r.artist} — ${r.title}${r.year ? ` (${r.year})` : ''}`);
   upsertReleaseMatchKeys(db, entityId, { artist: r.artist, album: r.title, year: r.year });
   upsertFacets(db, 'release', entityId, sourceId, r.facets);
 
@@ -417,7 +456,8 @@ function upsertTrack(
     );
   }
 
-  upsertSourceLink(db, 'track', entityId, sourceId, t.externalId, t.externalUrl, method, summary);
+  upsertSourceLink(db, 'track', entityId, sourceId, t.externalId, t.externalUrl, method, summary,
+    `${t.artist} — ${t.title}`);
   if (fp) upsertMatchKey(db, 'track', entityId, 'file_path', fp);
   // Write release_position key so future cross-source syncs can find this entity.
   if (releaseId && t.position) {
@@ -443,6 +483,8 @@ export function upsertSourceLink(
   externalUrl: string | undefined,
   method: MatchMethod,
   summary: CollateSummary,
+  /** The source record's own name, for the conflict report. */
+  label = externalId,
 ): void {
   // Detect PK conflict: a row already exists for (kind, source, external_id) but
   // it points at a different entity_id than what our match logic just resolved.
@@ -453,7 +495,10 @@ export function upsertSourceLink(
     )
     .get(kind, sourceId, externalId) as { entity_id: string } | undefined;
   if (existing && existing.entity_id !== entityId) {
-    summary.conflicts++;
+    noteConflict(summary, {
+      kind, externalId, name: label, reason: 'id held by another record',
+      entity: entityName(db, kind, entityId), heldBy: entityName(db, kind, existing.entity_id),
+    });
     return; // leave existing alone in Slice 1
   }
 
@@ -479,7 +524,10 @@ export function upsertSourceLink(
     .get(kind, entityId, sourceId) as { external_id: string } | undefined;
   if (existingByEntity && existingByEntity.external_id !== externalId) {
     if (method !== 'file_path') {
-      summary.conflicts++;
+      noteConflict(summary, {
+        kind, externalId, name: label, reason: 'entity already linked',
+        entity: entityName(db, kind, entityId), heldBy: existingByEntity.external_id,
+      });
       return;
     }
     db.prepare(
