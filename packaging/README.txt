@@ -3,8 +3,8 @@ booth
 
 Starting booth
 --------------
-1. Move this Booth folder wherever you like (Applications is fine).
-2. Double-click "Booth.command". A Terminal window opens and booth appears in
+1. Move this booth folder wherever you like (Applications is fine).
+2. Double-click "booth.command". A Terminal window opens and booth appears in
    your browser. Keep that window open while you use booth; closing it
    stops booth.
 
@@ -14,7 +14,7 @@ booth isn't from the App Store, so the first double-click shows a warning
 that it "cannot be opened" or "could not be verified". Click Done, then:
 
   System Settings → Privacy & Security → scroll down → "Open Anyway"
-  next to the message about Booth.command, then confirm.
+  next to the message about booth.command, then confirm.
 
 You only do this once.
 
@@ -23,7 +23,7 @@ Connecting your Discogs account
 On the first run, a settings file opens in TextEdit. Make a token at
 https://www.discogs.com/settings/developers ("Generate new token"), paste it
 after DISCOGS_TOKEN=, save, close the booth window, and double-click
-Booth.command again.
+booth.command again.
 
 The settings file lives at ~/.booth/settings.env. In Finder use
 Go → Go to Folder… and type ~/.booth to find it later.
@@ -31,4 +31,4 @@ Go → Go to Folder… and type ~/.booth to find it later.
 Your data
 ---------
 Everything booth stores (its database, backups, recordings, artwork) lives
-in ~/.booth. Replacing this Booth folder with a newer version keeps it all.
+in ~/.booth. Replacing this booth folder with a newer version keeps it all.

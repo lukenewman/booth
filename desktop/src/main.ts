@@ -124,7 +124,7 @@ ApplicationMenu.setApplicationMenu([
 
 const url = `http://127.0.0.1:${port}/`;
 const win = new BrowserWindow({
-	title: "Booth",
+	title: "booth",
 	url,
 	frame: { width: 1280, height: 820 },
 	// Booth draws its own title bar, which carries the update callout.
@@ -167,7 +167,7 @@ async function checkForUpdate(fromMenu = false): Promise<void> {
 			const check = await Updater.checkForUpdate();
 			if (check.error) throw new Error(check.error);
 			if (!check.updateAvailable) {
-				if (fromMenu) await message(`Booth ${local.version} is the latest version.`);
+				if (fromMenu) await message(`booth ${local.version} is the latest version.`);
 				return;
 			}
 			await Updater.downloadUpdate();
@@ -176,7 +176,7 @@ async function checkForUpdate(fromMenu = false): Promise<void> {
 			pendingUpdate = { version: info.version };
 		}
 		if (fromMenu) {
-			await message(`Booth ${pendingUpdate.version} has downloaded. Use Restart to Update at the top of the window.`);
+			await message(`booth ${pendingUpdate.version} has downloaded. Use Restart to Update at the top of the window.`);
 		}
 	} catch (error) {
 		console.error("[update]", error);
@@ -187,7 +187,7 @@ async function checkForUpdate(fromMenu = false): Promise<void> {
 }
 
 function message(text: string) {
-	return Utils.showMessageBox({ type: "info", title: "Booth", message: text, buttons: ["OK"] });
+	return Utils.showMessageBox({ type: "info", title: "booth", message: text, buttons: ["OK"] });
 }
 
 setTimeout(() => void checkForUpdate(), 10_000);

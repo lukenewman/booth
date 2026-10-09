@@ -1,4 +1,4 @@
-# Push a version tag (git tag v0.1.0 && git push --tags) to build Booth and
+# Push a version tag (git tag v0.1.0 && git push --tags) to build booth and
 # publish it as a GitHub Release. Installed copies update themselves from the
 # newest release, so its asset names must stay as Electrobun writes them.
 name: release
@@ -11,14 +11,14 @@ permissions:
   contents: write
 
 jobs:
-  # Booth.app for Apple Silicon. Electrobun 2 has no Intel Mac build.
+  # booth.app for Apple Silicon. Electrobun 2 has no Intel Mac build.
   app:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
-          # Builds the web app; the runtime inside Booth.app comes from Electrobun.
+          # Builds the web app; the runtime inside booth.app comes from Electrobun.
           bun-version: 1.2.21
       - run: bun install --frozen-lockfile
       - name: Install Hutch (Electrobun's build tool)
@@ -29,7 +29,7 @@ jobs:
         env:
           BOOTH_VERSION: ${{ github.ref_name }}
       - name: Name the installer for people
-        run: mv desktop/artifacts/macos-arm64-Booth.dmg "desktop/artifacts/Booth-${GITHUB_REF_NAME}-apple-silicon.dmg"
+        run: mv desktop/artifacts/macos-arm64-booth.dmg "desktop/artifacts/booth-${GITHUB_REF_NAME}-apple-silicon.dmg"
       - uses: actions/upload-artifact@v4
         with:
           name: app
@@ -47,11 +47,11 @@ jobs:
       - run: packaging/build-mac.sh x64
         env:
           BOOTH_VERSION: ${{ github.ref_name }}
-      - run: mv dist/Booth-*-mac-x64.zip "dist/Booth-${GITHUB_REF_NAME}-intel.zip"
+      - run: mv dist/booth-*-mac-x64.zip "dist/booth-${GITHUB_REF_NAME}-intel.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: intel
-          path: dist/Booth-*-intel.zip
+          path: dist/booth-*-intel.zip
 
   release:
     needs: [app, intel]
@@ -67,9 +67,9 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           cat > notes.md <<'EOF'
-          **Apple Silicon Mac (M1 or newer):** download the `.dmg`, open it, and drag Booth into Applications.
+          **Apple Silicon Mac (M1 or newer):** download the `.dmg`, open it, and drag booth into Applications.
           **Intel Mac:** download the `intel.zip`, unzip it, and read the README inside.
 
-          The first time you open Booth, macOS refuses because it isn't from the App Store. Click **Done**, then go to **System Settings → Privacy & Security**, scroll down, click **Open Anyway** next to the message about Booth, and confirm. You only do this once. Booth keeps itself up to date after that.
+          The first time you open booth, macOS refuses because it isn't from the App Store. Click **Done**, then go to **System Settings → Privacy & Security**, scroll down, click **Open Anyway** next to the message about booth, and confirm. You only do this once. booth keeps itself up to date after that.
           EOF
-          gh release create "$GITHUB_REF_NAME" assets/* --title "Booth $GITHUB_REF_NAME" --notes-file notes.md
+          gh release create "$GITHUB_REF_NAME" assets/* --title "booth $GITHUB_REF_NAME" --notes-file notes.md

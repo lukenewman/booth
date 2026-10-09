@@ -5,7 +5,7 @@ const version = (process.env.BOOTH_VERSION ?? "0.0.0").replace(/^v/, "");
 
 export default {
 	app: {
-		name: "Booth",
+		name: "booth",
 		identifier: "com.lukenewman.booth",
 		version,
 	},
@@ -23,8 +23,8 @@ export default {
 			codesign: false,
 			icons: "icon.iconset",
 			entitlements: {
-				"com.apple.security.device.camera": "Booth uses the camera to scan record barcodes.",
-				"com.apple.security.device.audio-input": "Booth records vinyl from your audio interface.",
+				"com.apple.security.device.camera": "booth uses the camera to scan record barcodes.",
+				"com.apple.security.device.audio-input": "booth records vinyl from your audio interface.",
 			},
 		},
 	},

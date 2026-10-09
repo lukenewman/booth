@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds the downloadable Mac zips: dist/Booth-<version>-mac-<arch>.zip.
+# Builds the downloadable Mac zips: dist/booth-<version>-mac-<arch>.zip.
 # Each one bundles the Bun runtime, so the person running it needs nothing
 # installed. Usage: packaging/build-mac.sh [arm64|x64]...  (default: both)
 set -euo pipefail
@@ -35,10 +35,10 @@ for ARCH in "${ARCHES[@]}"; do
     *) echo "unknown arch: $ARCH" >&2; exit 1 ;;
   esac
 
-  OUT="$ROOT/dist/$ARCH/Booth"
+  OUT="$ROOT/dist/$ARCH/booth"
   rm -rf "$ROOT/dist/$ARCH" && mkdir -p "$OUT"
   cp -R "$STAGE/app" "$OUT/app"
-  cp packaging/Booth.command packaging/README.txt "$OUT/"
+  cp packaging/booth.command packaging/README.txt "$OUT/"
 
   CACHE="$ROOT/dist/cache/$BUN_TARGET-$BUN_VERSION.zip"
   mkdir -p "$ROOT/dist/cache"
@@ -47,8 +47,8 @@ for ARCH in "${ARCHES[@]}"; do
   mkdir -p "$OUT/app/runtime"
   unzip -jq "$CACHE" "$BUN_TARGET/bun" -d "$OUT/app/runtime"
 
-  ZIP="$ROOT/dist/Booth-$VERSION-mac-$ARCH.zip"
+  ZIP="$ROOT/dist/booth-$VERSION-mac-$ARCH.zip"
   rm -f "$ZIP"
-  (cd "$ROOT/dist/$ARCH" && ditto -c -k --keepParent Booth "$ZIP")
+  (cd "$ROOT/dist/$ARCH" && ditto -c -k --keepParent booth "$ZIP")
   echo "→ $ZIP ($(du -h "$ZIP" | cut -f1))"
 done

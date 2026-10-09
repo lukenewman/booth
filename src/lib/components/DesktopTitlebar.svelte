@@ -46,9 +46,9 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="titlebar" ondblclick={onDoubleClick}>
-  <span class="title">Booth</span>
+  <span class="title">booth</span>
   {#if pending && dismissed !== pending}
-    <div class="callout" title="Booth {pending} has downloaded">
+    <div class="callout" title="booth {pending} has downloaded">
       <button class="restart" onclick={restart} disabled={restarting}>
         {restarting ? 'Restarting…' : 'Restart to Update'}
       </button>

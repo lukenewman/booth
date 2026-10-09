@@ -1,9 +1,9 @@
 #!/bin/bash
-# Builds Booth.app for this Mac's architecture (Hutch builds for the host only).
+# Builds booth.app for this Mac's architecture (Hutch builds for the host only).
 # Needs Bun and Hutch on PATH; see "Desktop app" in docs/CONTEXT.md.
 #
 #   desktop/build.sh            stable build → desktop/artifacts/ (DMG + update files)
-#   desktop/build.sh dev        quick unpackaged build → desktop/build/dev-*/Booth-dev.app
+#   desktop/build.sh dev        quick unpackaged build → desktop/build/dev-*/booth-dev.app
 set -euo pipefail
 
 ENV="${1:-stable}"
