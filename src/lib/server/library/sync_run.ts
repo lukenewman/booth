@@ -2,6 +2,7 @@ import type { Database } from 'bun:sqlite';
 import { ulid } from 'ulid';
 import { collate, type CollateSummary } from './collate';
 import { relinkMissing, type RelinkSummary } from './relink';
+import { resolveGenres } from '../genres/resolve';
 import { getSource } from '../sources/registry';
 import { NotImplementedError, type IngestReport, type SyncInput } from '../sources/types';
 import { hydrateDiscogsTracks } from '../sources/discogs/hydrateDiscogsTracks';
@@ -48,6 +49,8 @@ export type SyncRunSummary = CollateSummary & {
    * Absent when nothing was re-linked, like `analysis` and `ingest`.
    */
   playlistsRelinked?: RelinkSummary;
+  /** Releases with and without a resolved genre after this run. */
+  genres?: { tagged: number; untagged: number };
 };
 
 export type AnalysisState =
@@ -130,6 +133,10 @@ async function runSyncNow(db: Database, sourceId: string): Promise<SyncRunRow> {
     // re-attach any playlist entries that lost theirs (see relink.ts).
     const relinked = relinkMissing(db);
     if (relinked.tracks || relinked.releases) summary.playlistsRelinked = relinked;
+
+    // Every source can change a release's genre evidence; the resolved table
+    // is what filters and pills read, so it is rebuilt after any sync.
+    summary.genres = resolveGenres(db);
 
     db.exec('ANALYZE');
 
