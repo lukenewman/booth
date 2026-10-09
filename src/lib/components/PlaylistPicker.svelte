@@ -24,7 +24,8 @@
   let highlight = $state(0);
 
   const matches = $derived(
-    playlists.items.filter((p) => p.name.toLowerCase().includes(filter.trim().toLowerCase())),
+    // A smart playlist's tracks come from its rule, so it can't be added to.
+    playlists.items.filter((p) => !p.rule && p.name.toLowerCase().includes(filter.trim().toLowerCase())),
   );
   // Row 0 is always the "create" row; playlist rows follow.
   const rowCount = $derived(matches.length + 1);

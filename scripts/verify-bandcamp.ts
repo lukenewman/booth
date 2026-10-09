@@ -87,3 +87,10 @@ eq(edits(buy({ artist: 'Al-Tone', albumTitle: 'RNT030 // Al-Tone Edits', url: 'h
 eq(edits(buy({ artist: 'Aleqs Notal', albumTitle: 'Lighten You Up', url: 'https://rnt.bandcamp.com/album/l' })), { state: 'matched', releaseId: 'e2' }, 'no artist stripped, case-different artist fine');
 eq(edits(buy({ artist: 'Lone', albumTitle: 'Abraxas EP', url: 'https://rnt.bandcamp.com/album/x' })), { state: 'matched', releaseId: 'e3' }, 'stripped, same artist');
 console.log('ok stripped-artist guard');
+
+// "Various Artists" names no one: matching on it is a title-only match, so it
+// needs the same host agreement step 3 asks for.
+const va = buildMatcher([rel('v1', 'Various Artists', 'Summer Sampler'), rel('v2', 'Various Artists', 'Winter Sampler', ['lbl.bandcamp.com'])], []);
+eq(va(buy({ artist: 'Various Artists', albumTitle: 'Summer Sampler', url: 'https://otherlabel.bandcamp.com/album/s' })), { state: 'unmatched' }, 'VA without host agreement');
+eq(va(buy({ artist: 'V/A', albumTitle: 'Winter Sampler', url: 'https://lbl.bandcamp.com/album/w' })), { state: 'matched', releaseId: 'v2' }, 'VA with host agreement');
+console.log('ok various artists');

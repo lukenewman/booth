@@ -9,6 +9,9 @@ export type MatchResult = { state: 'matched'; releaseId: string } | { state: 'am
 
 const albumKey = (s: string) => matchKey(stripEditionTags(s));
 
+/** Compilation credits that identify no artist (as match keys). */
+const NON_ARTISTS = new Set(['variousartists', 'various', 'va', 'vacomp', 'compilation']);
+
 /**
  * A title with the noise Bandcamp and labels add stripped: bracketed and
  * starred notes ("[PHONICA030]", "*BC Exclusive*"), catalogue numbers
@@ -95,8 +98,11 @@ export function buildMatcher(releases: MatchRelease[], tracks: MatchTrack[]): (p
 
     const album = p.albumTitle ? albumKey(p.albumTitle) : '';
     const artist = matchKey(p.artist);
+    // "Various Artists" names nobody, so an artist + title match on it is
+    // really title-only and must go through the host-checked step instead.
+    const anonymous = NON_ARTISTS.has(artist);
     return (
-      (album ? decide(byArtistTitle.get(`${artist}|${album}`), false) : null) ??
+      (album && !anonymous ? decide(byArtistTitle.get(`${artist}|${album}`), false) : null) ??
       (p.itemType === 'track' ? decide(byTrack.get(`${artist}|${matchKey(p.title)}`), false) : null) ??
       (album ? decide(byTitle.get(album), true) : null) ??
       // Same host, looser titles: "Tidal Waves" vs "Tidal Waves EP", catalogue

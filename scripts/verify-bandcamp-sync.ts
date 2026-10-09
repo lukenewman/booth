@@ -45,3 +45,13 @@ db.prepare(`UPDATE bandcamp_item SET page_error = NULL WHERE item_id = 'a1'`).ru
 let n = 0;
 eq(await fetchPendingPages(db, { delayMs: 0, backoffMs: 1, fetcher: async () => (n++ === 0 ? { status: 429, html: '' } : { status: 200, html: '' }) }), { fetched: 1, failed: 0 }, '429 then ok');
 console.log('ok verify-bandcamp-sync');
+
+// A server error or block is transient: stop the run, record nothing, leave the
+// row pending for the next sync. Only 404/410 are permanent.
+db.prepare(`UPDATE bandcamp_item SET page_fetched_at = NULL, page_error = NULL, tags = NULL WHERE item_id = 'a1'`).run();
+let calls = 0;
+eq(await fetchPendingPages(db, { delayMs: 0, fetcher: async () => { calls++; return { status: 503, html: '' }; } }), { fetched: 0, failed: 0 }, '503 counts as nothing');
+eq(calls, 1, '503 stops the run');
+eq(db.prepare(`SELECT page_error, page_fetched_at FROM bandcamp_item WHERE item_id = 'a1'`).get(), { page_error: null, page_fetched_at: null }, '503 leaves the row pending');
+eq(await fetchPendingPages(db, { delayMs: 0, fetcher: async () => ({ status: 410, html: '' }) }), { fetched: 0, failed: 1 }, '410 is permanent');
+console.log('ok transient errors');

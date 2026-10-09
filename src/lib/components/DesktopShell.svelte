@@ -197,7 +197,8 @@ import RecordingPill from './RecordingPill.svelte';
       onSortChange={(s) => { explorerState.setSort(s); loadList(true); }}
     />
 
-    {#if !isAddView && currentEntity !== 'artists' && !(isSourcesView && selectedSource?.isStub)}
+    {#if !isAddView && currentEntity !== 'artists' && !(isSourcesView && selectedSource?.isStub)
+      && !(explorerState.nav.section === 'library' && explorerState.nav.item === 'untagged')}
       <GenreFilterBar value={explorerState.genre} onchange={(f) => explorerState.setGenreFilter(f)}>
         {#snippet actions()}
           {#if !isEmptyGenreFilter(explorerState.genre)}

@@ -103,9 +103,16 @@ export function fetchPendingPages(
         resolveGenres(db, [row.release_id]);
         onResolved?.(row.release_id);
         fetched++;
-      } else {
+      } else if (res.status === 404 || res.status === 410) {
+        // Gone for good: record it so the row stops being retried.
         bad.run(`http ${res.status}`, row.item_id);
         failed++;
+      } else {
+        // 5xx, a 403 from a bot wall, anything else: transient. Recording it
+        // would silently drop this release's tags for good, so stop the run and
+        // let the next sync pick up where this one left off.
+        console.warn(`[bandcamp] page fetch stopped on http ${res.status}`);
+        break;
       }
       if (delayMs) await Bun.sleep(delayMs);
     }

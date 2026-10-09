@@ -146,7 +146,10 @@ export function createExplorerController() {
       if (explorerState.nav.section === 'sources') {
         params.set('source', explorerState.nav.item);
       }
-      if (currentEntity !== 'artists') genreFilterToParams(explorerState.genre, params);
+      // Untagged records have no genre to filter by: a leftover filter would
+      // only empty the queue while its count says otherwise.
+      const untaggedQueue = explorerState.nav.section === 'library' && explorerState.nav.item === 'untagged';
+      if (currentEntity !== 'artists' && !untaggedQueue) genreFilterToParams(explorerState.genre, params);
 
       if (explorerState.nav.section === 'library') {
         if (explorerState.nav.item === 'starred') {
@@ -386,7 +389,7 @@ export function createExplorerController() {
     source: explorerState.nav.section === 'sources' ? explorerState.nav.item : undefined,
     q: explorerState.q || undefined,
     sort: explorerState.sort,
-    genre: explorerState.genre,
+    genre: explorerState.nav.section === 'library' && explorerState.nav.item === 'untagged' ? undefined : explorerState.genre,
   });
 
   // ----- Add → Discogs master grouping ---------------------------------------
