@@ -20,6 +20,8 @@
   import { session } from '$lib/stores/session.svelte';
   import { toast } from '$lib/stores/toast.svelte';
   import { annotations } from '$lib/stores/annotations.svelte';
+  import { genresStore } from '$lib/stores/genres.svelte';
+  import { genreFilterToParams } from '$lib/genreFilter';
 
 export function createExplorerController() {
 
@@ -43,17 +45,19 @@ export function createExplorerController() {
     allArtists: 0,
     starredTracks: 0,
     unvettedReleases: 0,
+    untaggedReleases: 0,
   });
   let syncing = $state<string | null>(null); // source id being synced
 
   async function loadSourcesAndCounts() {
-    const [srcRes, allRel, allTrk, allArt, starTrk, unvetRel] = await Promise.all([
+    const [srcRes, allRel, allTrk, allArt, starTrk, unvetRel, untagRel] = await Promise.all([
       fetch('/api/sources').then((r) => r.json()),
       fetch('/api/library/releases?limit=1').then((r) => r.json()),
       fetch('/api/library/tracks?limit=1').then((r) => r.json()),
       fetch('/api/library/artists?limit=1').then((r) => r.json()),
       fetch('/api/library/tracks?starred=1&limit=1').then((r) => r.json()),
       fetch('/api/library/releases?vetted=0&limit=1').then((r) => r.json()),
+      fetch('/api/library/releases?untagged=1&limit=1').then((r) => r.json()),
     ]);
     sources = srcRes;
     counts = {
@@ -62,6 +66,7 @@ export function createExplorerController() {
       allArtists: allArt.total ?? 0,
       starredTracks: starTrk.total ?? 0,
       unvettedReleases: unvetRel.total ?? 0,
+      untaggedReleases: untagRel.total ?? 0,
     };
   }
 
@@ -141,6 +146,7 @@ export function createExplorerController() {
       if (explorerState.nav.section === 'sources') {
         params.set('source', explorerState.nav.item);
       }
+      if (currentEntity !== 'artists') genreFilterToParams(explorerState.genre, params);
 
       if (explorerState.nav.section === 'library') {
         if (explorerState.nav.item === 'starred') {
@@ -153,6 +159,9 @@ export function createExplorerController() {
           // Vetting is a release-level fact; the tracks and artists lenses
           // have no honest reading of it, so they stay unfiltered.
           if (currentEntity === 'releases') params.set('vetted', '0');
+        } else if (explorerState.nav.item === 'untagged') {
+          // Like vetting, tagging is a release-level fact.
+          if (currentEntity === 'releases') params.set('untagged', '1');
         }
       }
 
@@ -377,6 +386,7 @@ export function createExplorerController() {
     source: explorerState.nav.section === 'sources' ? explorerState.nav.item : undefined,
     q: explorerState.q || undefined,
     sort: explorerState.sort,
+    genre: explorerState.genre,
   });
 
   // ----- Add → Discogs master grouping ---------------------------------------
@@ -570,6 +580,12 @@ export function createExplorerController() {
 
   // ----- Reactive triggers ---------------------------------------------------
 
+  const genreKey = $derived.by(() => {
+    const p = new URLSearchParams();
+    genreFilterToParams(explorerState.genre, p);
+    return p.toString();
+  });
+
   // Reload list when nav or entity changes. Query changes are handled by the
   // debounced onQueryChange callback below — reading explorerState.q here would
   // fire a fetch on every keystroke, bypassing the SearchBar debounce entirely.
@@ -577,6 +593,8 @@ export function createExplorerController() {
     explorerState.nav.section;
     explorerState.nav.item;
     currentEntity;
+    // A string key, not the object: a new-but-equal filter must not refetch.
+    genreKey;
     if (sources.length === 0) return; // wait until source meta is loaded
     untrack(() => loadList(true));
   });
@@ -614,12 +632,14 @@ export function createExplorerController() {
     const id = explorerState.id;
     const q = explorerState.q;
     const entity = explorerState.entity;
+    const genre = genreKey;
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams();
     if (`${navSection}:${navItem}` !== 'library:all') params.set('nav', `${navSection}:${navItem}`);
     if (id) params.set('id', id);
     if (q) params.set('q', q);
     if (entity !== 'releases') params.set('entity', entity);
+    for (const [k, v] of new URLSearchParams(genre)) params.append(k, v);
     const search = params.toString() ? `?${params.toString()}` : '';
     history.replaceState(history.state, '', `${location.pathname}${search}`);
   });
@@ -628,7 +648,7 @@ export function createExplorerController() {
 
   onMount(async () => {
     explorerState.hydrate(page.url.searchParams);
-    await Promise.all([loadSourcesAndCounts(), collection.load(), playlists.loadList()]);
+    await Promise.all([loadSourcesAndCounts(), collection.load(), playlists.loadList(), genresStore.load()]);
   });
 
   // ----- Add → Discogs CTA ---------------------------------------------------
@@ -761,6 +781,7 @@ export function createExplorerController() {
       await fetch(`/api/sources/${selectedSource.id}/sync`, { method: 'POST' });
       await loadSourcesAndCounts();
       await loadList(true);
+      void genresStore.load(true);
       syncRunsReloadKey++;
     } finally {
       syncing = null;
@@ -771,6 +792,7 @@ export function createExplorerController() {
   async function reloadAfterSync() {
     await loadSourcesAndCounts();
     await loadList(true);
+    void genresStore.load(true);
     syncRunsReloadKey++;
   }
 
@@ -864,6 +886,51 @@ export function createExplorerController() {
     // Top up if removals have drained the buffer below a screenful.
     if (advancing && listItems.length < 20 && listHasMore) void loadList(false);
   }
+  /**
+   * Save a release's hand-set genres/styles and, when working the Untagged
+   * queue, open the next release — the same shape as `vetAndAdvance`, for the
+   * same reasons. Only a save that gives the release a genre takes it out of
+   * the queue; styles alone leave it untagged.
+   */
+  async function tagAndAdvance(releaseId: string, tags: { genres: string[]; styles: string[] } | null) {
+    const inQueue =
+      explorerState.nav.section === 'library' && explorerState.nav.item === 'untagged';
+    const leaves = inQueue && !!tags?.genres.length;
+
+    // Reactive mutations before the await — see vetAndAdvance.
+    if (leaves) {
+      const idx = listItems.findIndex((it) => it.id === releaseId);
+      const successor = idx >= 0 ? (listItems[idx + 1] ?? listItems[idx - 1] ?? null) : null;
+      listItems = listItems.filter((it) => it.id !== releaseId);
+      listTotal = Math.max(0, listTotal - 1);
+      counts = { ...counts, untaggedReleases: Math.max(0, counts.untaggedReleases - 1) };
+      explorerState.setEntity(successor ? successor.id : null);
+    }
+
+    const res = await fetch(`/api/library/releases/${encodeURIComponent(releaseId)}/genres`, {
+      method: tags ? 'PUT' : 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: tags ? JSON.stringify(tags) : undefined,
+    });
+    if (!res.ok) {
+      toast.show('Couldn’t save tags');
+      return;
+    }
+    const saved = (await res.json()) as { genres: string[]; styles: string[]; genreOrigin: string | null };
+    void genresStore.load(true);
+
+    // Reflect the save wherever the release is still on screen.
+    listItems = listItems.map((it) => (it.id === releaseId ? { ...it, styles: saved.styles } : it));
+    if (detailData?.release?.id === releaseId) detailData = { ...detailData, ...saved };
+    if (!leaves) {
+      // Outside the queue the count still moves (tagging, or clearing an override).
+      void fetch('/api/library/releases?untagged=1&limit=1').then((r) => r.json()).then((d) => {
+        counts = { ...counts, untaggedReleases: d.total ?? counts.untaggedReleases };
+      });
+    }
+    if (leaves && listItems.length < 20 && listHasMore) void loadList(false);
+  }
+
 
   return {
     get sources() { return sources; },
@@ -907,5 +974,6 @@ export function createExplorerController() {
     handleSync,
     reloadAfterSync,
     vetAndAdvance,
+    tagAndAdvance,
   };
 }

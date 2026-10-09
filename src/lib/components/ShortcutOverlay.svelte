@@ -12,6 +12,7 @@
     { key: '/', label: 'Focus search' },
     { key: 's', label: 'Star selected track  •  scan barcode in Add → Discogs' },
     { key: 'v', label: 'Mark release vetted (advances in Unvetted)' },
+    { key: 'g', label: 'Edit genres & styles (advances in Untagged)' },
     { key: 'tab', label: 'Toggle tracks / releases' },
     { key: '↑ ↓', label: 'Move selection in results' },
     { key: '↵', label: 'Open confirm / confirm add' },

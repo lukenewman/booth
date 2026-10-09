@@ -1,4 +1,8 @@
 <script lang="ts">
+  import StylePill from './StylePill.svelte';
+  import TagEditor from './TagEditor.svelte';
+  import { display } from '$lib/genres';
+  import { explorerState } from '$lib/stores/explorerState.svelte';
   import { formatBpm, type ResolvedBpm } from '$lib/bpm';
   import { untrack } from 'svelte';
   import SourceGrid from './SourceGrid.svelte';
@@ -51,6 +55,11 @@
     onVet,
     recordDisabled = false,
     onAddTrack,
+    genres = [],
+    styles = [],
+    genreOrigin = null,
+    onSaveTags,
+    autoEditTags = false,
   }: {
     release: Release;
     sources: SourceLink[];
@@ -70,7 +79,23 @@
     recordDisabled?: boolean;
     /** Set in a gig: each tracklist row gets a ＋ that sketches the track into Unsorted. */
     onAddTrack?: (trackId: string) => void;
+    /** Resolved genres/styles and which source they came from (null = untagged). */
+    genres?: string[];
+    styles?: string[];
+    genreOrigin?: 'manual' | 'discogs' | 'bandcamp' | 'file' | null;
+    /** Absent for things that aren't library releases (Discogs search hits). null clears an override. */
+    onSaveTags?: (releaseId: string, tags: { genres: string[]; styles: string[] } | null) => void;
+    /** Open the tag editor on arrival (the Untagged queue). */
+    autoEditTags?: boolean;
   } = $props();
+
+  const ORIGIN_LABEL = { manual: 'set by hand', discogs: 'from discogs', bandcamp: 'from bandcamp', file: 'from file tags' } as const;
+  let editingTags = $state(false);
+  // Each release opens closed — or open, in the Untagged queue.
+  $effect(() => {
+    release.id;
+    editingTags = untrack(() => autoEditTags && !!onSaveTags);
+  });
 
   // Playing from a tracklist queues the rest of the release. Filtered to
   // playable tracks so `next` can never land on something with no audio.
@@ -188,6 +213,38 @@
           release.country,
           release.format,
         ].filter(Boolean).join(' · ')}
+      </div>
+    {/if}
+    {#if onSaveTags}
+      <div class="genre-block">
+        <div class="genre-line">
+          {#if genres.length}
+            <span class="genre-names">{genres.map(display).join(' · ')}</span>
+            {#if genreOrigin}<span class="genre-origin">{ORIGIN_LABEL[genreOrigin]}</span>{/if}
+          {:else}
+            <span class="untagged">untagged</span>
+          {/if}
+          {#if !editingTags}
+            <button type="button" class="edit-tags-btn" onclick={() => (editingTags = true)}>edit tags<span class="kbd-hint quiet">g</span></button>
+          {/if}
+        </div>
+        {#if styles.length && !editingTags}
+          <div class="genre-styles">
+            {#each styles as st (st)}<StylePill style={st} onclick={(x) => explorerState.toggleStyle(x)} />{/each}
+          </div>
+        {/if}
+        {#if editingTags}
+          {#key release.id}
+            <TagEditor
+              {genres}
+              {styles}
+              canRevert={genreOrigin === 'manual'}
+              onSave={(tags) => { editingTags = false; onSaveTags(release.id, tags); }}
+              onRevert={() => { editingTags = false; onSaveTags(release.id, null); }}
+              onCancel={() => (editingTags = false)}
+            />
+          {/key}
+        {/if}
       </div>
     {/if}
     {#if discogsUrl}
@@ -403,6 +460,18 @@
      than trailing the title. min-width:0 lets a long title ellipsize instead
      of pushing the dots out of the pane. */
   .title-row .title { flex: 1 1 auto; min-width: 0; }
+  .genre-block { margin-top: 8px; font-size: 12px; }
+  .genre-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .genre-names { color: var(--text); }
+  .genre-origin { color: var(--text-subtle); font-size: 11px; }
+  .untagged { color: var(--accent); }
+  .edit-tags-btn {
+    margin-left: auto; background: transparent; border: 0; padding: 0;
+    color: var(--text-subtle); font: inherit; font-size: 11px; cursor: pointer;
+    display: inline-flex; gap: 6px; align-items: baseline;
+  }
+  .edit-tags-btn:hover { color: var(--text); }
+  .genre-styles { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
   .title-row > :global(:not(.title)) { flex: 0 0 auto; }
 
   .vet-row { margin-top: 6px; }

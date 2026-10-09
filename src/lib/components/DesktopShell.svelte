@@ -1,6 +1,7 @@
 <script lang="ts">
   import Rail from './Rail.svelte';
   import ListviewToolbar from './ListviewToolbar.svelte';
+  import GenreFilterBar from './GenreFilterBar.svelte';
   import ReleaseList from './ReleaseList.svelte';
   import ReleaseGrid from './ReleaseGrid.svelte';
   import TrackList from './TrackList.svelte';
@@ -176,6 +177,10 @@ import RecordingPill from './RecordingPill.svelte';
       onSortChange={(s) => { explorerState.setSort(s); loadList(true); }}
     />
 
+    {#if !isAddView && currentEntity !== 'artists' && !(isSourcesView && selectedSource?.isStub)}
+      <GenreFilterBar value={explorerState.genre} onchange={(f) => explorerState.setGenreFilter(f)} />
+    {/if}
+
     {#if scannerOpen}
       <div class="scanner-overlay">
         <Scanner
@@ -318,6 +323,11 @@ import RecordingPill from './RecordingPill.svelte';
         onTrackSelect={(id) => explorerState.setEntity(id)}
         onArtistSelect={(id) => explorerState.setEntity(id)}
         onVet={detailData._isDiscogsSearchHit ? undefined : c.vetAndAdvance}
+        genres={detailData.genres ?? []}
+        styles={detailData.styles ?? []}
+        genreOrigin={detailData.genreOrigin ?? null}
+        onSaveTags={detailData._isDiscogsSearchHit ? undefined : c.tagAndAdvance}
+        autoEditTags={explorerState.nav.section === 'library' && explorerState.nav.item === 'untagged'}
         recordDisabled={recordingRelease !== null}
         onRecord={detailData._isDiscogsSearchHit
           ? undefined

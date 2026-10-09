@@ -183,6 +183,9 @@
         markVetted: () => {
           document.querySelector<HTMLButtonElement>('.vet-btn')?.click();
         },
+        editTags: () => {
+          document.querySelector<HTMLButtonElement>('.edit-tags-btn')?.click();
+        },
         navRailNext: () => {
           const items = Array.from(document.querySelectorAll<HTMLButtonElement>('.rail button.item'));
           if (items.length === 0) return;

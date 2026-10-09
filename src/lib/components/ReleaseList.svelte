@@ -1,10 +1,13 @@
 <script lang="ts">
+  import StylePills from './StylePills.svelte';
   import Listview from './Listview.svelte';
   import { annotations } from '$lib/stores/annotations.svelte';
   import SourceGrid from './SourceGrid.svelte';
   import EmptyState from './EmptyState.svelte';
 
   interface ReleaseItem {
+    /** Resolved styles of the release, in source order. */
+    styles?: string[];
     id: string;
     title: string;
     artist: string;
@@ -86,6 +89,7 @@
         <div class="meta">
           <div class="title">{item.title}</div>
           <div class="artist">{item.artist}</div>
+          {#if item.styles?.length}<div class="styles"><StylePills styles={item.styles} /></div>{/if}
           {#if item.label || item.catno || item.country || item.format}
             <div class="detail">
               {[
@@ -185,6 +189,7 @@
     font-size: 12px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  .styles { display: flex; margin: 2px 0 1px; min-width: 0; }
   .detail {
     color: var(--text-subtle);
     font-size: 11px;

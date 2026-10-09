@@ -1,10 +1,13 @@
 <script lang="ts">
+  import StylePills from './StylePills.svelte';
   import SourceGrid from './SourceGrid.svelte';
   import { annotations } from '$lib/stores/annotations.svelte';
   import EmptyState from './EmptyState.svelte';
   import { translucentDragImage } from '$lib/dnd';
 
   interface ReleaseItem {
+    /** Resolved styles of the release, in source order. */
+    styles?: string[];
     id: string;
     title: string;
     artist: string;
@@ -83,6 +86,7 @@
             <div class="caption">
               <div class="title">{item.title}</div>
               <div class="artist">{item.artist}</div>
+              {#if item.styles?.length}<div class="styles"><StylePills styles={item.styles} max={2} /></div>{/if}
               {#each item.runoutMatch ?? [] as line}
                 <div class="runout" title={line}>{line}</div>
               {/each}
@@ -174,6 +178,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .styles { display: flex; margin-top: 3px; min-width: 0; }
   .artist {
     color: var(--text-muted);
     font-size: 11px;

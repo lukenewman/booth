@@ -26,6 +26,7 @@ export interface KeyboardActions {
   toggleShortcuts: () => void;
   toggleStar: () => void;
   markVetted: () => void;
+  editTags: () => void;
   navRailNext: () => void;
   navRailPrev: () => void;
   togglePlay: () => void;
@@ -119,6 +120,7 @@ export function installKeyboard(actions: KeyboardActions, guards: KeyboardGuards
       return;
     }
     if (e.key === 'v' || e.key === 'V')                     { e.preventDefault(); actions.markVetted();     return; }
+    if (e.key === 'g' || e.key === 'G')                     { e.preventDefault(); actions.editTags();       return; }
     if (e.key === 'ArrowDown')                              { e.preventDefault(); actions.moveDown();       return; }
     if (e.key === 'ArrowUp')                                { e.preventDefault(); actions.moveUp();         return; }
     if (e.key === 'Enter')                                  { e.preventDefault(); actions.commit();         return; }

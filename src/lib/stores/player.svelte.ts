@@ -1,4 +1,5 @@
 import { nextIndex, prevTarget, type PlaybackContext } from '$lib/queue';
+import { genreFilterToParams } from '$lib/genreFilter';
 import { clampPitch, nextPitchRange, pitchToRate, type PitchRange } from '$lib/pitch';
 import type { ResolvedBpm } from '$lib/bpm';
 
@@ -122,6 +123,7 @@ export const player = {
       if (ctx.query.q) params.set('q', ctx.query.q);
       if (ctx.query.multiSource) params.set('multi_source', 'true');
       params.set('sort', ctx.query.sort);
+      if (ctx.query.genre) genreFilterToParams(ctx.query.genre, params);
       try {
         const res = await fetch(`/api/library/tracks/ids?${params.toString()}`);
         ids = res.ok ? ((await res.json()).ids ?? []) : [];

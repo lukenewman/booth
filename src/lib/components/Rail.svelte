@@ -18,6 +18,7 @@
     allArtists: number;
     starredTracks: number;
     unvettedReleases: number;
+    untaggedReleases?: number;
   }
 
   let {
@@ -163,6 +164,15 @@
     >
       <span>Unvetted</span>
       <span class="count">{counts.unvettedReleases.toLocaleString()}</span>
+    </button>
+    <!-- Same idea for genres: how many records still have none. -->
+    <button
+      class="item"
+      class:active={isActive('library', 'untagged')}
+      onclick={() => onSelect?.({ section: 'library', item: 'untagged' })}
+    >
+      <span>Untagged</span>
+      <span class="count">{(counts.untaggedReleases ?? 0).toLocaleString()}</span>
     </button>
   </div>
 

@@ -52,6 +52,7 @@
     { item: 'all', label: 'All' },
     { item: 'starred', label: 'Starred' },
     { item: 'unvetted', label: 'Unvetted' },
+    { item: 'untagged', label: 'Untagged' },
   ] as const;
   let sourcesOpen = $state(false);
 
@@ -199,6 +200,10 @@
           onTrackSelect={(id) => explorerState.setEntity(id)}
           onArtistSelect={(id) => explorerState.setEntity(id)}
           recordDisabled={true}
+          genres={detailData.genres ?? []}
+          styles={detailData.styles ?? []}
+          genreOrigin={detailData.genreOrigin ?? null}
+          onSaveTags={detailData._isDiscogsSearchHit ? undefined : c.tagAndAdvance}
         />
       {:else if detailKind === 'track' && detailData}
         <TrackDetail

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import StylePills from './StylePills.svelte';
   import { DEFAULT_SORT } from '$lib/types';
   import type { LibraryQuery, PlaybackContext } from '$lib/queue';
   import Listview from './Listview.svelte';
@@ -12,6 +13,8 @@
   import { formatBpm, type ResolvedBpm } from '$lib/bpm';
 
   interface TrackItem {
+    /** Resolved styles of the release, in source order. */
+    styles?: string[];
     id: string;
     title: string;
     artist: string;
@@ -160,7 +163,7 @@
       <div class="meta">
         <div class="title">{item.title}</div>
         <div class="artist">{item.artist}</div>
-        <div class="album">{item.album ?? '—'}</div>
+        <div class="album"><span class="album-name">{item.album ?? '—'}</span>{#if item.styles?.length}<StylePills styles={item.styles} max={2} />{/if}</div>
       </div>
       {#if anyNotes}
         <div class="note-cell"><TrackNote trackId={item.id} readonly /></div>
@@ -256,7 +259,9 @@
     font-size: 12px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  .album-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
   .album {
+    display: flex; gap: 6px; align-items: center;
     color: var(--text-muted);
     font-size: 12px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

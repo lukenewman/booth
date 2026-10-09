@@ -1,4 +1,5 @@
 import type { SortKey } from '$lib/types';
+import type { GenreFilter } from '$lib/genreFilter';
 
 /** The library listview's current filters, enough to rebuild its exact ordering. */
 export interface LibraryQuery {
@@ -6,6 +7,7 @@ export interface LibraryQuery {
   q?: string;
   sort: SortKey;
   multiSource?: boolean;
+  genre?: GenreFilter;
 }
 
 /**

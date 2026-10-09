@@ -18,10 +18,13 @@ export function display(name: string): string {
  * reading as distinct, so styles beyond the top twelve share — see
  * `assignStyleColors` for who gets which.
  */
-const HUES = [25, 55, 85, 115, 145, 175, 200, 230, 260, 290, 320, 350];
+// Slots are handed out most-used first, so consecutive slots must be far apart
+// on the wheel: the top three styles (house, deep house, techno) landing on
+// neighbouring hues is exactly the confusion this exists to prevent.
+const HUES = [25, 200, 115, 290, 70, 245, 160, 340, 95, 220, 135, 315];
 export const PALETTE = HUES.map((h) => ({
-  bg: `oklch(0.33 0.08 ${h})`,
-  fg: `oklch(0.90 0.10 ${h})`,
+  bg: `oklch(0.37 0.11 ${h})`,
+  fg: `oklch(0.93 0.07 ${h})`,
 }));
 export const PALETTE_SIZE = PALETTE.length;
 

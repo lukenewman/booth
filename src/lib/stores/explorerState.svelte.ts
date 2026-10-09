@@ -9,6 +9,7 @@
  */
 
 import { DEFAULT_SORT, type SortKey } from '$lib/types';
+import { parseGenreFilter, genreFilterToParams, type GenreFilter } from '$lib/genreFilter';
 
 export type NavSection = 'library' | 'sources' | 'add' | 'playlist';
 export interface NavValue { section: NavSection; item: string; }
@@ -52,6 +53,7 @@ export function navEntityHint(nav: NavValue): EntityKind | null {
   if (nav.section !== 'library') return null;
   if (nav.item === 'starred') return 'tracks';
   if (nav.item === 'unvetted') return 'releases';
+  if (nav.item === 'untagged') return 'releases';
   return null;
 }
 
@@ -66,6 +68,12 @@ class ExplorerState {
   entity = $state<EntityKind>('releases');
   /** Listview ordering. Like `entity`, an app-wide lens rather than a per-rail attribute. */
   sort = $state<SortKey>(DEFAULT_SORT);
+  /**
+   * Genre/style filter over the library. Like the query it belongs to its
+   * section (cleared when leaving it), but persists across library rail items.
+   * Untagged is a rail item, not part of this filter.
+   */
+  genre = $state<GenreFilter>({});
   // Unlike the lens, the query belongs to its section: a Discogs search typed
   // in Add means nothing as a library filter, and the reverse. Each section
   // keeps the last query it had while you're elsewhere. Not persisted — only
@@ -86,6 +94,8 @@ class ExplorerState {
     const sort = params.get('sort');
     this.sort =
       sort === 'added-desc' || sort === 'added-asc' || sort === 'artist' ? sort : DEFAULT_SORT;
+    const { untagged: _, ...genre } = parseGenreFilter(params);
+    this.genre = genre;
   }
 
   /** Serialize current state to URLSearchParams. Omits empty/default values. */
@@ -98,6 +108,7 @@ class ExplorerState {
     if (this.q) params.set('q', this.q);
     if (this.entity !== 'releases') params.set('entity', this.entity);
     if (this.sort !== DEFAULT_SORT) params.set('sort', this.sort);
+    genreFilterToParams({ ...this.genre, untagged: false }, params);
     return params;
   }
 
@@ -112,6 +123,7 @@ class ExplorerState {
     if (nav.section !== this.nav.section) {
       this.queries.set(this.nav.section, this.q);
       this.q = this.queries.get(nav.section) ?? '';
+      this.genre = {};
     }
     this.nav = nav;
     this.id = null;
@@ -126,6 +138,23 @@ class ExplorerState {
 
   setQuery(q: string) {
     this.q = q;
+  }
+
+  setGenreFilter(f: GenreFilter) {
+    this.genre = f;
+  }
+
+  /** Pill click: add a style to the include list, or take it back out. */
+  toggleStyle(style: string) {
+    const styles = this.genre.styles ?? { include: [], exclude: [] };
+    const has = styles.include.includes(style);
+    this.genre = {
+      ...this.genre,
+      styles: {
+        include: has ? styles.include.filter((s) => s !== style) : [...styles.include, style],
+        exclude: styles.exclude.filter((s) => s !== style),
+      },
+    };
   }
 
   setSort(sort: SortKey) {
