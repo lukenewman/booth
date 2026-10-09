@@ -65,4 +65,46 @@ eq(await backfillArtwork(db, { ...deps, artworkDir: mkdtempSync(join(tmpdir(), '
 
 eq(bandcampArtUrl('42'), 'https://f4.bcbits.com/img/a0000000042_10.jpg', 'art id padded');
 eq(parseCollectionItem({ tralbum_type: 'a', tralbum_id: 1, item_url: 'u', band_name: 'B', item_title: 'T', item_art_id: 658331929 }).artId, '658331929', 'collection art id');
+// A purchase Apple withdrew under its original id: fall back to a name search,
+// taking only a single result whose artist and title match exactly (case and
+// punctuation aside; a trailing " - Single"/" - EP" ignored). A reissue
+// ("2022 Remastered", "20th Anniversary Edition") is not the same record.
+const db2 = new Database(':memory:');
+db2.exec('PRAGMA foreign_keys = ON');
+runMigrations(db2);
+db2.prepare(`INSERT INTO artist (id, name) VALUES ('s', 'Yoshinori Sunahara'), ('j', 'Jamiroquai'), ('v', 'Various Artists')`).run();
+const rel2 = (id: string, artist: string, title: string, hash: string) => {
+  db2.prepare(`INSERT INTO release (id, title, artist_id) VALUES (?, ?, ?)`).run(id, title, artist);
+  db2.prepare(`INSERT INTO source_link (entity_kind, entity_id, source, external_id, match_method) VALUES ('release', ?, 'local', ?, 'test')`).run(id, `itunes-album:${hash}`);
+  db2.prepare(`INSERT INTO track (id, title, artist_id, release_id) VALUES (?, 't', ?, ?)`).run(`t${id}`, artist, id);
+  db2.prepare(`INSERT INTO match_key (entity_kind, entity_id, key_type, key_value) VALUES ('track', ?, 'file_path', ?)`).run(`t${id}`, `/m/${id}.m4a`);
+  db2.prepare(`INSERT INTO source_facets (entity_kind, entity_id, source, key, value) VALUES ('track', ?, 'local', 'kind', '"Purchased AAC audio file"')`).run(`t${id}`);
+};
+rel2('lb', 's', 'Love Beat', '111111111111');
+rel2('ht', 'j', 'High Times - Singles 1992-2006', '222222222222');
+rel2('ls', 's', 'Lone Single - Single', '333333333333');
+const searches: string[] = [];
+const search = {
+  'lookup': { resultCount: 0, results: [] },
+  'Love Beat': { results: [{ artistName: 'Yoshinori Sunahara', collectionName: 'LOVEBEAT', artworkUrl100: 'https://a/lb/100x100bb.jpg' },
+                           { artistName: 'Yoshinori Sunahara', collectionName: 'LOVEBEAT 2021 Optimized Re-Master', artworkUrl100: 'https://a/x/100x100bb.jpg' }] },
+  'High Times': { results: [{ artistName: 'Jamiroquai', collectionName: 'High Times: Singles 1992-2006 (2022 Remastered)', artworkUrl100: 'https://a/ht/100x100bb.jpg' }] },
+  'Lone Single': { results: [{ artistName: 'Yoshinori Sunahara', collectionName: 'Lone Single - Single', artworkUrl100: 'https://a/ls/100x100bb.jpg' }] },
+} as Record<string, unknown>;
+const r2 = await backfillArtwork(db2, {
+  artworkDir: mkdtempSync(join(tmpdir(), 'booth-art-')),
+  appleAlbumId: async () => '999',
+  fetchJson: async (url: string) => {
+    if (url.includes('/lookup')) return search.lookup;
+    searches.push(decodeURIComponent(new URL(url).searchParams.get('term') ?? ''));
+    const k = Object.keys(search).find((k) => url.includes(encodeURIComponent(k).replace(/%20/g, '%20')) || decodeURIComponent(url).includes(k));
+    return k ? search[k] : { results: [] };
+  },
+  fetchBytes: async () => ({ bytes: new Uint8Array([1]), type: 'image/jpeg' }),
+  delayMs: 0,
+});
+eq(r2, { apple: 2, bandcamp: 0, missing: 1 }, 'search fallback: exact titles only');
+const t2 = (id: string) => (db2.prepare(`SELECT thumb_url FROM release WHERE id = ?`).get(id) as { thumb_url: string | null }).thumb_url;
+eq([t2('lb') !== null, t2('ht'), t2('ls') !== null], [true, null, true], 'LOVEBEAT and the single matched; the remaster did not');
+eq(searches.includes('Yoshinori Sunahara Lone Single'), true, 'search drops the "- Single" suffix');
 console.log('ok verify-artwork-backfill');

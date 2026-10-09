@@ -1,6 +1,7 @@
 import type { Database } from 'bun:sqlite';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { matchKey } from './relink';
 
 /**
  * Covers for releases whose files carry none. The local sync only reads art
@@ -46,10 +47,44 @@ async function appleArtUrl(db: Database, releaseId: string, deps: ArtworkDeps): 
       | { results?: { artworkUrl100?: string }[] }
       | null;
     const small = res?.results?.[0]?.artworkUrl100;
-    // Apple serves any size from the same path; 1000px matches what the store shows.
-    return small ? small.replace(/\/\d+x\d+bb\.(jpg|png)$/, '/1000x1000bb.$1') : null;
+    if (small) return large(small);
+    // Withdrawn under its original id (Apple often reissues under a new one).
+    return appleSearchArtUrl(db, releaseId, deps);
   }
   return null;
+}
+
+// Apple serves any size from the same path; 1000px matches what the store shows.
+const large = (url: string) => url.replace(/\/\d+x\d+bb\.(jpg|png)$/, '/1000x1000bb.$1');
+
+const SINGLE_OR_EP = /\s+-\s+(Single|EP)$/i;
+const titleKey = (s: string) => matchKey(s.replace(SINGLE_OR_EP, ''));
+
+/**
+ * Name search for a purchase Apple withdrew. Accepts only a single result
+ * whose artist and title match exactly (case and punctuation aside, a trailing
+ * " - Single"/" - EP" ignored). Edition tags are NOT stripped: a "2022
+ * Remastered" or "20th Anniversary Edition" reissue is a different record and
+ * often a different cover — searching "LOVEBEAT" finds both the original and a
+ * 2021 remaster.
+ */
+async function appleSearchArtUrl(db: Database, releaseId: string, deps: ArtworkDeps): Promise<string | null> {
+  const rel = db.prepare(
+    `SELECT a.name AS artist, r.title FROM release r JOIN artist a ON a.id = r.artist_id WHERE r.id = ?`,
+  ).get(releaseId) as { artist: string; title: string } | null;
+  if (!rel) return null;
+  const various = /^various( artists)?$/i.test(rel.artist.trim());
+  const term = `${various ? '' : rel.artist} ${rel.title.replace(SINGLE_OR_EP, '')}`.trim();
+  const res = (await deps.fetchJson(
+    `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&limit=25`,
+  )) as { results?: { artistName?: string; collectionName?: string; artworkUrl100?: string }[] } | null;
+  const hits = (res?.results ?? []).filter(
+    (x) =>
+      x.collectionName && x.artistName && x.artworkUrl100 &&
+      titleKey(x.collectionName) === titleKey(rel.title) &&
+      (various ? /various/i.test(x.artistName) : matchKey(x.artistName) === matchKey(rel.artist)),
+  );
+  return hits.length === 1 ? large(hits[0].artworkUrl100!) : null;
 }
 
 export async function backfillArtwork(
