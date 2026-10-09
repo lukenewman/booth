@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { parseFile as parseAudioFile } from 'music-metadata';
 import { runInboxIngest, scanIngestedLibrary } from './ingest';
 import { bandcampHostFrom } from '../../genres/bandcampHost';
+import { withCompilationArtist } from './compilation';
 import { resolvedInboxRoot, resolvedLibraryRoot } from './ingest_env';
 import { env } from '$lib/server/env';
 import { getDb } from '../../db';
@@ -65,6 +66,9 @@ export async function syncITunesLibrary(): Promise<SyncResult> {
   }
 
   const lib = parseITunesLibrary(xmlPath);
+  // Multi-artist compilations with no album artist group as one record
+  // (see compilation.ts), not one per track artist.
+  const libTracks = withCompilationArtist(lib.tracks);
   const input: SyncInput = {
     path: xmlPath,
     mtime: statSync(xmlPath).mtime.toISOString(),
@@ -73,7 +77,7 @@ export async function syncITunesLibrary(): Promise<SyncResult> {
 
   // Group tracks by album.
   const groups = new Map<string, { groupKey: string; tracks: ITunesTrack[] }>();
-  for (const t of lib.tracks) {
+  for (const t of libTracks) {
     const groupKey = albumGroupKey(t);
     if (!groupKey) continue;
     const id = syntheticReleaseId(groupKey);
@@ -117,7 +121,7 @@ export async function syncITunesLibrary(): Promise<SyncResult> {
   // every server boot and would overwrite a directly-written facet each time.
   const overlay = loadDateOverlay(getDb());
 
-  const tracks: SourceTrack[] = lib.tracks.map((t) => {
+  const tracks: SourceTrack[] = libTracks.map((t) => {
     const groupKey = albumGroupKey(t);
     const recovered = overlay.get(mediaPathKey(t.location));
     return {

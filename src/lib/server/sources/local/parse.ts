@@ -27,6 +27,8 @@ export interface ITunesTrack {
   genre?: string;
   /** Bandcamp downloads say "Visit https://<artist>.bandcamp.com" here. */
   comment?: string;
+  /** Music.app's Compilation flag. */
+  compilation?: boolean;
   kind?: string;
   bitRate?: number;
   sampleRate?: number;
@@ -82,6 +84,7 @@ export function parseITunesLibrary(xmlPath: string): ITunesLibrary {
       playCount: t['Play Count'] as number | undefined,
       genre: t['Genre'] as string | undefined,
       comment: t['Comments'] as string | undefined,
+      compilation: t['Compilation'] === true || undefined,
       kind: t['Kind'] as string | undefined,
       bitRate: t['Bit Rate'] as number | undefined,
       sampleRate: t['Sample Rate'] as number | undefined,
