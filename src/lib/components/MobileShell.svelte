@@ -2,7 +2,7 @@
   import ReleaseGrid from './ReleaseGrid.svelte';
   import TrackList from './TrackList.svelte';
   import ArtistList from './ArtistList.svelte';
-  import ReleaseDetail from './ReleaseDetail.svelte';
+  import ReleasePane from './ReleasePane.svelte';
   import TrackDetail from './TrackDetail.svelte';
   import ArtistDetail from './ArtistDetail.svelte';
   import PlaylistView from './PlaylistView.svelte';
@@ -190,20 +190,13 @@
   <main class="mbody">
     {#if detailOpen}
       {#if detailKind === 'release' && detailData}
-        <ReleaseDetail
-          release={detailData.release}
-          sources={detailData.sources}
-          tracks={detailData.tracks ?? []}
-          notes={detailData.notes ?? null}
-          identifiers={detailData.identifiers ?? []}
+        <ReleasePane
+          data={detailData}
           addCta={releaseDetailCta}
           onTrackSelect={(id) => explorerState.setEntity(id)}
           onArtistSelect={(id) => explorerState.setEntity(id)}
           recordDisabled={true}
-          genres={detailData.genres ?? []}
-          styles={detailData.styles ?? []}
-          genreOrigin={detailData.genreOrigin ?? null}
-          onSaveTags={detailData._isDiscogsSearchHit ? undefined : c.tagAndAdvance}
+          onSaveTags={c.tagAndAdvance}
         />
       {:else if detailKind === 'track' && detailData}
         <TrackDetail

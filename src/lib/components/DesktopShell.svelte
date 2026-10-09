@@ -7,7 +7,7 @@
   import ReleaseGrid from './ReleaseGrid.svelte';
   import TrackList from './TrackList.svelte';
   import ArtistList from './ArtistList.svelte';
-  import ReleaseDetail from './ReleaseDetail.svelte';
+  import ReleasePane from './ReleasePane.svelte';
   import TrackDetail from './TrackDetail.svelte';
   import ArtistDetail from './ArtistDetail.svelte';
   import EmptyState from './EmptyState.svelte';
@@ -306,15 +306,10 @@ import RecordingPill from './RecordingPill.svelte';
       <section class="right">
         <button class="pl-detail-close" onclick={() => c.closePlDetail()}>{isGig ? '← Crate' : '← Close detail'}</button>
         {#if plDetail.kind === 'release'}
-          <ReleaseDetail
-            release={plDetail.data.release}
-            sources={plDetail.data.sources}
-            tracks={plDetail.data.tracks ?? []}
+          <ReleasePane
+            data={plDetail.data}
             onArtistSelect={(id) => openPlaylistEntity('artist', id)}
             onAddTrack={isGig ? addToGig : undefined}
-            genres={plDetail.data.genres ?? []}
-            styles={plDetail.data.styles ?? []}
-            genreOrigin={plDetail.data.genreOrigin ?? null}
             onSaveTags={c.tagPlaylistRelease}
             stylesFilter={false}
           />
@@ -352,32 +347,23 @@ import RecordingPill from './RecordingPill.svelte';
         : 'Select a release to see details'
       } />
     {:else if detailKind === 'release' && detailData}
-      <ReleaseDetail
-        release={detailData.release}
-        sources={detailData.sources}
-        tracks={detailData.tracks ?? []}
-        notes={detailData.notes ?? null}
-        identifiers={detailData.identifiers ?? []}
+      <ReleasePane
+        data={detailData}
         addCta={releaseDetailCta}
         onTrackSelect={(id) => explorerState.setEntity(id)}
         onArtistSelect={(id) => explorerState.setEntity(id)}
-        onVet={detailData._isDiscogsSearchHit ? undefined : c.vetAndAdvance}
-        genres={detailData.genres ?? []}
-        styles={detailData.styles ?? []}
-        genreOrigin={detailData.genreOrigin ?? null}
-        onSaveTags={detailData._isDiscogsSearchHit ? undefined : c.tagAndAdvance}
+        onVet={c.vetAndAdvance}
+        onSaveTags={c.tagAndAdvance}
         autoEditTags={explorerState.nav.section === 'library' && explorerState.nav.item === 'untagged'}
         recordDisabled={recordingRelease !== null}
-        onRecord={detailData._isDiscogsSearchHit
-          ? undefined
-          : () => {
-              recordingMinimized = false;
-              recordingRelease = {
-                id: detailData.release.id,
-                title: detailData.release.title,
-                artist: detailData.release.artist,
-              };
-            }}
+        onRecord={() => {
+          recordingMinimized = false;
+          recordingRelease = {
+            id: detailData.release.id,
+            title: detailData.release.title,
+            artist: detailData.release.artist,
+          };
+        }}
       />
     {:else if detailKind === 'track' && detailData}
       <TrackDetail
