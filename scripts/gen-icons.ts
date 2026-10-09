@@ -72,7 +72,7 @@ function encodePng(width: number, height: number, rgba: Uint8Array): Uint8Array 
   return out;
 }
 
-/** A record on the app's ground: outer ring, accent label, spindle hole. */
+/** A record on the app's ground: fine grooves out to the edge, accent label, spindle hole. */
 function drawIcon(size: number, scale = 1): Uint8Array {
   const px = new Uint8Array(size * size * 4);
   const c = size / 2;
@@ -80,10 +80,19 @@ function drawIcon(size: number, scale = 1): Uint8Array {
   const ring = [0xe6, 0xe3, 0xdc];
   const label = [0xa5, 0x8c, 0xf0];
 
-  const rOuter = size * scale * 0.40;
-  const ringW = size * scale * 0.045;
+  const rOuter = size * scale * 0.47;
   const rLabel = size * scale * 0.155;
   const rHole = size * scale * 0.035;
+
+  // Evenly spaced grooves from just outside the label to the rim. Small sizes
+  // get fewer so each groove keeps ~3px of ground either side instead of
+  // smearing into a flat grey disc.
+  const grooveW = Math.max(1, size * scale * 0.007);
+  const firstGroove = rLabel + size * scale * 0.045;
+  const span = rOuter - firstGroove;
+  const grooves = Math.max(2, Math.min(9, Math.floor(span / (grooveW + 3)) + 1));
+  const grooveRadii = Array.from({ length: grooves }, (_, k) => firstGroove + (span * k) / (grooves - 1));
+  const grooveAlpha = 0.6;
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -91,7 +100,11 @@ function drawIcon(size: number, scale = 1): Uint8Array {
       // Coverage-based antialiasing: how far inside the shape edge this pixel sits.
       const edge = (dist: number, r: number) => Math.max(0, Math.min(1, r - dist + 0.5));
 
-      const aRing = Math.min(edge(d, rOuter), 1 - edge(d, rOuter - ringW));
+      let aRing = 0;
+      for (const r of grooveRadii) {
+        aRing = Math.max(aRing, Math.min(edge(d, r + grooveW / 2), 1 - edge(d, r - grooveW / 2)));
+      }
+      aRing *= grooveAlpha;
       const aLabel = Math.min(edge(d, rLabel), 1 - edge(d, rHole));
 
       const i = (y * size + x) * 4;
