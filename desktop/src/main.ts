@@ -63,6 +63,22 @@ const port = await pickPort(Number(process.env.BOOTH_PORT ?? 4747));
 process.env.PORT = String(port);
 process.env.HOST = "127.0.0.1";
 process.env.BOOTH_MIGRATIONS_DIR = join(boothDir, "migrations");
+
+// The page asks the server about updates; the server asks us through this.
+let pendingUpdate: { version: string } | null = null;
+(globalThis as { __boothDesktop?: unknown }).__boothDesktop = { // shape: src/app.d.ts
+	pendingUpdate: () => pendingUpdate,
+	restartToUpdate: () => void Updater.applyUpdate(),
+	titlebarDoubleClick: () => {
+		// System Settings → Desktop & Dock → "Double-click a window's title bar to".
+		const pref = Bun.spawnSync(["defaults", "read", "-g", "AppleActionOnDoubleClick"]).stdout.toString().trim();
+		if (pref === "Minimize") win.minimize();
+		else if (pref === "None" || pref === "Do Nothing") return;
+		else if (win.isMaximized()) win.unmaximize();
+		else win.maximize();
+	},
+};
+
 await import(join(boothDir, "build", "index.js"));
 
 // --- Window -----------------------------------------------------------------
@@ -111,6 +127,8 @@ const win = new BrowserWindow({
 	title: "Booth",
 	url,
 	frame: { width: 1280, height: 820 },
+	// Booth draws its own title bar, which carries the update callout.
+	titleBarStyle: "hiddenInset",
 });
 
 // Booth opens Discogs and YouTube links in a new tab; send those to the
@@ -130,8 +148,9 @@ ApplicationMenu.on("application-menu-clicked", (event) => {
 });
 
 // --- Updates ----------------------------------------------------------------
-// Each release publishes update archives next to the installers; a newer one
-// downloads in the background and is applied on restart.
+// Each release publishes update archives next to the installers. A newer one
+// downloads in the background, then the page's title bar offers "Restart to
+// Update"; nothing interrupts. Unapplied, it's offered again next launch.
 
 let checking = false;
 
@@ -144,25 +163,21 @@ async function checkForUpdate(fromMenu = false): Promise<void> {
 			if (fromMenu) await message("Updates are off in development builds.");
 			return;
 		}
-		const check = await Updater.checkForUpdate();
-		if (check.error) throw new Error(check.error);
-		if (!check.updateAvailable) {
-			if (fromMenu) await message(`Booth ${local.version} is the latest version.`);
-			return;
+		if (!pendingUpdate) {
+			const check = await Updater.checkForUpdate();
+			if (check.error) throw new Error(check.error);
+			if (!check.updateAvailable) {
+				if (fromMenu) await message(`Booth ${local.version} is the latest version.`);
+				return;
+			}
+			await Updater.downloadUpdate();
+			const info = Updater.updateInfo();
+			if (!info.updateReady) throw new Error(info.error || "the download didn't finish");
+			pendingUpdate = { version: info.version };
 		}
-		await Updater.downloadUpdate();
-		const info = Updater.updateInfo();
-		if (!info.updateReady) throw new Error(info.error || "the download didn't finish");
-		const { response } = await Utils.showMessageBox({
-			type: "info",
-			title: "Update ready",
-			message: `Booth ${info.version} is ready to install.`,
-			detail: "Booth will restart. Your library and settings stay as they are.",
-			buttons: ["Restart Now", "Later"],
-			defaultId: 0,
-			cancelId: 1,
-		});
-		if (response === 0) await Updater.applyUpdate();
+		if (fromMenu) {
+			await message(`Booth ${pendingUpdate.version} has downloaded. Use Restart to Update at the top of the window.`);
+		}
 	} catch (error) {
 		console.error("[update]", error);
 		if (fromMenu) await message(`Couldn't check for updates: ${(error as Error).message}`);

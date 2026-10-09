@@ -98,5 +98,10 @@ export const handle: Handle = async ({ event, resolve }) => {
   autoSyncAll();
   startScheduledSync();
   snapshotOnBoot();
-  return resolve(event);
+  // Inside the desktop app, mark the page before any script runs so its own
+  // title bar takes the space up front instead of shifting the layout later.
+  if (!globalThis.__boothDesktop) return resolve(event);
+  return resolve(event, {
+    transformPageChunk: ({ html }) => html.replace('<html lang="en">', '<html lang="en" data-desktop>'),
+  });
 };

@@ -378,7 +378,8 @@ import RecordingPill from './RecordingPill.svelte';
     /* dvh, not vh: iOS Safari's URL bar shrinks the visual viewport as you
        scroll, and 100vh keeps reporting the *largest* height — which pushes
        the PlayerBar down under the browser chrome. */
-    height: 100dvh;
+    height: calc(100dvh - var(--titlebar-h));
+    margin-top: var(--titlebar-h);
   }
   .explorer {
     display: grid;

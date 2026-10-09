@@ -326,7 +326,8 @@
     flex-direction: column;
     /* dvh, not vh: iOS Safari's URL bar shrinks the visual viewport and 100vh
        keeps reporting the largest height, hiding the tab bar under chrome. */
-    height: 100dvh;
+    height: calc(100dvh - var(--titlebar-h));
+    margin-top: var(--titlebar-h);
     overflow: hidden;
   }
   .mhead {

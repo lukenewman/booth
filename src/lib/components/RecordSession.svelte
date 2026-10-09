@@ -361,7 +361,7 @@
 <style>
   .record-overlay {
     position: fixed;
-    inset: 0;
+    inset: var(--titlebar-h) 0 0 0;
     background: var(--bg, #111);
     z-index: 50;
     display: flex;

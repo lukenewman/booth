@@ -29,7 +29,8 @@ export default {
 		},
 	},
 	scripts: {
-		postWrap: "scripts/post-wrap.ts",
+		postBuild: "scripts/adhoc-sign.ts",
+		postWrap: "scripts/adhoc-sign.ts",
 	},
 	runtime: {
 		exitOnLastWindowClosed: true,

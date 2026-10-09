@@ -26,6 +26,9 @@
      RecordingPill's lifted offset both derive from it, so they can't drift out
      of step when the art is resized. 8px of breathing room above and below. */
   --player-art: 72px;
+  /* Desktop app only: Booth draws the window's title bar itself (it carries
+     the "Restart to Update" callout), so the shells start below it. */
+  --titlebar-h: 0px;
   --player-bar-h: calc(var(--player-art) + 16px);
 
   --space-1: 4px;
@@ -41,6 +44,8 @@
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
+
+html[data-desktop] { --titlebar-h: 38px; }
 
 * { box-sizing: border-box; }
 
