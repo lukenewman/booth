@@ -26,7 +26,6 @@
     syncLastAt = null,
     syncing = false,
     onSync,
-    meta = '',
     externalSearchUrl = null,
     showViewToggle = false,
     view = 'list' as 'list' | 'grid',
@@ -49,7 +48,6 @@
     syncLastAt?: string | null;
     syncing?: boolean;
     onSync?: () => void;
-    meta?: string;
     externalSearchUrl?: string | null;
     showViewToggle?: boolean;
     view?: 'list' | 'grid';
@@ -152,7 +150,6 @@
   {#if showSyncChip}
     <SyncChip isStub={syncIsStub} lastSyncedAt={syncLastAt} {syncing} {onSync} />
   {/if}
-  {#if meta}<span class="meta">{meta}</span>{/if}
 </div>
 
 <style>
@@ -206,12 +203,6 @@
   .toggle button.active {
     background: var(--accent-bg);
     color: var(--text);
-  }
-  .meta {
-    color: var(--text-subtle);
-    font-size: 11px;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
   }
   .open-link {
     color: var(--text-subtle);

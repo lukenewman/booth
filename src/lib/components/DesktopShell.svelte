@@ -61,7 +61,6 @@ import RecordingPill from './RecordingPill.svelte';
   const showReleaseOnlySourceEmpty = $derived(c.showReleaseOnlySourceEmpty);
   const toolbarPlaceholder = $derived(c.toolbarPlaceholder);
   const discogsSearchUrl = $derived(c.discogsSearchUrl);
-  const toolbarMeta = $derived(c.toolbarMeta);
   const syncRunsReloadKey = $derived(c.syncRunsReloadKey);
   const sourceMetaForDetail = $derived(c.sourceMetaForDetail);
   const releaseDetailCta = $derived(c.releaseDetailCta);
@@ -156,7 +155,6 @@ import RecordingPill from './RecordingPill.svelte';
       syncLastAt={selectedSource?.lastSyncedAt ?? null}
       syncing={syncing === selectedSource?.id}
       onSync={handleSync}
-      meta={toolbarMeta}
       externalSearchUrl={discogsSearchUrl}
       showViewToggle={!isAddView && currentEntity === 'releases'}
       view={releaseView}

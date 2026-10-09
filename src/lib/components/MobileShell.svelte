@@ -118,7 +118,7 @@
         <input
           class="search"
           type="search"
-          placeholder="Search library…"
+          placeholder={c.toolbarPlaceholder}
           bind:value={explorerState.q}
           oninput={() => { if (sources.length) loadList(true); }}
         />
@@ -131,7 +131,9 @@
           >{e}</button>
         {/each}
       </div>
-      <span class="meta">{toolbarMeta}</span>
+      <!-- The Search tab carries the count in its placeholder; Library has no
+           input, so it keeps the label. -->
+      {#if tab === 'library'}<span class="meta">{toolbarMeta}</span>{/if}
     </div>
     {#if tab === 'library'}
       <!-- The rail's Starred/Unvetted items have no home in a four-tab shell,
@@ -160,7 +162,6 @@
         bind:value={explorerState.q}
         oninput={() => { if (sources.length) loadList(true); }}
       />
-      <span class="meta">{toolbarMeta}</span>
     </div>
   {/if}
 

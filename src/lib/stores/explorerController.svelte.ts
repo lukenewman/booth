@@ -70,6 +70,10 @@ export function createExplorerController() {
   let listItems = $state<any[]>([]);
   let listTotal = $state(0);
   let listHasMore = $state(false);
+  // The current view's size with no query, for the search placeholder
+  // ("Search 5,668 tracks…"). Separate from listTotal, which shrinks to the
+  // match count while a query is typed; null until the unfiltered load lands.
+  let unfilteredTotal = $state<number | null>(null);
 
   // Add → Discogs: raw search hits (with masterId) + which master is drilled
   // into. The displayed list is derived from these via groupByMaster, so it's
@@ -118,10 +122,12 @@ export function createExplorerController() {
         return;
       }
 
+      const q = explorerState.q;
+      if (reset && !q) unfilteredTotal = null;
       const params = new URLSearchParams();
       params.set('limit', '200');
       params.set('offset', String(offset));
-      if (explorerState.q) params.set('q', explorerState.q);
+      if (q) params.set('q', q);
       // Always explicit for releases/tracks rather than relying on the server's
       // own default, so the toolbar's selected chip and the rows can't disagree.
       // Artists have no date-added concept; the endpoint ignores it anyway.
@@ -162,6 +168,7 @@ export function createExplorerController() {
         listItems = [];
         listTotal = 0;
         listHasMore = false;
+        if (!q) unfilteredTotal = 0;
         return;
       }
 
@@ -186,6 +193,7 @@ export function createExplorerController() {
 
       listItems = reset ? items : [...listItems, ...items];
       listTotal = res.total ?? listItems.length;
+      if (!q) unfilteredTotal = listTotal;
       listHasMore = !!res.hasMore;
     } finally {
       if (gen === loadGen) listLoading = false;
@@ -520,9 +528,13 @@ export function createExplorerController() {
       && !selectedSource.contributes.includes('track'),
   );
 
-  const toolbarPlaceholder = $derived(
-    isAddView ? 'Search Discogs…' : 'Search library…',
-  );
+  const toolbarPlaceholder = $derived.by(() => {
+    if (isAddView) return 'Search Discogs…';
+    const n = unfilteredTotal;
+    const noun = currentEntity === 'tracks' ? 'track' : currentEntity === 'artists' ? 'artist' : 'release';
+    if (n === null) return `Search ${noun}s…`;
+    return `Search ${n.toLocaleString()} ${noun}${n === 1 ? '' : 's'}…`;
+  });
 
   const discogsSearchUrl = $derived.by(() => {
     if (!isAddView) return null;
