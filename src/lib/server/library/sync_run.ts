@@ -3,6 +3,8 @@ import { ulid } from 'ulid';
 import { collate, type CollateSummary } from './collate';
 import { relinkMissing, type RelinkSummary } from './relink';
 import { resolveGenres } from '../genres/resolve';
+import { refreshBandcamp, fetchPendingPages, type BandcampSummary } from '../genres/bandcampSync';
+import { bandcampUsername } from '../genres/bandcamp_env';
 import { getSource } from '../sources/registry';
 import { NotImplementedError, type IngestReport, type SyncInput } from '../sources/types';
 import { hydrateDiscogsTracks } from '../sources/discogs/hydrateDiscogsTracks';
@@ -51,6 +53,8 @@ export type SyncRunSummary = CollateSummary & {
   playlistsRelinked?: RelinkSummary;
   /** Releases with and without a resolved genre after this run. */
   genres?: { tagged: number; untagged: number };
+  /** Bandcamp purchases refreshed and matched (local source, when connected). */
+  bandcamp?: BandcampSummary;
 };
 
 export type AnalysisState =
@@ -136,7 +140,20 @@ async function runSyncNow(db: Database, sourceId: string): Promise<SyncRunRow> {
 
     // Every source can change a release's genre evidence; the resolved table
     // is what filters and pills read, so it is rebuilt after any sync.
+    // Bandcamp rides the local sync: the purchases list is one request, so it
+    // is refreshed and re-matched here; the per-album page fetches run behind
+    // the sync like tempo analysis, because a first run is ~1,000 pages at one
+    // every two seconds.
+    const bcUser = sourceId === 'local' ? bandcampUsername() : null;
+    if (bcUser) summary.bandcamp = await refreshBandcamp(db, bcUser);
+
     summary.genres = resolveGenres(db);
+
+    if (summary.bandcamp && !('error' in summary.bandcamp) && summary.bandcamp.pagesPending) {
+      void fetchPendingPages(db)
+        .then((r) => console.log(`[bandcamp] pages ${JSON.stringify(r)}`))
+        .catch((e) => console.warn('[bandcamp] page fetch failed:', e));
+    }
 
     db.exec('ANALYZE');
 
