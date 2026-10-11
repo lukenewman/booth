@@ -14,9 +14,10 @@ import { homedir } from 'node:os';
 import { basename, dirname, extname, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { artworkPath, thumbnailsFor } from '../src/lib/server/cdj/artwork';
-import { withCues } from '../src/lib/server/cdj/cues';
+import { readCues, withCues, type Cue } from '../src/lib/server/cdj/cues';
+import { mp3Frames, seekHint } from '../src/lib/server/cdj/mp3';
 import { readRekordboxCues } from '../src/lib/server/cdj/rekordbox-xml';
-import { AnlzSlots, indexLocalAnalysis, withPath, type LocalAnalysis } from '../src/lib/server/cdj/anlz';
+import { AnlzSlots, anlzFolder, indexLocalAnalysis, withPath, type LocalAnalysis } from '../src/lib/server/cdj/anlz';
 import {
 	EXPORT_EXT_TABLES,
 	FileType,
@@ -44,6 +45,8 @@ const playlistName = arg('playlist');
 const outRoot = arg('out');
 // Optional: rekordbox's collection XML export, for hot and memory cues.
 const xmlPath = arg('rekordbox-xml');
+// Optional: a USBANLZ-shaped folder (say, a rekordbox stick) to take cues from, found by path hash.
+const cuesAnlzRoot = arg('cues-from-anlz');
 if (!playlistName || !outRoot) {
 	console.error('usage: bun scripts/spike-cdj-usb.ts --playlist NAME --out DIR');
 	process.exit(1);
@@ -150,13 +153,19 @@ for (const r of rows) {
 	// Analysis, with PPTH naming the file's place on the stick
 	mkdirSync(join(outRoot, anlzDir), { recursive: true });
 	// and cues from the rekordbox XML, which the local copies leave empty
-	const cues = cuesByPath.get(r.path.normalize('NFC')) ?? [];
+	let cues: Cue[] = cuesByPath.get(r.path.normalize('NFC')) ?? [];
+	if (!cues.length && cuesAnlzRoot) {
+		const ext = join(cuesAnlzRoot, anlzFolder(usbPath).replace('/PIONEER/USBANLZ/', ''), 'ANLZ0000.EXT');
+		if (existsSync(ext)) cues = readCues(readFileSync(ext));
+	}
+	const frames = cues.length ? mp3Frames(r.path) : null;
+	const seek = frames ? (t: number) => seekHint(frames, t) : undefined;
 	const bpm = found.grid!.beats[0].tempoCenti / 100;
 	for (const ext of ['DAT', 'EXT', '2EX'] as const) {
 		const src = join(found.dir, `ANLZ0000.${ext}`);
 		if (!existsSync(src)) continue;
 		let bytes = withPath(readFileSync(src), usbPath);
-		if (cues.length && ext !== '2EX') bytes = withCues(bytes, ext, cues, bpm);
+		if (cues.length && ext !== '2EX') bytes = withCues(bytes, ext, cues, bpm, seek);
 		writeFileSync(join(outRoot, anlzDir, `${stem}.${ext}`), bytes);
 	}
 

@@ -3,8 +3,12 @@
  * carries empty cue sections and fills them from its database at export time;
  * here they are filled from the rekordbox XML export's POSITION_MARK entries.
  *
- * Ported from baken's cues.rs (MIT), whose layouts were read off a real export
- * and are tested byte for byte there:
+ * Ported from baken's cues.rs (MIT), whose layouts were read off a real export,
+ * then matched byte for byte against rekordbox 7's own cues on Luke's stick
+ * (2026-10-10). Two things rekordbox 7 does that baken's reference did not:
+ * each PCPT carries a seek hint (the cue in 1/75 s and the byte offset of an
+ * MP3 frame 8 frames earlier), and PCP2 entries stop after the colour instead
+ * of padding to 88 bytes.
  *  - `.DAT`: PCOB hot (A–C), PCOB memory
  *  - `.EXT`: PCOB hot (D–H), PCOB memory (empty), PCO2 hot (all), PCO2 memory
  */
@@ -19,7 +23,12 @@ export interface Cue {
 	num: number;
 	name: string;
 	rgb?: [number, number, number];
+	/** rekordbox's own colour bytes (code, r, g, b), when read back from a file; wins over `rgb`. */
+	colour?: [number, number, number, number];
 }
+
+/** Seek hint for a time in seconds; see `seekHint` in mp3.ts. */
+export type Seek = (seconds: number) => { t75: number; byteOffset: number };
 
 const HOT = 1;
 const MEMORY = 0;
@@ -63,7 +72,7 @@ function split(cues: Cue[]): { hot: Cue[]; mem: Cue[] } {
 	return { hot: kept.filter((c) => c.num >= 0).reverse(), mem: kept.filter((c) => c.num < 0).reverse() };
 }
 
-function pcob(list: number, cues: Cue[]): Uint8Array {
+function pcob(list: number, cues: Cue[], seek?: Seek): Uint8Array {
 	const p = new Be()
 		.u32(list)
 		.u16(0)
@@ -74,7 +83,9 @@ function pcob(list: number, cues: Cue[]): Uint8Array {
 		const [prev, next] = list === HOT ? [0xffff, 0xffff] : [i === 0 ? 0xffff : i - 1, i + 1 === n ? 0xffff : i + 1];
 		p.tag('PCPT').u32(0x1c).u32(0x38).u32(hotNumber(c)).u32(0).u32(0x00010000);
 		p.u16(prev).u16(next).u8(cueType(c)).raw([0x00, 0x03, 0xe8]).u32(ms(c.start)).u32(loopMs(c));
-		p.raw(new Array(16).fill(0));
+		const hint = seek?.(c.start) ?? { t75: 0, byteOffset: 0 };
+		// Loop-end hints are not filled: no rekordbox 7 loop has been read yet.
+		p.u32(hint.t75).u32(0).u32(hint.byteOffset).u32(0);
 	});
 	return section('PCOB', 0x18, p.b);
 }
@@ -102,6 +113,7 @@ const HOT_CUE_COLOURS: [number, [number, number, number], [number, number, numbe
 const NO_COLOUR = [0, 0x1a, 0xff, 0x00];
 
 function hotColour(c: Cue): number[] {
+	if (c.colour) return c.colour;
 	if (!c.rgb) return NO_COLOUR;
 	const [r, g, b] = c.rgb;
 	const d = ([pr, pg, pb]: [number, number, number]) => (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
@@ -124,30 +136,68 @@ function pco2(list: number, cues: Cue[], bpm: number): Uint8Array {
 			for (let i = 0; i < c.name.length; i++) comment.push(c.name.charCodeAt(i) >> 8, c.name.charCodeAt(i) & 0xff);
 			comment.push(0, 0);
 		}
-		const len = 0x2c + comment.length + 4 + 40;
+		const len = 0x2c + comment.length + (list === HOT ? 4 : 0);
 		const e = new Be().tag('PCP2').u32(0x10).u32(len).u32(hotNumber(c)).u8(cueType(c)).raw([0x00, 0x03, 0xe8]);
 		e.u32(ms(c.start)).u32(loopMs(c)).u8(0).raw([0x01, 0, 0, 0, 0, 0, 0]);
 		const [num, den] = loopFraction(c, bpm);
-		e.u16(num).u16(den).u32(comment.length).raw(comment).raw(list === HOT ? hotColour(c) : [0, 0, 0, 0]);
-		while (e.b.length < len) e.u8(0);
+		e.u16(num).u16(den).u32(comment.length).raw(comment);
+		if (list === HOT) e.raw(hotColour(c));
 		p.raw(e.b);
 	}
 	return section('PCO2', 0x14, p.b);
 }
 
-export function cueSections(kind: 'DAT' | 'EXT', cues: Cue[], bpm: number): Uint8Array[] {
+export function cueSections(kind: 'DAT' | 'EXT', cues: Cue[], bpm: number, seek?: Seek): Uint8Array[] {
 	const { hot, mem } = split(cues);
 	const datHot = hot.filter((c) => c.num < DAT_HOT_CUES);
 	const extHot = hot.filter((c) => c.num >= DAT_HOT_CUES);
 	return kind === 'DAT'
-		? [pcob(HOT, datHot), pcob(MEMORY, mem)]
-		: [pcob(HOT, extHot), pcob(MEMORY, []), pco2(HOT, hot, bpm), pco2(MEMORY, mem, bpm)];
+		? [pcob(HOT, datHot, seek), pcob(MEMORY, mem, seek)]
+		: [pcob(HOT, extHot, seek), pcob(MEMORY, [], seek), pco2(HOT, hot, bpm), pco2(MEMORY, mem, bpm)];
+}
+
+/**
+ * Reads the cues back out of a `.EXT` file's PCO2 sections (hot and memory),
+ * in XML order — each list un-reversed — so `cueSections(readCues(f))` round-trips.
+ */
+export function readCues(extFile: Uint8Array): Cue[] {
+	const lists: Cue[][] = [];
+	for (const s of readSections(extFile).sections.filter((x) => x.tag === 'PCO2')) {
+		const cues: Cue[] = [];
+		lists.push(cues);
+		const v = new DataView(s.bytes.buffer, s.bytes.byteOffset, s.bytes.byteLength);
+		const count = v.getUint16(16);
+		let at = 20;
+		for (let k = 0; k < count; k++) {
+			const len = v.getUint32(at + 8);
+			const hot = v.getUint32(at + 12);
+			const type = v.getUint8(at + 16);
+			const start = v.getUint32(at + 20) / 1000;
+			const loopEnd = v.getUint32(at + 24);
+			const commentLen = len >= 0x2c ? v.getUint32(at + 0x28) : 0;
+			let name = '';
+			for (let i = 0; i + 1 < commentLen - 2; i += 2) name += String.fromCharCode(v.getUint16(at + 0x2c + i));
+			const cue: Cue = { start, num: hot ? hot - 1 : -1, name };
+			if (type === 2 && loopEnd !== NONE) cue.end = loopEnd / 1000;
+			const colourAt = at + 0x2c + commentLen;
+			if (hot && colourAt + 4 <= at + len) {
+				const code = v.getUint8(colourAt);
+				cue.colour = [code, v.getUint8(colourAt + 1), v.getUint8(colourAt + 2), v.getUint8(colourAt + 3)];
+				const match = HOT_CUE_COLOURS.find((c) => c[0] === code);
+				if (match) cue.rgb = match[1];
+				else if (code === 0) cue.rgb = [40, 226, 20];
+			}
+			cues.push(cue);
+			at += len;
+		}
+	}
+	return lists.flatMap((l) => l.reverse());
 }
 
 /** Replaces an analysis file's cue sections, keeping rekordbox's section order. */
-export function withCues(file: Uint8Array, kind: 'DAT' | 'EXT', cues: Cue[], bpm: number): Uint8Array {
+export function withCues(file: Uint8Array, kind: 'DAT' | 'EXT', cues: Cue[], bpm: number, seek?: Seek): Uint8Array {
 	const { header, sections } = readSections(file);
-	const fresh = cueSections(kind, cues, bpm);
+	const fresh = cueSections(kind, cues, bpm, seek);
 	const parts = sections.map((s) => (s.tag === 'PCOB' || s.tag === 'PCO2' ? (fresh.shift() ?? s.bytes) : s.bytes));
 	const total = header.length + parts.reduce((n, p) => n + p.length, 0);
 	const out = new Uint8Array(total);
