@@ -82,6 +82,47 @@ export function withPath(file: Uint8Array, usbPath: string): Uint8Array {
 	return out;
 }
 
+/**
+ * Where a player looks for a track's analysis. Players ignore the database's
+ * analyze_path and hash the audio file's path on the stick (over UTF-16 code
+ * units) to find the folder themselves, so an export must put the files exactly
+ * there. Algorithm recovered from the rekordbox binary by the fourfour project,
+ * as implemented in baken (MIT); verified against Luke's own gig stick.
+ */
+export function anlzFolder(usbPath: string): string {
+	let h = 0;
+	for (let i = 0; i < usbPath.length; i++) {
+		const c = usbPath.charCodeAt(i);
+		h = (Math.imul(h, 0x5bc9) + c) >>> 0;
+		h = (Math.imul(h, 0x93b5) + c) >>> 0;
+	}
+	const r = h % 200003;
+	const p =
+		(r & 1) |
+		((r >> 1) & 2) |
+		((r >> 4) & 4) |
+		((r >> 4) & 8) |
+		((r >> 5) & 0x10) |
+		((r >> 8) & 0x20) |
+		((r >> 10) & 0x40);
+	const hex = (n: number, w: number) => n.toString(16).toUpperCase().padStart(w, '0');
+	return `/PIONEER/USBANLZ/P${hex(p, 3)}/${hex(r, 8)}`;
+}
+
+/**
+ * Two paths can hash to one folder (about n²/400000 pairs for n tracks). rekordbox
+ * then numbers the files: ANLZ0000 for the first track, ANLZ0001 for the next.
+ */
+export class AnlzSlots {
+	private taken = new Map<string, number>();
+	assign(usbPath: string): { folder: string; stem: string } {
+		const folder = anlzFolder(usbPath);
+		const n = this.taken.get(folder) ?? 0;
+		this.taken.set(folder, n + 1);
+		return { folder, stem: `ANLZ${n.toString().padStart(4, '0')}` };
+	}
+}
+
 export interface BeatGrid {
 	beats: { beatInBar: number; tempoCenti: number; timeMs: number }[];
 }

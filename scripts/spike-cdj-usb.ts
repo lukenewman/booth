@@ -12,7 +12,7 @@ import { Database } from 'bun:sqlite';
 import { copyFileSync, mkdirSync, readFileSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, join } from 'node:path';
-import { indexLocalAnalysis, withPath, type LocalAnalysis } from '../src/lib/server/cdj/anlz';
+import { AnlzSlots, indexLocalAnalysis, withPath, type LocalAnalysis } from '../src/lib/server/cdj/anlz';
 import {
 	EXPORT_EXT_TABLES,
 	FileType,
@@ -37,8 +37,6 @@ function arg(name: string): string | undefined {
 }
 const playlistName = arg('playlist');
 const outRoot = arg('out');
-// Offsets analysis folder names (hex), so a test can share a stick with a rekordbox export.
-const anlzBase = parseInt(arg('anlz-base') ?? '0', 16);
 if (!playlistName || !outRoot) {
 	console.error('usage: bun scripts/spike-cdj-usb.ts --playlist NAME --out DIR');
 	process.exit(1);
@@ -110,6 +108,7 @@ const idFor = (m: Map<string, number>, k: string) => {
 };
 
 const tracks: TrackRow[] = [];
+const anlzSlots = new AnlzSlots();
 const skipped: string[] = [];
 for (const r of rows) {
 	const label = `${r.artist} — ${r.title}`;
@@ -131,16 +130,17 @@ for (const r of rows) {
 	const f = facets(r.id);
 	const id = tracks.length + 1;
 	const usbPath = `/Contents/${fat(r.artist)}/${fat(r.album ?? 'Unknown Album')}/${fat(basename(r.path))}`;
-	const anlzDir = `/PIONEER/USBANLZ/P${(id >> 12).toString(16).toUpperCase().padStart(3, '0')}/${(anlzBase + id).toString(16).toUpperCase().padStart(8, '0')}`;
+	// Players find analysis by hashing the audio path, not via the database row.
+	const { folder: anlzDir, stem } = anlzSlots.assign(usbPath);
 
 	// Audio
 	mkdirSync(dirname(join(outRoot, usbPath)), { recursive: true });
 	copyFileSync(r.path, join(outRoot, usbPath));
 	// Analysis, with PPTH naming the file's place on the stick
 	mkdirSync(join(outRoot, anlzDir), { recursive: true });
-	for (const name of ['ANLZ0000.DAT', 'ANLZ0000.EXT', 'ANLZ0000.2EX']) {
-		const src = join(found.dir, name);
-		if (existsSync(src)) writeFileSync(join(outRoot, anlzDir, name), withPath(readFileSync(src), usbPath));
+	for (const ext of ['DAT', 'EXT', '2EX']) {
+		const src = join(found.dir, `ANLZ0000.${ext}`);
+		if (existsSync(src)) writeFileSync(join(outRoot, anlzDir, `${stem}.${ext}`), withPath(readFileSync(src), usbPath));
 	}
 
 	const artistId = idFor(artists, r.artist);
@@ -166,7 +166,7 @@ for (const r of rows) {
 		rating: 0,
 		colorId: 0,
 		dateAdded: today,
-		analyzePath: `${anlzDir}/ANLZ0000.DAT`,
+		analyzePath: `${anlzDir}/${stem}.DAT`,
 		analyzeDate: today,
 		comment: '',
 		mixName: '',
