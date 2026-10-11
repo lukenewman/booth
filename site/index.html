@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>booth</title>
+<meta name="description" content="booth is a Mac app for DJs: your Discogs collection and Apple Music library in one place, with vinyl recording built in.">
+<link rel="icon" href="img/icon.png">
+<style>
+  /* The app's own palette (src/app.css): warm graphite, lavender accent. */
+  :root {
+    --bg-sunken: #1f1f1d;
+    --bg: #262624;
+    --bg-raised: #2e2e2b;
+    --border: #42423e;
+    --text: #e6e3dc;
+    --text-muted: #a39f96;
+    --text-subtle: #8d8a82;
+    --accent: #a58cf0;
+    --accent-strong: #bba8f7;
+    --accent-bg: #373249;
+    --accent-border: #594c84;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 17px;
+    line-height: 1.55;
+  }
+  a { color: var(--accent-strong); }
+  img { display: block; max-width: 100%; height: auto; }
+  code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+
+  header.wrap { padding-top: 72px; padding-bottom: 40px; text-align: center; }
+  .mark { display: inline-flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .mark img { width: 40px; height: 40px; border-radius: 9px; }
+  h1 { font-size: clamp(32px, 5.5vw, 52px); line-height: 1.1; letter-spacing: -0.025em; font-weight: 700; margin: 28px auto 16px; max-width: 16em; text-wrap: balance; }
+  .lede { color: var(--text-muted); font-size: 19px; max-width: 34em; margin: 0 auto; text-wrap: pretty; }
+
+  .download { margin-top: 32px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .btn {
+    display: inline-block; padding: 13px 26px; border-radius: 10px;
+    background: var(--accent); color: #17151f; font-weight: 600; text-decoration: none;
+    transition: background 0.15s;
+  }
+  .btn:hover { background: var(--accent-strong); }
+  .btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; }
+  .alt { font-size: 14px; color: var(--text-subtle); }
+  .alt a { color: var(--text-muted); }
+
+  .shot {
+    border-radius: 12px; overflow: hidden;
+    border: 1px solid var(--border);
+    box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.6);
+    background: var(--bg-sunken);
+  }
+  .hero-shot { margin: 8px auto 0; }
+
+  section { padding: 96px 0 0; }
+  h2 { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-subtle); margin: 0 0 32px; }
+
+  .feature { display: grid; grid-template-columns: 1fr 1.6fr; gap: 48px; align-items: center; margin-bottom: 80px; }
+  .feature:nth-of-type(even) { grid-template-columns: 1.6fr 1fr; }
+  .feature:nth-of-type(even) .copy { order: 2; }
+  .feature h3 { font-size: 26px; line-height: 1.2; letter-spacing: -0.015em; margin: 0 0 12px; text-wrap: balance; }
+  .feature p { color: var(--text-muted); margin: 0; text-wrap: pretty; }
+  .feature.text-only { grid-template-columns: 1fr; max-width: 36em; }
+
+  .note { color: var(--text-muted); max-width: 40em; }
+
+  ol.steps { list-style: none; counter-reset: step; padding: 0; margin: 0; display: grid; gap: 14px; max-width: 46em; }
+  ol.steps li {
+    counter-increment: step; position: relative;
+    background: var(--bg-raised); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 20px 18px 64px;
+  }
+  ol.steps li::before {
+    content: counter(step); position: absolute; left: 20px; top: 18px;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent-bg); border: 1px solid var(--accent-border); color: var(--accent-strong);
+    font-size: 14px; font-weight: 600; display: grid; place-items: center;
+  }
+  ol.steps strong { display: block; margin-bottom: 4px; }
+  ol.steps p { margin: 0; color: var(--text-muted); }
+  ol.steps .optional { font-size: 12px; font-weight: 500; color: var(--text-subtle); margin-left: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+  footer { margin-top: 120px; padding: 32px 0 48px; border-top: 1px solid var(--border); color: var(--text-subtle); font-size: 14px; }
+  footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  footer a { color: var(--text-muted); }
+
+  @media (max-width: 760px) {
+    header.wrap { padding-top: 48px; }
+    section { padding-top: 64px; }
+    .feature, .feature:nth-of-type(even) { grid-template-columns: 1fr; gap: 20px; margin-bottom: 56px; }
+    .feature:nth-of-type(even) .copy { order: 0; }
+    ol.steps li { padding-left: 56px; }
+    ol.steps li::before { left: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <div class="mark"><img src="img/icon.png" alt="">booth</div>
+  <h1>Your records, all in one crate.</h1>
+  <p class="lede">booth is a Mac app for DJs. It puts your Discogs collection and your Apple Music library in one place, so you can browse, play, and plan sets from it, and record your vinyl straight into it.</p>
+  <div class="download">
+    <a class="btn" href="https://github.com/lukenewman/booth/releases/latest/download/booth-apple-silicon.dmg">Download for Mac</a>
+    <span class="alt">Apple Silicon (M1 or newer) · <a href="https://github.com/lukenewman/booth/releases/latest/download/booth-intel.zip">Intel Mac version</a></span>
+  </div>
+</header>
+
+<div class="wrap">
+  <img class="shot hero-shot" src="img/hero.jpg" width="2400" height="1500" alt="booth showing a grid of record covers, with one release open beside it: its tracklist, tags and a Record from vinyl button.">
+</div>
+
+<main class="wrap">
+  <section>
+    <h2>What it does</h2>
+
+    <div class="feature">
+      <div class="copy">
+        <h3>One library, wherever the music lives</h3>
+        <p>Records from Discogs and files from Apple Music land in the same list, matched up so each release shows once. Tempo, stars and notes sit right next to every track, and anything with a file plays in the app.</p>
+      </div>
+      <img class="shot" src="img/library.jpg" width="1600" height="963" loading="lazy" alt="A list of tracks with cover art, tempo, length and stars.">
+    </div>
+
+    <div class="feature">
+      <div class="copy">
+        <h3>Add a record in seconds</h3>
+        <p>Search Discogs by name, or hold the sleeve up to your camera and scan its barcode. It goes straight into your Discogs collection and your library.</p>
+      </div>
+      <img class="shot" src="img/add.jpg" width="1600" height="963" loading="lazy" alt="Discogs search results shown as a grid of covers.">
+    </div>
+
+    <div class="feature text-only">
+      <div class="copy">
+        <h3>Record your vinyl into it</h3>
+        <p>Plug in your audio interface, drop the needle, and record a side. booth finds the gaps between tracks, lines them up with the tracklist from Discogs, and saves each one as a file you can play and take to a gig.</p>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="copy">
+        <h3>Plan the night</h3>
+        <p>Star what works, write notes on what doesn't, and build playlists and gig sets from the tracks you trust. Everything is keyboard-first, so you can move fast.</p>
+      </div>
+      <img class="shot" src="img/gigs.jpg" width="1600" height="815" loading="lazy" alt="A playlist called Late room with six tracks, their tempos and lengths.">
+    </div>
+  </section>
+
+  <section id="install">
+    <h2>Install and set up</h2>
+    <ol class="steps">
+      <li>
+        <strong>Download and install</strong>
+        <p>Open the <a href="https://github.com/lukenewman/booth/releases/latest/download/booth-apple-silicon.dmg">.dmg</a> and drag booth into Applications. On an Intel Mac, unzip the <a href="https://github.com/lukenewman/booth/releases/latest/download/booth-intel.zip">Intel version</a> and follow the README inside.</p>
+      </li>
+      <li>
+        <strong>Let macOS open it</strong>
+        <p>The first time, macOS refuses because booth isn't from the App Store. Click <b>Done</b>, open <b>System Settings → Privacy &amp; Security</b>, scroll down, click <b>Open Anyway</b> next to the message about booth, and confirm. You only do this once.</p>
+      </li>
+      <li>
+        <strong>Connect Discogs</strong>
+        <p>booth asks for a Discogs token. Get one from <a href="https://www.discogs.com/settings/developers">Discogs → Settings → Developers</a> (“Generate new token”) and paste it in. Your collection starts loading straight away.</p>
+      </li>
+      <li>
+        <strong>Bring in Apple Music <span class="optional">Optional</span></strong>
+        <p>In Music, open <b>Settings → Advanced</b> and turn on <b>Share Library XML with other applications</b>. Then click <b>Find my Music library</b> in booth, and allow access to your Music folder when macOS asks.</p>
+      </li>
+      <li>
+        <strong>Tempo analysis <span class="optional">Optional</span></strong>
+        <p>To have booth work out BPMs, install ffmpeg with <a href="https://brew.sh">Homebrew</a>: <code>brew install ffmpeg</code>.</p>
+      </li>
+      <li>
+        <strong>That's it</strong>
+        <p>booth keeps itself up to date. When a new version is ready, a “Restart to Update” button shows up in the title bar. The camera and microphone prompts appear the first time you scan a barcode or record.</p>
+      </li>
+    </ol>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Mac only. A personal project by Luke Newman.</span>
+    <span><a href="https://github.com/lukenewman/booth">GitHub</a> · <a href="https://github.com/lukenewman/booth/releases">Release notes</a></span>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -94,9 +94,16 @@ function snapshotOnBoot() {
   seedPlaylistJournal(getDb());
 }
 
+// BOOTH_NO_SYNC=1 runs booth against a frozen library: no boot sync, no
+// scheduler. The site's demo library depends on it, since a boot sync would
+// pull the whole Discogs collection back into the pruned copy.
+const syncDisabled = env.BOOTH_NO_SYNC === '1';
+
 export const handle: Handle = async ({ event, resolve }) => {
-  autoSyncAll();
-  startScheduledSync();
+  if (!syncDisabled) {
+    autoSyncAll();
+    startScheduledSync();
+  }
   snapshotOnBoot();
   // Inside the desktop app, mark the page before any script runs so its own
   // title bar takes the space up front instead of shifting the layout later.
