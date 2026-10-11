@@ -12,6 +12,10 @@ import { Database } from 'bun:sqlite';
 import { copyFileSync, mkdirSync, readFileSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { artworkPath, thumbnailsFor } from '../src/lib/server/cdj/artwork';
+import { withCues } from '../src/lib/server/cdj/cues';
+import { readRekordboxCues } from '../src/lib/server/cdj/rekordbox-xml';
 import { AnlzSlots, indexLocalAnalysis, withPath, type LocalAnalysis } from '../src/lib/server/cdj/anlz';
 import {
 	EXPORT_EXT_TABLES,
@@ -20,6 +24,7 @@ import {
 	Table,
 	albumRow,
 	artistRow,
+	artworkRow,
 	buildDatabase,
 	hex,
 	namedRow,
@@ -37,6 +42,8 @@ function arg(name: string): string | undefined {
 }
 const playlistName = arg('playlist');
 const outRoot = arg('out');
+// Optional: rekordbox's collection XML export, for hot and memory cues.
+const xmlPath = arg('rekordbox-xml');
 if (!playlistName || !outRoot) {
 	console.error('usage: bun scripts/spike-cdj-usb.ts --playlist NAME --out DIR');
 	process.exit(1);
@@ -83,6 +90,8 @@ function facets(trackId: string): Record<string, unknown> {
 	return out;
 }
 
+const cuesByPath = xmlPath ? readRekordboxCues(xmlPath) : new Map();
+if (xmlPath) console.log(`read cues for ${cuesByPath.size} tracks from the rekordbox XML`);
 console.log('indexing rekordbox analysis…');
 const analysis = indexLocalAnalysis();
 
@@ -102,6 +111,8 @@ const today = new Date().toISOString().slice(0, 10);
 const artists = new Map<string, number>();
 const albums = new Map<string, number>();
 const genres = new Map<string, number>();
+// One artwork row per distinct picture, keyed by its thumbnail's hash.
+const artwork = new Map<string, number>();
 const idFor = (m: Map<string, number>, k: string) => {
 	if (!m.has(k)) m.set(k, m.size + 1);
 	return m.get(k)!;
@@ -138,9 +149,31 @@ for (const r of rows) {
 	copyFileSync(r.path, join(outRoot, usbPath));
 	// Analysis, with PPTH naming the file's place on the stick
 	mkdirSync(join(outRoot, anlzDir), { recursive: true });
-	for (const ext of ['DAT', 'EXT', '2EX']) {
+	// and cues from the rekordbox XML, which the local copies leave empty
+	const cues = cuesByPath.get(r.path.normalize('NFC')) ?? [];
+	const bpm = found.grid!.beats[0].tempoCenti / 100;
+	for (const ext of ['DAT', 'EXT', '2EX'] as const) {
 		const src = join(found.dir, `ANLZ0000.${ext}`);
-		if (existsSync(src)) writeFileSync(join(outRoot, anlzDir, `${stem}.${ext}`), withPath(readFileSync(src), usbPath));
+		if (!existsSync(src)) continue;
+		let bytes = withPath(readFileSync(src), usbPath);
+		if (cues.length && ext !== '2EX') bytes = withCues(bytes, ext, cues, bpm);
+		writeFileSync(join(outRoot, anlzDir, `${stem}.${ext}`), bytes);
+	}
+
+	// Album art, from the picture embedded in the file
+	let artworkId = 0;
+	const thumbs = thumbnailsFor(r.path);
+	if (thumbs) {
+		const key = createHash('sha1').update(thumbs.small).digest('hex');
+		artworkId = artwork.get(key) ?? 0;
+		if (!artworkId) {
+			artworkId = idFor(artwork, key);
+			for (const [medium, bytes] of [[false, thumbs.small], [true, thumbs.medium]] as const) {
+				const at = join(outRoot, artworkPath(artworkId, medium));
+				mkdirSync(dirname(at), { recursive: true });
+				writeFileSync(at, bytes);
+			}
+		}
 	}
 
 	const artistId = idFor(artists, r.artist);
@@ -152,7 +185,7 @@ for (const r of rows) {
 		genreId: typeof f.genre === 'string' && f.genre ? idFor(genres, f.genre) : 0,
 		labelId: 0,
 		keyId: 0,
-		artworkId: 0,
+		artworkId,
 		sampleRate: Number(f.sampleRate) || 44100,
 		sampleDepth: 16,
 		bitrate: Number(f.bitRate) || 0,
@@ -174,7 +207,7 @@ for (const r of rows) {
 		filename: basename(usbPath),
 		filePath: usbPath
 	});
-	console.log(`  ✓ ${label}  (${(found.grid!.beats[0].tempoCenti / 100).toFixed(2)} BPM, ${found.grid!.beats.length} beats)`);
+	console.log(`  ✓ ${label}  (${(found.grid!.beats[0].tempoCenti / 100).toFixed(2)} BPM, ${found.grid!.beats.length} beats${cues.length ? `, ${cues.filter((c) => c.num >= 0).length} hot / ${cues.filter((c) => c.num < 0).length} memory cues` : ''})`);
 }
 
 const albumArtist = new Map([...albums.keys()].map((k) => [k, Number(k.split('\u0000')[0])]));
@@ -183,6 +216,7 @@ const tableRows: Partial<Record<number, RowBuilder[]>> = {
 	[Table.genres]: [...genres].map(([name, id]) => namedRow(id, name)),
 	[Table.artists]: [...artists].map(([name, id]) => artistRow(id, name)),
 	[Table.albums]: [...albums].map(([k, id]) => albumRow(id, albumArtist.get(k)!, k.split('\u0000')[1])),
+	[Table.artwork]: [...artwork.values()].map((id) => artworkRow(id, artworkPath(id, false))),
 	[Table.playlistTree]: [playlistTreeRow({ id: 1, parentId: 0, sortOrder: 0, isFolder: false, name: playlistName })],
 	[Table.playlistEntries]: tracks.map((t, k) => playlistEntryRow(k + 1, t.id, 1))
 };
@@ -196,5 +230,5 @@ mkdirSync(join(outRoot, 'PIONEER/rekordbox'), { recursive: true });
 writeFileSync(join(outRoot, 'PIONEER/rekordbox/export.pdb'), exportPdb);
 writeFileSync(join(outRoot, 'PIONEER/rekordbox/exportExt.pdb'), exportExtPdb);
 
-console.log(`\nwrote ${tracks.length} tracks, ${artists.size} artists, ${albums.size} albums to ${outRoot}`);
+console.log(`\nwrote ${tracks.length} tracks, ${artists.size} artists, ${albums.size} albums, ${artwork.size} artworks to ${outRoot}`);
 if (skipped.length) console.log(`skipped ${skipped.length}:\n  ${skipped.join('\n  ')}`);

@@ -252,6 +252,11 @@ export function namedRow(id: number, name: string): RowBuilder {
 	return () => new Bytes().u32(id).raw(deviceString(name).bytes).padTo(4).done();
 }
 
+/** Artwork row: id, then the path of the small thumbnail (`/PIONEER/Artwork/00001/a1.jpg`). */
+export function artworkRow(id: number, path: string): RowBuilder {
+	return () => new Bytes().u32(id).raw(deviceString(path).bytes).padTo(4).done();
+}
+
 export function keyRow(id: number, name: string): RowBuilder {
 	return () => new Bytes().u32(id).u32(id).raw(deviceString(name).bytes).padTo(4).done();
 }
