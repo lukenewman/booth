@@ -1,42 +1,63 @@
-# sv
+# booth
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+A personal, local-only app for a DJ's record collection: one library across
+vinyl (Discogs), digital files (Apple Music) and vinyl rips recorded straight
+into it, with playback, playlists, gigs, BPM, and USB sticks that Pioneer DJ
+players read, written without rekordbox in between.
 
-## Creating a project
+It's built for one person's collection and machine. There are no accounts and
+nothing leaves your computer except Discogs API calls.
 
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project
-npx sv create my-app
-```
-
-To recreate this project with the same configuration:
+## Running it
 
 ```sh
-# recreate this project
-bunx sv@0.15.2 create --template minimal --types ts --install bun .
+bun install
+bun dev          # http://localhost:5173
 ```
 
-## Developing
+The first run walks you through pasting a Discogs token and connecting the
+Apple Music library. Data lives in `~/.booth/`. `ffmpeg` (`brew install ffmpeg`)
+is needed for tempo analysis, artwork and audio fingerprints.
 
-Once you've installed dependencies with `bun install`, start a development server:
+- `bun check`: type-check
+- `bun run build && bun start`: production server on port 3000
+- `desktop/build.sh`: the macOS app (see `docs/CONTEXT.md`)
 
-```sh
-bun dev
+`docs/CONTEXT.md` is the source of truth for how booth works and why.
 
-# or start the server and open the app in a new browser tab
-bun dev -- --open
-```
+## Acknowledgements
 
-## Building
+The Pioneer USB export stands on years of other people's reverse engineering.
+Thank you to:
 
-To create a production version of your app:
+- **[baken](https://github.com/M-Igashi/baken)** by Masanari Higashi (MIT).
+  Booth's cue writer is ported from its `cues.rs`. Its artwork layout and
+  thumbnail recipe, and its implementation of the player's analysis-folder
+  hash, are what made booth's sticks work on real hardware.
+- **[fourfour](https://github.com/morizkraemer/fourfour)** by @morizkraemer, who
+  recovered from rekordbox that players find a track's analysis by hashing its
+  path.
+- **[Deep Symmetry](https://github.com/Deep-Symmetry)**: James Elliott's
+  [crate-digger](https://github.com/Deep-Symmetry/crate-digger) Kaitai specs
+  for the export database and analysis files, and the
+  [DJ Link analysis](https://djl-analysis.deepsymmetry.org/) built with Henry
+  Betts, Fabian Lesniak and others.
+- **[rekordcrate](https://github.com/Holzhaus/rekordcrate)** by Jan Holthuis and
+  contributors (MPL-2.0). Booth's export is checked with its strict parser, and
+  its real rekordbox exports were the reference for the database's fixed tables.
+- **[pyrekordbox](https://github.com/dylanljones/pyrekordbox)** by @dylanljones,
+  for its documentation of rekordbox's files.
 
-```sh
-bun run build
-```
+Booth is built with [Bun](https://bun.sh), [SvelteKit](https://svelte.dev) and
+[Svelte](https://svelte.dev), [Vite](https://vite.dev),
+[Electrobun](https://electrobun.dev) for the desktop app,
+[FFmpeg](https://ffmpeg.org),
+[music-metadata](https://github.com/Borewit/music-metadata),
+[taglib-wasm](https://github.com/CharlesWiltgen/taglib-wasm) (TagLib),
+[ZXing](https://github.com/zxing-js/browser) for barcode scanning,
+[plist](https://github.com/TooTallNate/plist.js) and
+[ulid](https://github.com/ulid/javascript).
 
-You can preview the production build with `bun run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+Release and collection data comes from the [Discogs](https://www.discogs.com)
+API. Booth isn't affiliated with, or endorsed by, Discogs, Apple, AlphaTheta or
+Pioneer DJ. rekordbox is a trademark of AlphaTheta Corporation.
