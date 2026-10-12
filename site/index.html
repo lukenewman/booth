@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>booth</title>
-<meta name="description" content="booth is a Mac app for DJs: your Discogs collection and Apple Music library in one place, with vinyl recording built in.">
+<meta name="description" content="booth is a Mac app for DJs: your Discogs collection and digital library in one place, with vinyl ripping built in.">
 <link rel="icon" href="img/icon.png">
 <style>
   /* The app's own palette (src/app.css): warm graphite, lavender accent. */
@@ -56,6 +56,11 @@
   .btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; }
   .alt { font-size: 14px; color: var(--text-subtle); }
   .alt a { color: var(--text-muted); }
+  .which-mac { font-size: 14px; color: var(--text-muted); max-width: 30em; }
+  .which-mac summary { cursor: pointer; color: var(--text-subtle); list-style: none; text-decoration: underline dotted; text-underline-offset: 3px; }
+  .which-mac summary::-webkit-details-marker { display: none; }
+  .which-mac summary:hover { color: var(--text-muted); }
+  .which-mac p { margin: 10px 0 0; padding: 12px 16px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 8px; text-align: left; }
 
   .shot {
     border-radius: 12px; overflow: hidden;
@@ -77,7 +82,7 @@
 
   .note { color: var(--text-muted); max-width: 40em; }
 
-  ol.steps { list-style: none; counter-reset: step; padding: 0; margin: 0; display: grid; gap: 14px; max-width: 46em; }
+  ol.steps { list-style: none; counter-reset: step; padding: 0; margin: 0; display: grid; gap: 14px; }
   ol.steps li {
     counter-increment: step; position: relative;
     background: var(--bg-raised); border: 1px solid var(--border); border-radius: 10px;
@@ -112,10 +117,14 @@
 <header class="wrap">
   <div class="mark"><img src="img/icon.png" alt="">booth</div>
   <h1>Your records, all in one crate.</h1>
-  <p class="lede">booth is a Mac app for DJs. It puts your Discogs collection and your Apple Music library in one place, so you can browse, play, and plan sets from it, and record your vinyl straight into it.</p>
+  <p class="lede">booth is a Mac app for DJs. It puts your Discogs collection and your digital library in one place, so you can browse, play, and plan sets from it, and rip your vinyl straight into it.</p>
   <div class="download">
     <a class="btn" href="https://github.com/lukenewman/booth/releases/latest/download/booth-apple-silicon.dmg">Download for Mac</a>
     <span class="alt">Apple Silicon (M1 or newer) · <a href="https://github.com/lukenewman/booth/releases/latest/download/booth-intel.zip">Intel Mac version</a></span>
+    <details class="which-mac">
+      <summary>Which Mac do I have?</summary>
+      <p>Click the Apple menu in the top-left corner and choose <b>About This Mac</b>. If the line labelled <b>Chip</b> says <b>Apple M1</b>, M2, M3 or newer, you have Apple Silicon. If it says <b>Processor</b> and mentions <b>Intel</b>, get the Intel version.</p>
+    </details>
   </div>
 </header>
 
@@ -130,7 +139,7 @@
     <div class="feature">
       <div class="copy">
         <h3>One library, wherever the music lives</h3>
-        <p>Records from Discogs and files from Apple Music land in the same list, matched up so each release shows once. Tempo, stars and notes sit right next to every track, and anything with a file plays in the app.</p>
+        <p>Records from Discogs and the files in your digital library land in the same list, matched up so each release shows once. Tempo, stars and notes sit right next to every track, and anything with a file plays in the app.</p>
       </div>
       <img class="shot" src="img/library.jpg" width="1600" height="963" loading="lazy" alt="A list of tracks with cover art, tempo, length and stars.">
     </div>
@@ -145,8 +154,8 @@
 
     <div class="feature text-only">
       <div class="copy">
-        <h3>Record your vinyl into it</h3>
-        <p>Plug in your audio interface, drop the needle, and record a side. booth finds the gaps between tracks, lines them up with the tracklist from Discogs, and saves each one as a file you can play and take to a gig.</p>
+        <h3>Rip your vinyl collection to digital</h3>
+        <p>Plug in your audio interface, drop the needle, and rip a side. booth finds the gaps between tracks, lines them up with the tracklist from Discogs, and saves each one as a file you can play and take to a gig.</p>
       </div>
     </div>
 
@@ -164,7 +173,7 @@
     <ol class="steps">
       <li>
         <strong>Download and install</strong>
-        <p>Open the <a href="https://github.com/lukenewman/booth/releases/latest/download/booth-apple-silicon.dmg">.dmg</a> and drag booth into Applications. On an Intel Mac, unzip the <a href="https://github.com/lukenewman/booth/releases/latest/download/booth-intel.zip">Intel version</a> and follow the README inside.</p>
+        <p>Open the <a href="https://github.com/lukenewman/booth/releases/latest/download/booth-apple-silicon.dmg">.dmg</a> and drag booth into Applications. On an Intel Mac, unzip the <a href="https://github.com/lukenewman/booth/releases/latest/download/booth-intel.zip">Intel version</a> and follow the README inside. Not sure which Mac you have? Apple menu → <b>About This Mac</b>: a <b>Chip</b> line naming Apple M1 or newer means Apple Silicon; a <b>Processor</b> line naming Intel means Intel.</p>
       </li>
       <li>
         <strong>Let macOS open it</strong>
@@ -175,8 +184,8 @@
         <p>booth asks for a Discogs token. Get one from <a href="https://www.discogs.com/settings/developers">Discogs → Settings → Developers</a> (“Generate new token”) and paste it in. Your collection starts loading straight away.</p>
       </li>
       <li>
-        <strong>Bring in Apple Music <span class="optional">Optional</span></strong>
-        <p>In Music, open <b>Settings → Advanced</b> and turn on <b>Share Library XML with other applications</b>. Then click <b>Find my Music library</b> in booth, and allow access to your Music folder when macOS asks.</p>
+        <strong>Bring in your digital library <span class="optional">Optional</span></strong>
+        <p>booth reads the library Apple Music shares. In Music, open <b>Settings → Advanced</b> and turn on <b>Share Library XML with other applications</b>. Then click <b>Find my Music library</b> in booth, and allow access to your Music folder when macOS asks.</p>
       </li>
       <li>
         <strong>Tempo analysis <span class="optional">Optional</span></strong>
@@ -184,7 +193,7 @@
       </li>
       <li>
         <strong>That's it</strong>
-        <p>booth keeps itself up to date. When a new version is ready, a “Restart to Update” button shows up in the title bar. The camera and microphone prompts appear the first time you scan a barcode or record.</p>
+        <p>booth keeps itself up to date. When a new version is ready, a “Restart to Update” button shows up in the title bar. The camera and microphone prompts appear the first time you scan a barcode or rip a record.</p>
       </li>
     </ol>
   </section>
