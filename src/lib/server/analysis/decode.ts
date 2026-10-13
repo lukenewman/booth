@@ -76,6 +76,11 @@ export async function decodeForAnalysis(
   return samples;
 }
 
+/** Decode a whole file to mono float samples at `rate`, for analysis that needs every beat. */
+export async function decodeWhole(filePath: string, rate: number): Promise<Float32Array> {
+  return run(['-hide_banner', '-loglevel', 'error', '-i', filePath, '-ac', '1', '-ar', String(rate), '-f', 'f32le', '-']);
+}
+
 async function run(args: string[]): Promise<Float32Array> {
   let proc;
   try {

@@ -35,19 +35,22 @@ def run_essentia(path):
     return list(beats), []
 
 
-_bt = None
+_bt = {}
 
 
-def run_beat_this(path):
-    global _bt
+def run_beat_this(path, checkpoint="final0"):
+    import torch
     from beat_this.inference import Audio2Beats
-    if _bt is None:
-        _bt = Audio2Beats(checkpoint_path="final0", device="cpu", dbn=False)
-    beats, downbeats = _bt(load(path, 22050), 22050)
+    if checkpoint not in _bt:
+        # One thread per process: the pool already fills the cores, and oversubscribing them costs more than it gains.
+        torch.set_num_threads(1)
+        _bt[checkpoint] = Audio2Beats(checkpoint_path=checkpoint, device="cpu", dbn=False)
+    beats, downbeats = _bt[checkpoint](load(path, 22050), 22050)
     return list(beats), list(downbeats)
 
 
-TRACKERS = {"librosa": run_librosa, "essentia": run_essentia, "beat_this": run_beat_this}
+TRACKERS = {"librosa": run_librosa, "essentia": run_essentia, "beat_this": run_beat_this,
+            "beat_this_small": lambda path: run_beat_this(path, "small0")}
 
 
 def work(job):
