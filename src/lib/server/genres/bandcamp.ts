@@ -7,6 +7,14 @@ const UA = 'Mozilla/5.0 (booth; personal library)';
  * 2013). This is the endpoint Bandcamp's own fan page uses; one request returns
  * the whole public purchase history with exact item URLs.
  */
+/**
+ * Above the collection's size, so one ~3s request returns everything. At 1,000
+ * Bandcamp paged through overlapping results instead: four requests and ~12s
+ * for 1,042 purchases (measured 2026-10-13). collectPages still handles paging
+ * should a collection outgrow this.
+ */
+const COLLECTION_COUNT = 5000;
+
 export async function fetchFanCollection(username: string): Promise<BandcampPurchase[]> {
   const page = await fetch(`https://bandcamp.com/${encodeURIComponent(username)}`, { headers: { 'User-Agent': UA } });
   if (!page.ok) throw new Error(`bandcamp fan page ${page.status}`);
@@ -18,7 +26,7 @@ export async function fetchFanCollection(username: string): Promise<BandcampPurc
     const res = await fetch('https://bandcamp.com/api/fancollection/1/collection_items', {
       method: 'POST',
       headers: { 'User-Agent': UA, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fan_id: Number(fanId), older_than_token: token, count: 1000 }),
+      body: JSON.stringify({ fan_id: Number(fanId), older_than_token: token, count: COLLECTION_COUNT }),
     });
     if (!res.ok) throw new Error(`bandcamp collection ${res.status}`);
     return (await res.json()) as CollectionPage;

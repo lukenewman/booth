@@ -94,3 +94,20 @@ const va = buildMatcher([rel('v1', 'Various Artists', 'Summer Sampler'), rel('v2
 eq(va(buy({ artist: 'Various Artists', albumTitle: 'Summer Sampler', url: 'https://otherlabel.bandcamp.com/album/s' })), { state: 'unmatched' }, 'VA without host agreement');
 eq(va(buy({ artist: 'V/A', albumTitle: 'Winter Sampler', url: 'https://lbl.bandcamp.com/album/w' })), { state: 'matched', releaseId: 'v2' }, 'VA with host agreement');
 console.log('ok various artists');
+
+// One request should carry the whole collection: with count=1000 Bandcamp
+// pages through overlapping results at ~3s a page (4 requests for 1,042
+// purchases); a count above the collection size returns it all at once.
+{
+  const { fetchFanCollection } = await import('../src/lib/server/genres/bandcamp');
+  const realFetch = globalThis.fetch;
+  const bodies: { count: number }[] = [];
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    if (!init?.body) return new Response('{"fan_id":42}');
+    bodies.push(JSON.parse(String(init.body)));
+    return Response.json({ items: [], more_available: false });
+  }) as typeof fetch;
+  try { await fetchFanCollection('someone'); } finally { globalThis.fetch = realFetch; }
+  eq(bodies.map((b) => b.count), [5000], 'one request asks for up to 5,000');
+  console.log('ok single-request collection');
+}
