@@ -25,3 +25,30 @@ eq(s.conflictDetails, [{
   reason: 'entity already linked', entity: 'Daft Punk — Discovery', heldBy: 'itunes-album:one',
 }], 'details name both sides');
 console.log('ok verify-collate-conflicts');
+
+// A sync that drops records must say which ones, not just "−2".
+const db2 = new Database(':memory:');
+db2.exec('PRAGMA foreign_keys = ON');
+runMigrations(db2);
+collate(db2, 'local', {
+  releases: [
+    { externalId: 'alb:a', title: 'Alpha', artist: 'X' },
+    { externalId: 'alb:b', title: 'Beta', artist: 'Y' },
+  ],
+  tracks: [
+    { externalId: 't1', title: 'One', artist: 'X', releaseExternalId: 'alb:a' },
+    { externalId: 't2', title: 'Two', artist: 'Y', releaseExternalId: 'alb:b' },
+  ],
+});
+const s2 = collate(db2, 'local', {
+  releases: [{ externalId: 'alb:a', title: 'Alpha', artist: 'X' }],
+  tracks: [{ externalId: 't1', title: 'One', artist: 'X', releaseExternalId: 'alb:a' }],
+});
+eq([s2.releasesDeleted, s2.tracksDeleted], [1, 1], 'counts');
+eq(s2.removed, [{ kind: 'release', name: 'Y — Beta' }, { kind: 'track', name: 'Y — Two' }], 'removed names');
+const s3 = collate(db2, 'local', {
+  releases: [{ externalId: 'alb:a', title: 'Alpha', artist: 'X' }],
+  tracks: [{ externalId: 't1', title: 'One', artist: 'X', releaseExternalId: 'alb:a' }],
+});
+eq(s3.removed, undefined, 'absent when nothing removed');
+console.log('ok removed names');

@@ -16,6 +16,14 @@
       releasesDeleted: number;
       tracksDeleted: number;
       conflicts: number;
+      conflictDetails?: {
+        kind: string;
+        name: string;
+        reason: 'id held by another record' | 'entity already linked';
+        entity: string;
+        heldBy: string;
+      }[];
+      removed?: { kind: string; name: string }[];
       input?: { path: string; mtime: string; generatedAt?: string };
       stale?: boolean;
       analysis?:
@@ -153,6 +161,32 @@
    * A failed import is the loud case — the file is still sitting in the inbox
    * and nothing else will tell you it didn't make it.
    */
+  /**
+   * Which records a run deleted or couldn't link. Older runs only kept counts,
+   * so this is empty for them and the row shows no disclosure.
+   */
+  function detailLines(run: SyncRun): { removed: string[]; conflicts: string[]; more: number } | null {
+    const s = run.summary;
+    if (!s || run.error) return null;
+    const removed = (s.removed ?? []).map((r) => `${r.name} (${r.kind})`);
+    // Both sides usually carry the same name (a duplicate file, a year that
+    // changed), so only name the other side when it differs.
+    const conflicts = (s.conflictDetails ?? []).map((c) =>
+      c.reason === 'entity already linked'
+        ? c.entity === c.name
+          ? `${c.name} — duplicate: another copy is already linked`
+          : `${c.name} — matched ${c.entity}, which another record already holds`
+        : c.heldBy === c.name
+          ? `${c.name} — still linked to an older record of the same name`
+          : `${c.name} — its id is still linked to ${c.heldBy}`,
+    );
+    if (!removed.length && !conflicts.length) return null;
+    const more =
+      Math.max(0, s.tracksDeleted + s.releasesDeleted - removed.length) +
+      Math.max(0, s.conflicts - conflicts.length);
+    return { removed, conflicts, more };
+  }
+
   function ingestLabel(run: SyncRun): { text: string; warn: boolean } | null {
     const i = run.summary?.ingest;
     if (!i || run.error) return null;
@@ -183,6 +217,7 @@
     {@const stale = staleLabel(run)}
     {@const analysis = analysisLabel(run)}
     {@const ingest = ingestLabel(run)}
+    {@const details = detailLines(run)}
     <div
       class="row"
       class:errored={!!run.error}
@@ -210,6 +245,20 @@
           class:muted={!ingest.warn}
           title={ingest.warn ? run.summary?.ingest?.failed.map((f) => `${f.path}: ${f.error}`).join('\n') : undefined}
         >{ingest.text}</span>
+      {/if}
+      {#if details}
+        <details class="details">
+          <summary>Details</summary>
+          {#if details.removed.length}
+            <div class="group">Removed</div>
+            <ul>{#each details.removed as line}<li>{line}</li>{/each}</ul>
+          {/if}
+          {#if details.conflicts.length}
+            <div class="group">Conflicts</div>
+            <ul>{#each details.conflicts as line}<li>{line}</li>{/each}</ul>
+          {/if}
+          {#if details.more}<div class="more">and {details.more} more</div>{/if}
+        </details>
       {/if}
     </div>
   {/snippet}
@@ -307,6 +356,32 @@
     color: var(--danger);
     white-space: normal;
   }
+
+  .details {
+    grid-column: 2 / -1;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .details summary {
+    cursor: pointer;
+    color: var(--text-subtle);
+    width: fit-content;
+  }
+  .details .group {
+    margin-top: 6px;
+    color: var(--text-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 10px;
+  }
+  .details ul {
+    margin: 2px 0 0;
+    padding-left: 14px;
+    user-select: text;
+  }
+  .details li { padding: 1px 0; overflow-wrap: anywhere; }
+  .details .more { margin-top: 4px; color: var(--text-subtle); }
 
   .row.syncing { color: var(--text-muted); }
 

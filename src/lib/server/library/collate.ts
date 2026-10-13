@@ -60,6 +60,8 @@ export interface CollateSummary {
   conflicts: number;
   /** What each conflict was about, first 20 only. Absent when there were none. */
   conflictDetails?: ConflictDetail[];
+  /** Records this sync deleted because the source no longer has them, first 20 only. Absent when none. */
+  removed?: { kind: EntityKind; name: string }[];
   /**
    * Links whose external_id was rewritten in place because an authoritative
    * match proved the source had renumbered the same entity. Distinct from
@@ -141,10 +143,10 @@ export function collate(
       !!opts.recordingsRoot &&
       externalId.startsWith(opts.recordingsRoot);
     if (result.releases.length > 0) {
-      summary.releasesDeleted = pruneSource(db, 'release', sourceId, externalIds, isVinylRip);
+      summary.releasesDeleted = pruneSource(db, 'release', sourceId, externalIds, summary, isVinylRip);
     }
     if (result.tracks.length > 0) {
-      summary.tracksDeleted = pruneSource(db, 'track', sourceId, externalIds, isVinylRip);
+      summary.tracksDeleted = pruneSource(db, 'track', sourceId, externalIds, summary, isVinylRip);
     }
 
     db.prepare(
@@ -602,6 +604,7 @@ function pruneSource(
   kind: EntityKind,
   sourceId: string,
   keepExternalIds: Set<string>,
+  summary: CollateSummary,
   keepPredicate?: (externalId: string) => boolean,
 ): number {
   const toDelete = db
@@ -625,6 +628,8 @@ function pruneSource(
       )
       .get(kind, row.entity_id);
     if (!remaining) {
+      const removed = (summary.removed ??= []);
+      if (removed.length < MAX_CONFLICT_DETAILS) removed.push({ kind, name: entityName(db, kind, row.entity_id) });
       const table = kind === 'track' ? 'track' : 'release';
       db.prepare(`DELETE FROM ${table} WHERE id=?`).run(row.entity_id);
       db.prepare(
