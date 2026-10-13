@@ -455,6 +455,9 @@ Goal: write a USB stick Pioneer players read, with no rekordbox in between. `scr
   - Cost is about 10 s of CPU per track, 85% of it the network. On one thread onnxruntime and PyTorch take the same time, so Python was never the slow part. wasm takes about 5× the CPU of native, and onnxruntime's CoreML path was far slower than plain CPU (the model gets split across devices). The small model (2M weights) saves only a third, with worse downbeats.
   - A session holds about 1.6 GB after its first chunk and never gives it back, and Bun crashes tearing onnxruntime down at exit. So analysis runs in its own process, which ends with `process.exit()`. Several sessions in one Bun process serialise their runs, so parallel analysis means separate processes.
   - The model goes in `~/.booth/models/beat_this-final0.onnx`; `scripts/beatgrid/export_onnx.py` makes it from the published checkpoint.
+- **Writing booth's grids to a stick** (`spike-cdj-usb.ts --grids booth`; `analysis/grid.ts`). The fitted grid is folded into rekordbox's 70–180 BPM range, with downbeats choosing which beat survives a halving. The rounded tempo is pinned mid-track, the bar phase comes from the tracker's downbeats, and the grid is shifted onto rekordbox's time base per file (the file's own encoder delay, plus 20 ms for MP3). The PQTZ grid is replaced, and the .EXT's extended grid (PQT2) is dropped rather than left contradicting it. Waveforms are still rekordbox's. Two fixes came out of the first playlist:
+  - The fit starts from the most common beat interval, not the median, because beat_this sometimes counts sections at double time and the median then lands between the two levels.
+  - Folding moved tempo agreement from 77% to 81%.
 - beat_this works in 20 ms frames; nudging the whole grid to the strongest onsets (`refine_phase.py`) lifts the 10 ms lock from 34% to 40%. It takes about 10 s per track on CPU with eight in parallel.
 
 ### Genres and styles

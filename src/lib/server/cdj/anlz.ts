@@ -140,6 +140,38 @@ export function readBeatGrid(file: Uint8Array): BeatGrid | null {
 	return { beats };
 }
 
+/**
+ * Replaces an analysis file's beat grid (PQTZ) with `beats`. The extended grid
+ * newer players read from the .EXT (PQT2) is dropped rather than left
+ * contradicting it; the XDJ-700 reads only PQTZ.
+ */
+export function withBeatGrid(file: Uint8Array, beats: BeatGrid['beats']): Uint8Array {
+	const pqtz = new Uint8Array(24 + 8 * beats.length);
+	const v = new DataView(pqtz.buffer);
+	pqtz.set([0x50, 0x51, 0x54, 0x5a]); // PQTZ
+	v.setUint32(4, 24);
+	v.setUint32(8, pqtz.length);
+	v.setUint32(16, 0x00080000);
+	v.setUint32(20, beats.length);
+	beats.forEach((b, k) => {
+		v.setUint16(24 + 8 * k, b.beatInBar);
+		v.setUint16(26 + 8 * k, b.tempoCenti);
+		v.setUint32(28 + 8 * k, b.timeMs);
+	});
+	const { header, sections } = readSections(file);
+	const parts = sections.filter((s) => s.tag !== 'PQT2').map((s) => (s.tag === 'PQTZ' ? pqtz : s.bytes));
+	const total = header.length + parts.reduce((n, p) => n + p.length, 0);
+	const out = new Uint8Array(total);
+	out.set(header);
+	new DataView(out.buffer).setUint32(8, total);
+	let at = header.length;
+	for (const p of parts) {
+		out.set(p, at);
+		at += p.length;
+	}
+	return out;
+}
+
 export interface LocalAnalysis {
 	dir: string;
 	/** What rekordbox recorded for the audio file — locally, just "?/" and the file name. */

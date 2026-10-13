@@ -14,6 +14,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
+import { fitGrid, type Grid } from '../src/lib/server/analysis/grid';
 
 interface Truth {
 	id: string;
@@ -45,56 +46,6 @@ const jsonl = <T>(p: string): T[] =>
 		.filter(Boolean)
 		.map((l) => JSON.parse(l));
 const truth = new Map(jsonl<Truth>(truthPath).map((t) => [t.id, t]));
-
-interface Grid {
-	periodMs: number;
-	/** Time of the beat nearest zero; beat k is at offset + k·period. */
-	offsetMs: number;
-	inliers: number;
-}
-
-/**
- * The fixed grid that best explains a beat list. Searches tempo near the median
- * beat interval for the period whose phases agree most (the length of the mean
- * phase vector), which shrugs off skipped, doubled and stray beats, then refines
- * by least squares over the beats within a quarter beat of that grid.
- */
-export function fitGrid(beats: number[]): Grid | null {
-	if (beats.length < 8) return null;
-	const ibis = beats.slice(1).map((b, i) => b - beats[i]).sort((a, b) => a - b);
-	const median = ibis[Math.floor(ibis.length / 2)];
-	let best = { r: -1, period: median, phase: 0 };
-	for (let period = median * 0.95; period <= median * 1.05; period += 0.02) {
-		let c = 0;
-		let s = 0;
-		for (const b of beats) {
-			const th = (2 * Math.PI * b) / period;
-			c += Math.cos(th);
-			s += Math.sin(th);
-		}
-		const r = Math.hypot(c, s) / beats.length;
-		if (r > best.r) best = { r, period, phase: Math.atan2(s, c) };
-	}
-	let period = best.period;
-	let anchor = ((best.phase / (2 * Math.PI)) * period + period) % period;
-	let used: number[] = [];
-	for (let pass = 0; pass < 3; pass++) {
-		const pts = beats
-			.map((b) => ({ k: Math.round((b - anchor) / period), b }))
-			.filter(({ k, b }) => Math.abs(b - (anchor + k * period)) < period / 4);
-		if (pts.length < 8) return null;
-		const n = pts.length;
-		const mk = pts.reduce((s, p) => s + p.k, 0) / n;
-		const mb = pts.reduce((s, p) => s + p.b, 0) / n;
-		const sxy = pts.reduce((s, p) => s + (p.k - mk) * (p.b - mb), 0);
-		const sxx = pts.reduce((s, p) => s + (p.k - mk) ** 2, 0);
-		period = sxy / sxx;
-		anchor = mb - mk * period;
-		used = pts.map((p) => p.b);
-	}
-	const offset = ((anchor % period) + period) % period;
-	return { periodMs: period, offsetMs: offset, inliers: used.length / beats.length };
-}
 
 const pct = (n: number, d: number) => (d ? `${((100 * n) / d).toFixed(0)}%` : '–');
 const median = (xs: number[]) => (xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] : 0);

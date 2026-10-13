@@ -3,7 +3,10 @@
  * export — audio under /Contents, the DeviceSQL database, and per-track
  * analysis copied from rekordbox's local store with its path rewritten.
  *
- *   bun scripts/spike-cdj-usb.ts --playlist "STEREO OCTOBER" --out /path/to/usb-root
+ *   bun scripts/spike-cdj-usb.ts --playlist "STEREO OCTOBER" --out /path/to/usb-root [--grids booth]
+ *
+ * With --grids booth, beat grids and BPM come from booth's own tracker
+ * (analysis/beats.ts) instead of rekordbox's; waveforms are still rekordbox's.
  *
  * Reads the booth database read-only. Tracks without a local file, or that
  * rekordbox has not analysed, are skipped and listed.
@@ -17,7 +20,10 @@ import { artworkPath, thumbnailsFor } from '../src/lib/server/cdj/artwork';
 import { readCues, withCues, type Cue } from '../src/lib/server/cdj/cues';
 import { mp3Frames, seekHint } from '../src/lib/server/cdj/mp3';
 import { readRekordboxCues } from '../src/lib/server/cdj/rekordbox-xml';
-import { AnlzSlots, anlzFolder, indexLocalAnalysis, withPath, type LocalAnalysis } from '../src/lib/server/cdj/anlz';
+import { AnlzSlots, anlzFolder, indexLocalAnalysis, withBeatGrid, withPath, type LocalAnalysis } from '../src/lib/server/cdj/anlz';
+import { BEAT_RATE, logMelSpectrogram, onnxBeatModel, pickBeats, trackLogits, type BeatModel } from '../src/lib/server/analysis/beats';
+import { decodeWhole } from '../src/lib/server/analysis/decode';
+import { fitGrid, gridBeats, rekordboxShiftMs, type GridBeat } from '../src/lib/server/analysis/grid';
 import {
 	EXPORT_EXT_TABLES,
 	FileType,
@@ -47,6 +53,16 @@ const outRoot = arg('out');
 const xmlPath = arg('rekordbox-xml');
 // Optional: a USBANLZ-shaped folder (say, a rekordbox stick) to take cues from, found by path hash.
 const cuesAnlzRoot = arg('cues-from-anlz');
+// 'booth' to write booth's own beat grids instead of rekordbox's.
+const grids = arg('grids') ?? 'rekordbox';
+let beatModel: BeatModel | null = null;
+/** Booth's grid for a file, on rekordbox's time base. */
+async function boothGrid(path: string, durationMs: number): Promise<GridBeat[] | null> {
+	beatModel ??= await onnxBeatModel(join(homedir(), '.booth/models/beat_this-final0.onnx'));
+	const { beats, downbeats } = pickBeats(await trackLogits(logMelSpectrogram(await decodeWhole(path, BEAT_RATE)), beatModel));
+	const grid = fitGrid(beats.map((b) => b * 1000));
+	return grid ? gridBeats(grid, downbeats.map((d) => d * 1000), durationMs, rekordboxShiftMs(path)) : null;
+}
 if (!playlistName || !outRoot) {
 	console.error('usage: bun scripts/spike-cdj-usb.ts --playlist NAME --out DIR');
 	process.exit(1);
@@ -141,6 +157,21 @@ for (const r of rows) {
 		skipped.push(`${label}: unsupported file type ${ext}`);
 		continue;
 	}
+	const rbBeats = found.grid!.beats;
+	const beats = grids === 'booth' ? await boothGrid(r.path, r.duration_ms ?? rbBeats.at(-1)!.timeMs + 1000) : rbBeats;
+	if (!beats?.length) {
+		skipped.push(`${label}: booth found no steady beat`);
+		continue;
+	}
+	let vsRekordbox = '';
+	if (grids === 'booth') {
+		// How booth's grid sits against rekordbox's, for reading the result on the player.
+		const period = 6_000_000 / rbBeats[0].tempoCenti;
+		const mid = beats[Math.floor(beats.length / 2)];
+		const nearestRb = rbBeats.reduce((a, b) => (Math.abs(b.timeMs - mid.timeMs) < Math.abs(a.timeMs - mid.timeMs) ? b : a));
+		const off = mid.timeMs - nearestRb.timeMs;
+		vsRekordbox = `\n      booth ${(beats[0].tempoCenti / 100).toFixed(2)} BPM vs rekordbox ${(rbBeats[0].tempoCenti / 100).toFixed(2)}; mid-track booth is ${off >= 0 ? '+' : ''}${off} ms (${(off / period).toFixed(2)} beat) from rekordbox; bar 1 ${mid.beatInBar === nearestRb.beatInBar ? 'agrees' : 'differs'}`;
+	}
 	const f = facets(r.id);
 	const id = tracks.length + 1;
 	const usbPath = `/Contents/${fat(r.artist)}/${fat(r.album ?? 'Unknown Album')}/${fat(basename(r.path))}`;
@@ -160,11 +191,12 @@ for (const r of rows) {
 	}
 	const frames = cues.length ? mp3Frames(r.path) : null;
 	const seek = frames ? (t: number) => seekHint(frames, t) : undefined;
-	const bpm = found.grid!.beats[0].tempoCenti / 100;
+	const bpm = beats[0].tempoCenti / 100;
 	for (const ext of ['DAT', 'EXT', '2EX'] as const) {
 		const src = join(found.dir, `ANLZ0000.${ext}`);
 		if (!existsSync(src)) continue;
 		let bytes = withPath(readFileSync(src), usbPath);
+		if (grids === 'booth' && ext !== '2EX') bytes = withBeatGrid(bytes, beats);
 		if (cues.length && ext !== '2EX') bytes = withCues(bytes, ext, cues, bpm, seek);
 		writeFileSync(join(outRoot, anlzDir, `${stem}.${ext}`), bytes);
 	}
@@ -201,7 +233,7 @@ for (const r of rows) {
 		fileSize: statSync(r.path).size,
 		fileType,
 		durationSec: Math.round((r.duration_ms ?? 0) / 1000),
-		tempoCenti: found.grid!.beats[0].tempoCenti,
+		tempoCenti: beats[0].tempoCenti,
 		trackNumber: 0,
 		discNumber: 0,
 		year: r.year ?? 0,
@@ -216,7 +248,7 @@ for (const r of rows) {
 		filename: basename(usbPath),
 		filePath: usbPath
 	});
-	console.log(`  ✓ ${label}  (${(found.grid!.beats[0].tempoCenti / 100).toFixed(2)} BPM, ${found.grid!.beats.length} beats${cues.length ? `, ${cues.filter((c) => c.num >= 0).length} hot / ${cues.filter((c) => c.num < 0).length} memory cues` : ''})`);
+	console.log(`  ✓ ${label}  (${bpm.toFixed(2)} BPM, ${beats.length} beats${cues.length ? `, ${cues.filter((c) => c.num >= 0).length} hot / ${cues.filter((c) => c.num < 0).length} memory cues` : ''})${vsRekordbox}`);
 }
 
 const albumArtist = new Map([...albums.keys()].map((k) => [k, Number(k.split('\u0000')[0])]));
@@ -241,3 +273,5 @@ writeFileSync(join(outRoot, 'PIONEER/rekordbox/exportExt.pdb'), exportExtPdb);
 
 console.log(`\nwrote ${tracks.length} tracks, ${artists.size} artists, ${albums.size} albums, ${artwork.size} artworks to ${outRoot}`);
 if (skipped.length) console.log(`skipped ${skipped.length}:\n  ${skipped.join('\n  ')}`);
+// onnxruntime crashes Bun on a normal exit.
+process.exit(0);
