@@ -1,7 +1,7 @@
 export interface ToastMessage {
   id: number;
   text: string;
-  kind: 'info' | 'error';
+  kind: 'info' | 'success' | 'error';
   action?: { label: string; onClick: () => void };
 }
 

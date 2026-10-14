@@ -38,7 +38,7 @@
   async function add(r: { id: string; title: string }) {
     if (!open) return;
     const { added } = await playlists.addRelease(open.id, r.id);
-    toast.show(added ? `Crated ${r.title}` : 'Already in the crate');
+    toast.show(added ? `Crated ${r.title}` : 'Already in the crate', { kind: added ? 'success' : 'info' });
     q = '';
     results = [];
   }
@@ -152,7 +152,9 @@
   .crate-search input::placeholder { color: var(--text-subtle); }
   .results { position: absolute; left: 14px; right: 14px; z-index: 5; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 4px; }
   .result { display: flex; gap: 8px; align-items: center; width: 100%; padding: 6px 8px; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; }
-  .result.active { background: var(--bg-row-hover); }
+  .result { border-left: 3px solid transparent; }
+  .result.active { background: var(--accent-bg); border-left-color: var(--accent); color: var(--text); }
+  .result:not(.active) .result-text { color: var(--text-muted); }
   .result img, .sleeve.small { width: 28px; height: 28px; object-fit: cover; flex: none; }
   .result-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .crate-list { overflow-y: auto; flex: 1; }

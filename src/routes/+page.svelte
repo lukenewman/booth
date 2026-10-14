@@ -156,10 +156,10 @@
               collection.markRemoved(last.releaseId);
               toast.show('Undone');
             } else {
-              toast.show('Could not undo. Try again.');
+              toast.show('Could not undo. Try again.', { kind: 'error' });
             }
           } catch {
-            toast.show('Could not undo. Network error.');
+            toast.show('Could not undo. Network error.', { kind: 'error' });
           }
         },
         toggleEntity: () => {

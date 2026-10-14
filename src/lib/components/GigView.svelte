@@ -81,7 +81,7 @@
     if (!open) return;
     if (!targetDraft.trim()) return playlists.setTarget(open.id, null);
     const m = parseLength(targetDraft);
-    if (m == null) toast.show('Length not understood — try 3:00 or 180');
+    if (m == null) toast.show('Length not understood — try 3:00 or 180', { kind: 'error' });
     else await playlists.setTarget(open.id, m);
   }
 
@@ -113,7 +113,7 @@
     const trackId = dt.getData(TRACK);
     if (trackId) {
       const { moved, added } = await playlists.placeTrack(open.id, trackId, section.id);
-      if (added) toast.show(`Added to ${section.name}`);
+      if (added) toast.show(`Added to ${section.name}`, { kind: 'success' });
       else if (moved) toast.show(`Moved to ${section.name}`);
     }
   }

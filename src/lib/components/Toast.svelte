@@ -4,7 +4,7 @@
 
 <div class="container">
   {#each toast.messages as msg (msg.id)}
-    <div class="toast" class:error={msg.kind === 'error'}>
+    <div class="toast {msg.kind}">
       <span>{msg.text}</span>
       {#if msg.action}
         <button
@@ -32,9 +32,12 @@
     gap: 8px;
     z-index: 200;
   }
+  /* Tinted by kind, with a solid edge, so a toast reads at a glance against
+     the dark UI instead of blending into the player bar. */
   .toast {
-    background: var(--bg-raised);
-    border: 1px solid var(--border-strong);
+    background: var(--accent-bg);
+    border: 1px solid var(--accent-border);
+    border-left: 4px solid var(--accent);
     border-radius: var(--radius);
     padding: 8px 14px;
     color: var(--text);
@@ -43,9 +46,12 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    animation: toast-in 160ms ease-out;
   }
-  .toast.error {
-    border-color: rgba(219, 90, 90, 0.5);
+  .toast.success { background: var(--ok-bg); border-color: var(--ok-border); border-left-color: var(--ok); }
+  .toast.error { background: var(--danger-bg); border-color: var(--danger-border); border-left-color: var(--danger); }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(8px); }
   }
   button {
     background: transparent;

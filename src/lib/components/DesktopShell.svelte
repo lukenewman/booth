@@ -56,7 +56,7 @@ import RecordingPill from './RecordingPill.svelte';
     const open = playlists.openPlaylist;
     if (!open) return;
     const { added, sectionName } = await playlists.addTrack(open.id, trackId);
-    toast.show(added ? 'Added to Unsorted' : `Already in ${sectionName}`);
+    toast.show(added ? 'Added to Unsorted' : `Already in ${sectionName}`, { kind: added ? 'success' : 'info' });
   }
   const libraryQuery = $derived(c.libraryQuery);
   const drilledMaster = $derived(c.drilledMaster);
@@ -110,7 +110,7 @@ import RecordingPill from './RecordingPill.svelte';
     const starred = explorerState.nav.section === 'library' && explorerState.nav.item === 'starred';
     const created = await playlists.createSmart(name, { genres, styles, ...(starred ? { starred: true } : {}) });
     if (created) explorerState.setNav({ section: 'playlist', item: created.id });
-    else toast.show('Couldn’t create the smart playlist');
+    else toast.show('Couldn’t create the smart playlist', { kind: 'error' });
   }
   // Where the Music library offer appears: once in the library (it can be
   // dismissed), and for good under Sources → Local, which it fills.
@@ -139,7 +139,7 @@ import RecordingPill from './RecordingPill.svelte';
     onAddTrackToPlaylist={async (playlistId, trackId) => {
       const { added } = await playlists.addTrack(playlistId, trackId);
       const name = playlists.items.find((p) => p.id === playlistId)?.name ?? 'playlist';
-      toast.show(added ? `Added to ${name}` : 'Already in playlist');
+      toast.show(added ? `Added to ${name}` : 'Already in playlist', { kind: added ? 'success' : 'info' });
     }}
     onCreateGig={async (name, minutes) => {
       const created = await playlists.createGig(name, minutes);
@@ -152,7 +152,7 @@ import RecordingPill from './RecordingPill.svelte';
     onAddReleaseToPlaylist={async (playlistId, releaseId) => {
       const { added } = await playlists.addRelease(playlistId, releaseId);
       const name = playlists.items.find((p) => p.id === playlistId)?.name ?? 'gig';
-      toast.show(added ? `Crated in ${name}` : 'Already in the crate');
+      toast.show(added ? `Crated in ${name}` : 'Already in the crate', { kind: added ? 'success' : 'info' });
     }}
   />
 

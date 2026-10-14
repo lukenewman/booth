@@ -702,9 +702,9 @@ export function createExplorerController() {
             },
           ],
         };
-        toast.show('Added');
+        toast.show('Added', { kind: 'success' });
       } else {
-        toast.show('Could not add. Try again.');
+        toast.show('Could not add. Try again.', { kind: 'error' });
       }
     } finally {
       addSubmitting = false;
@@ -765,10 +765,10 @@ export function createExplorerController() {
         toast.show(successToast);
       } else {
         const err = await res.json().catch(() => ({}));
-        toast.show((err && err.message) || 'Could not remove. Try again.');
+        toast.show((err && err.message) || 'Could not remove. Try again.', { kind: 'error' });
       }
     } catch {
-      toast.show('Could not remove. Network error.');
+      toast.show('Could not remove. Network error.', { kind: 'error' });
     }
   }
 
@@ -900,11 +900,11 @@ export function createExplorerController() {
       const body = new FormData();
       body.append('file', file);
       const res = await fetch(`/api/library/releases/${encodeURIComponent(releaseId)}/cover`, { method: 'POST', body });
-      if (!res.ok) { toast.show(res.status === 413 ? 'Image too large (max 10MB)' : 'Couldn’t set the cover'); return; }
+      if (!res.ok) { toast.show(res.status === 413 ? 'Image too large (max 10MB)' : 'Couldn’t set the cover', { kind: 'error' }); return; }
       url = (await res.json()).coverUrl;
     } else {
       const res = await fetch(`/api/library/releases/${encodeURIComponent(releaseId)}/cover`, { method: 'DELETE' });
-      if (!res.ok) { toast.show('Couldn’t remove the cover'); return; }
+      if (!res.ok) { toast.show('Couldn’t remove the cover', { kind: 'error' }); return; }
     }
     const patch = { thumb_url: url, cover_url: url, cover_override: url };
     if (detailData?.release?.id === releaseId) detailData = { ...detailData, release: { ...detailData.release, ...patch } };
@@ -925,7 +925,7 @@ export function createExplorerController() {
       headers: { 'content-type': 'application/json' },
       body: tags ? JSON.stringify(tags) : undefined,
     });
-    if (!res.ok) { toast.show('Couldn’t save tags'); return; }
+    if (!res.ok) { toast.show('Couldn’t save tags', { kind: 'error' }); return; }
     void genresStore.load(true);
     if (plDetail?.kind === 'release' && plDetail.data?.release?.id === releaseId) {
       plDetail = { kind: 'release', data: { ...plDetail.data, ...(await res.json()) } };
@@ -959,7 +959,7 @@ export function createExplorerController() {
       body: tags ? JSON.stringify(tags) : undefined,
     });
     if (!res.ok) {
-      toast.show('Couldn’t save tags');
+      toast.show('Couldn’t save tags', { kind: 'error' });
       return;
     }
     const saved = (await res.json()) as { genres: string[]; styles: string[]; genreOrigin: string | null };

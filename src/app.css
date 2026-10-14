@@ -27,6 +27,9 @@
   --warn-border: #5e4f28;
   --danger-bg: #3a2322;
   --danger-border: #5e2f2c;
+  --ok: #6fbf73;
+  --ok-bg: #22301f;
+  --ok-border: #3f6a3c;
 
   /* PlayerBar artwork is the one number to tune; the bar height and
      RecordingPill's lifted offset both derive from it, so they can't drift out
