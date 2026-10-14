@@ -458,6 +458,7 @@ Goal: write a USB stick Pioneer players read, with no rekordbox in between. `scr
 - **Writing booth's grids to a stick** (`spike-cdj-usb.ts --grids booth`; `analysis/grid.ts`). The fitted grid is folded into rekordbox's 70–180 BPM range, with downbeats choosing which beat survives a halving. The rounded tempo is pinned mid-track, the bar phase comes from the tracker's downbeats, and the grid is shifted onto rekordbox's time base per file (the file's own encoder delay, plus 20 ms for MP3). The PQTZ grid is replaced, and the .EXT's extended grid (PQT2) is dropped rather than left contradicting it. Waveforms are still rekordbox's. Two fixes came out of the first playlist:
   - The fit starts from the most common beat interval, not the median, because beat_this sometimes counts sections at double time and the median then lands between the two levels.
   - Folding moved tempo agreement from 77% to 81%.
+  - **On the XDJ-700 (2026-10-13), every grid in STEREO OCTOBER was right**, including the two where booth disagreed with rekordbox: Working it out at 100.0 against rekordbox's 96.07, and It Feels Great at 85.01 against 84.30. So agreement with rekordbox is a floor for booth's accuracy, not the measure of it.
 - beat_this works in 20 ms frames; nudging the whole grid to the strongest onsets (`refine_phase.py`) lifts the 10 ms lock from 34% to 40%. It takes about 10 s per track on CPU with eight in parallel.
 
 ### Genres and styles
