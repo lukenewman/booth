@@ -14,6 +14,11 @@
   let active = $state(0);
   let timer: ReturnType<typeof setTimeout> | undefined;
   const vinylOnly = $derived(open?.vinylOnly ?? false);
+  // Records with nothing sketched yet float to the top: they're the ones still
+  // waiting for a plan. Otherwise the crate keeps the order records went in.
+  const crate = $derived(
+    open ? [...open.crate.filter((c) => !c.sketchedCount), ...open.crate.filter((c) => c.sketchedCount)] : [],
+  );
 
   function search() {
     clearTimeout(timer);
@@ -101,7 +106,7 @@
       {#if open.crate.length === 0}
         <div class="empty">No records yet. Search above, drag a release onto this gig in the rail, or press <kbd>c</kbd> on a release.</div>
       {/if}
-      {#each open.crate as c (c.entryId)}
+      {#each crate as c (c.entryId)}
         <div class="crate-row" class:missing={!c.releaseId} data-entry-id={c.entryId}>
           <button class="crate-main" disabled={!c.releaseId} onclick={() => c.releaseId && onOpenRelease(c.releaseId)}>
             {#if c.thumbUrl}<img src={c.thumbUrl} alt="" loading="lazy" />{:else}<span class="sleeve"></span>{/if}
