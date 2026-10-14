@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { refuseSmart } from '$lib/server/library/smartGuard';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
-import { getPlaylist, renamePlaylist, deletePlaylist, setTargetMinutes, parseTarget } from '$lib/server/library/playlists';
+import { getPlaylist, renamePlaylist, deletePlaylist, setTargetMinutes, setVinylOnly, parseTarget } from '$lib/server/library/playlists';
 import { recordPlaylistEvent, crateEntryIds, recordNewCrateRows } from '$lib/server/backup';
 
 export const GET: RequestHandler = async ({ params }) => {
@@ -18,9 +18,11 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
   const name = typeof body.name === 'string' ? body.name.trim() : undefined;
   const target = parseTarget(body.targetMinutes);
   if (target === 'invalid') throw error(400, 'targetMinutes must be a positive integer or null');
-  if (name === undefined && target === undefined) throw error(400, 'name or targetMinutes required');
+  if (body.vinylOnly !== undefined && typeof body.vinylOnly !== 'boolean') throw error(400, 'vinylOnly must be a boolean');
+  const vinylOnly: boolean | undefined = body.vinylOnly;
+  if (name === undefined && target === undefined && vinylOnly === undefined) throw error(400, 'name, targetMinutes or vinylOnly required');
   // A smart playlist can be renamed, but a set length would make it a gig.
-  if (target !== undefined) refuseSmart(params.id);
+  if (target !== undefined || vinylOnly !== undefined) refuseSmart(params.id);
   if (name !== undefined) {
     if (!name) throw error(400, 'name required');
     renamePlaylist(db, params.id, name);
@@ -32,8 +34,12 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
     recordPlaylistEvent(db, params.id, { action: 'target', minutes: target });
     recordNewCrateRows(db, params.id, before);
   }
+  if (vinylOnly !== undefined) {
+    setVinylOnly(db, params.id, vinylOnly);
+    recordPlaylistEvent(db, params.id, { action: 'vinyl-only', on: vinylOnly });
+  }
   const after = getPlaylist(db, params.id)!;
-  return json({ id: after.id, name: after.name, targetMinutes: after.targetMinutes });
+  return json({ id: after.id, name: after.name, targetMinutes: after.targetMinutes, vinylOnly: after.vinylOnly });
 };
 
 export const DELETE: RequestHandler = async ({ params }) => {

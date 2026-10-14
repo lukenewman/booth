@@ -1,23 +1,38 @@
 <script lang="ts">
   import { playlists } from '$lib/stores/playlists.svelte';
   import { toast } from '$lib/stores/toast.svelte';
+  import SourceGrid from './SourceGrid.svelte';
 
   let { onOpenRelease }: { onOpenRelease: (releaseId: string) => void } = $props();
 
   const open = $derived(playlists.openPlaylist);
   let confirming = $state<string | null>(null);
   let q = $state('');
-  let results = $state<{ id: string; title: string; artist: string; year: number | null; thumb_url: string | null }[]>([]);
+  let results = $state<{ id: string; title: string; artist: string; year: number | null; thumb_url: string | null; sources: string[] }[]>([]);
+  // The highlighted result. Focus stays in the input; Tab / arrows move this
+  // and Enter crates it, so records can go in one after another from the keyboard.
+  let active = $state(0);
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const vinylOnly = $derived(open?.vinylOnly ?? false);
 
   function search() {
     clearTimeout(timer);
     const term = q.trim();
     if (!term) { results = []; return; }
+    const vinyl = vinylOnly;
     timer = setTimeout(async () => {
-      const res = await fetch(`/api/library/releases?q=${encodeURIComponent(term)}&limit=8`);
-      if (res.ok && q.trim() === term) results = (await res.json()).items ?? [];
+      const res = await fetch(`/api/library/releases?q=${encodeURIComponent(term)}&limit=8${vinyl ? '&vinyl=1' : ''}`);
+      if (res.ok && q.trim() === term && vinylOnly === vinyl) {
+        results = (await res.json()).items ?? [];
+        active = 0;
+      }
     }, 200);
+  }
+
+  async function toggleVinyl() {
+    if (!open) return;
+    await playlists.setVinylOnly(open.id, !vinylOnly);
+    search();
   }
 
   async function add(r: { id: string; title: string }) {
@@ -26,6 +41,18 @@
     toast.show(added ? `Crated ${r.title}` : 'Already in the crate');
     q = '';
     results = [];
+  }
+
+  function onKey(e: KeyboardEvent) {
+    e.stopPropagation();
+    if (e.key === 'Escape') { q = ''; results = []; return; }
+    if (e.key === 'Enter') { if (results[active]) add(results[active]); return; }
+    if (!results.length) return;
+    const back = e.key === 'ArrowUp' || (e.key === 'Tab' && e.shiftKey);
+    if (back || e.key === 'ArrowDown' || e.key === 'Tab') {
+      e.preventDefault();
+      active = (active + (back ? -1 : 1) + results.length) % results.length;
+    }
   }
 
   async function remove(entryId: string, sketched: number) {
@@ -40,21 +67,31 @@
   <div class="crate-panel">
     <div class="crate-head">
       <span class="label">Crate</span>
+      <button class="vinyl" class:on={vinylOnly} aria-pressed={vinylOnly} onclick={toggleVinyl}
+        title={vinylOnly ? 'Search offers vinyl only — click to include digital' : 'Search offers everything — click for vinyl only'}>
+        Vinyl only
+      </button>
       <span class="count">{open.crate.length}</span>
     </div>
     <div class="crate-search">
       <input
-        placeholder="＋ add record…"
+        placeholder={vinylOnly ? '＋ add record (vinyl)…' : '＋ add record…'}
         bind:value={q}
         oninput={search}
-        onkeydown={(e) => { e.stopPropagation(); if (e.key === 'Escape') { q = ''; results = []; } if (e.key === 'Enter' && results[0]) add(results[0]); }}
+        onkeydown={onKey}
+        role="combobox"
+        aria-expanded={results.length > 0}
+        aria-controls="crate-results"
+        aria-activedescendant={results[active] ? `crate-result-${active}` : undefined}
       />
       {#if results.length}
-        <div class="results">
-          {#each results as r (r.id)}
-            <button class="result" onclick={() => add(r)}>
-              {#if r.thumb_url}<img src={r.thumb_url} alt="" />{/if}
-              <span>{r.artist} — {r.title}{r.year ? ` (${r.year})` : ''}</span>
+        <div class="results" id="crate-results" role="listbox">
+          {#each results as r, i (r.id)}
+            <button class="result" class:active={i === active} id="crate-result-{i}" role="option" aria-selected={i === active}
+              tabindex="-1" onmouseenter={() => (active = i)} onclick={() => add(r)}>
+              {#if r.thumb_url}<img src={r.thumb_url} alt="" />{:else}<span class="sleeve small"></span>{/if}
+              <span class="result-text">{r.artist} — {r.title}{r.year ? ` (${r.year})` : ''}</span>
+              <SourceGrid present={r.sources} />
             </button>
           {/each}
         </div>
@@ -93,7 +130,11 @@
 
 <style>
   .crate-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-  .crate-head { display: flex; justify-content: space-between; padding: 14px 14px 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-subtle); }
+  .crate-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-subtle); }
+  .crate-head .label { flex: 1; }
+  .vinyl { background: transparent; border: 1px solid var(--border-strong); color: var(--text-subtle); border-radius: 3px; padding: 2px 7px; cursor: pointer; font-family: inherit; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .vinyl:hover { color: var(--text-muted); }
+  .vinyl.on { color: var(--accent); border-color: var(--accent-border); }
   .crate-search { position: relative; padding: 0 14px 10px; }
   /* Matches the library search bar, so it reads as part of the dark UI. */
   .crate-search input {
@@ -111,8 +152,9 @@
   .crate-search input::placeholder { color: var(--text-subtle); }
   .results { position: absolute; left: 14px; right: 14px; z-index: 5; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 4px; }
   .result { display: flex; gap: 8px; align-items: center; width: 100%; padding: 6px 8px; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; }
-  .result:hover { background: var(--bg-row-hover); }
-  .result img { width: 28px; height: 28px; object-fit: cover; }
+  .result.active { background: var(--bg-row-hover); }
+  .result img, .sleeve.small { width: 28px; height: 28px; object-fit: cover; flex: none; }
+  .result-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .crate-list { overflow-y: auto; flex: 1; }
   .crate-row { display: flex; align-items: center; border-top: 1px solid var(--border); }
   .crate-row.missing { opacity: 0.45; }

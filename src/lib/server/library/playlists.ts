@@ -59,6 +59,8 @@ export interface PlaylistDetail {
   coverUrl: string | null;
   mosaic: string[];
   targetMinutes: number | null;
+  /** The crate search offers vinyl only. */
+  vinylOnly: boolean;
   isGig: boolean;
   rule: SmartRule | null;
   /** Present tracks, flattened in section order — what playback queues. */
@@ -213,6 +215,11 @@ export function setTargetMinutes(db: Database, id: string, minutes: number | nul
   })();
 }
 
+export function setVinylOnly(db: Database, id: string, on: boolean): void {
+  assertNotSmart(db, id);
+  db.prepare(`UPDATE playlist SET vinyl_only = ?, updated_at = ${NOW} WHERE id = ?`).run(on ? 1 : 0, id);
+}
+
 export function deletePlaylist(db: Database, id: string): void {
   // Sections, entries and crate rows cascade (FK ON DELETE CASCADE; the
   // foreign_keys pragma is ON for the app connection — see db/pragmas.ts).
@@ -241,10 +248,10 @@ export function sectionOf(
 export function getPlaylist(db: Database, id: string): PlaylistDetail | null {
   const playlist = db
     .prepare(
-      `SELECT id, name, cover_url AS coverUrl, target_minutes AS targetMinutes, rule, ${IS_GIG} AS isGig
+      `SELECT id, name, cover_url AS coverUrl, target_minutes AS targetMinutes, vinyl_only AS vinylOnly, rule, ${IS_GIG} AS isGig
          FROM playlist WHERE id = ?`,
     )
-    .get(id) as { id: string; name: string; coverUrl: string | null; targetMinutes: number | null; rule: string | null; isGig: number } | undefined;
+    .get(id) as { id: string; name: string; coverUrl: string | null; targetMinutes: number | null; vinylOnly: number; rule: string | null; isGig: number } | undefined;
   if (!playlist) return null;
 
   const rule = parseRule(playlist.rule);
@@ -262,6 +269,7 @@ export function getPlaylist(db: Database, id: string): PlaylistDetail | null {
       coverUrl: playlist.coverUrl,
       mosaic: smartMosaic(db, ids),
       targetMinutes: null,
+      vinylOnly: false,
       isGig: false,
       rule,
       tracks,
@@ -346,6 +354,7 @@ export function getPlaylist(db: Database, id: string): PlaylistDetail | null {
     coverUrl: playlist.coverUrl,
     mosaic: mosaicFor(db, id),
     targetMinutes: playlist.targetMinutes,
+    vinylOnly: !!playlist.vinylOnly,
     isGig: !!playlist.isGig,
     rule: null,
     tracks,

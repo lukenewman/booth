@@ -34,6 +34,7 @@ export interface CrateEntry { entryId: string; releaseId: string | null; artist:
 export interface PlaylistDetail {
   id: string; name: string; coverUrl: string | null; mosaic: string[]; tracks: PlaylistTrack[];
   targetMinutes: number | null;
+  vinylOnly: boolean;
   isGig: boolean;
   rule?: SmartRule | null;
   sections: PlaylistSection[];
@@ -262,6 +263,11 @@ class PlaylistsStore {
 
   async setTarget(id: string, minutes: number | null) {
     const res = await this.send('PATCH', `/api/playlists/${id}`, { targetMinutes: minutes });
+    if (res.ok) await this.refresh(id);
+  }
+
+  async setVinylOnly(id: string, on: boolean) {
+    const res = await this.send('PATCH', `/api/playlists/${id}`, { vinylOnly: on });
     if (res.ok) await this.refresh(id);
   }
 

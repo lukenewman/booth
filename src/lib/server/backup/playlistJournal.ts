@@ -18,6 +18,7 @@ export type PlaylistEventBody =
   | { action: 'rename'; name: string }
   | { action: 'delete' }
   | { action: 'target'; minutes: number | null }
+  | { action: 'vinyl-only'; on: boolean }
   | { action: 'section-add'; sectionId: string; name: string }
   | { action: 'section-rename'; sectionId: string; name: string }
   | { action: 'section-delete'; sectionId: string }
@@ -32,7 +33,7 @@ export type PlaylistEvent = { at: string; playlistId: string; playlistName: stri
 export interface ReplayedEntry { entryId: string; trackId: string | null; artist: string; title: string; album: string | null; position: string | null }
 export interface ReplayedSection { id: string; name: string; isUnsorted: boolean; entryIds: string[] }
 export interface ReplayedCrate { entryId: string; releaseId: string | null; artist: string; title: string; year: number | null }
-export interface ReplayedPlaylist { id: string; name: string; targetMinutes: number | null; rule?: SmartRule | null; sections: ReplayedSection[]; entries: Record<string, ReplayedEntry>; crate: ReplayedCrate[] }
+export interface ReplayedPlaylist { id: string; name: string; targetMinutes: number | null; vinylOnly?: boolean; rule?: SmartRule | null; sections: ReplayedSection[]; entries: Record<string, ReplayedEntry>; crate: ReplayedCrate[] }
 export type BaselineState = Omit<ReplayedPlaylist, 'id'>;
 
 export function appendPlaylistEvent(logPath: string, e: PlaylistEvent): void {
@@ -68,6 +69,7 @@ export function baselineFromDetail(d: PlaylistDetail): BaselineState {
   return {
     name: d.name,
     targetMinutes: d.targetMinutes,
+    vinylOnly: d.vinylOnly,
     rule: d.rule ?? null,
     sections: d.sections.map((s) => ({ id: s.id, name: s.name, isUnsorted: s.isUnsorted, entryIds: smart ? [] : s.entries.map((e) => e.entryId) })),
     entries,
@@ -114,6 +116,7 @@ export function replayPlaylistEvents(events: PlaylistEvent[], asOf?: string): Ma
       case 'rule': p.rule = e.rule; break;
       case 'rename': p.name = e.name; break;
       case 'target': p.targetMinutes = e.minutes; break;
+      case 'vinyl-only': p.vinylOnly = e.on; break;
       case 'section-add': sectionFor(p, e.sectionId, e.name); break;
       case 'section-rename': sectionFor(p, e.sectionId, e.name).name = e.name; break;
       case 'section-delete': {

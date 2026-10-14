@@ -4,8 +4,9 @@ import { runMigrations } from '../src/lib/server/db/migrate';
 import {
   createPlaylist, getPlaylist, listPlaylists, addTrack, removeEntry, removeTrack, moveEntry,
   createSection, renameSection, deleteSection, reorderSections, addRelease, removeCrateEntry,
-  setTargetMinutes, unsortedSectionId, reorderTracks,
+  setTargetMinutes, setVinylOnly, unsortedSectionId, reorderTracks,
 } from '../src/lib/server/library/playlists';
+import { listReleases } from '../src/lib/server/library/queries';
 
 function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
 function assert(cond: unknown, msg: string): asserts cond { if (!cond) fail(msg); }
@@ -126,6 +127,22 @@ assert(getPlaylist(db, q.id)!.tracks.length === 1, 'removeTrack by track id');
 assert(!getPlaylist(db, q.id)!.isGig, 'plain still plain');
 setTargetMinutes(db, q.id, 180);
 assert(getPlaylist(db, q.id)!.isGig && getPlaylist(db, q.id)!.targetMinutes === 180, 'target length → gig');
+
+// --- vinyl only: a flag on the gig, and a release filter on the Discogs format
+assert(getPlaylist(db, q.id)!.vinylOnly === false, 'vinyl-only defaults off');
+setVinylOnly(db, q.id, true);
+assert(getPlaylist(db, q.id)!.vinylOnly === true, 'vinyl-only set');
+const vinylLp = release('Vinyl Thing');
+const cdLp = release('CD Thing');
+release('Digital Thing'); // local-only: no format facet
+const facet = db.prepare(`INSERT INTO source_facets (entity_kind, entity_id, source, key, value) VALUES ('release', ?, 'discogs', 'format', ?)`);
+const gone = release('Gone Thing'); // left the Discogs collection; its facet lingers
+const link = db.prepare(`INSERT INTO source_link (entity_kind, entity_id, source, external_id, match_method) VALUES ('release', ?, 'discogs', ?, 'exact')`);
+for (const [id, format] of [[vinylLp, 'Vinyl, Vinyl'], [cdLp, 'CD'], [gone, 'Vinyl']]) facet.run(id, JSON.stringify(format));
+link.run(vinylLp, 'd1'); link.run(cdLp, 'd2');
+const found = (vinyl: boolean) => listReleases(db, { q: 'Thing', limit: 50, offset: 0, vinyl }).items.map((r) => r.title).sort().join();
+assert(found(false) === 'CD Thing,Digital Thing,Gone Thing,Vinyl Thing', `unfiltered search: ${found(false)}`);
+assert(found(true) === 'Vinyl Thing', `vinyl search: ${found(true)}`);
 
 // --- a plain reorder leaves a missing row in its slot (not shoved to the end)
 const r3 = createPlaylist(db, 'Slots');

@@ -20,6 +20,7 @@ export const GET: RequestHandler = async ({ url }) => {
   const q = url.searchParams.get('q') ?? undefined;
   const multiSource = url.searchParams.get('multi_source') === 'true';
   const hasStarred = url.searchParams.get('has_starred') === '1';
+  const vinyl = url.searchParams.get('vinyl') === '1';
 
   const rawLimit = Number(url.searchParams.get('limit') ?? DEFAULT_LIMIT);
   const limit = Math.max(1, Math.min(MAX_LIMIT, Number.isFinite(rawLimit) ? rawLimit : DEFAULT_LIMIT));
@@ -31,6 +32,6 @@ export const GET: RequestHandler = async ({ url }) => {
 
   const genre = parseGenreFilter(url.searchParams);
 
-  const result = listReleases(getDb(), { source, q, limit, offset, multiSource, sort, vetted, hasStarred, genre });
+  const result = listReleases(getDb(), { source, q, limit, offset, multiSource, sort, vetted, hasStarred, genre, vinyl });
   return json(result);
 };

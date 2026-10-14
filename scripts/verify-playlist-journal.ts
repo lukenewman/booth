@@ -17,6 +17,7 @@ const add = (entryId: string, sectionId: string, sectionName: string, title: str
 
 const events: PlaylistEvent[] = [
   ev({ action: 'create', targetMinutes: 180 }),
+  ev({ action: 'vinyl-only', on: true }),
   ev({ action: 'section-add', sectionId: 's1', name: 'Openers' }),
   ev(add('e1', 'u1', 'Unsorted', 'One')),
   ev(add('e2', 'u1', 'Unsorted', 'Two')),
@@ -37,6 +38,7 @@ assert(!now.has('p1'), 'deleted playlist absent from replay');
 
 const before = replayPlaylistEvents(read, cut).get('p1')!;
 assert(before && before.name === 'Sat' && before.targetMinutes === 180, 'as-of replay restores playlist');
+assert(before.vinylOnly === true, 'vinyl-only replays');
 assert(before.sections.map((s) => s.name).join('|') === 'Unsorted|Openers', 'sections');
 assert(before.sections[0].entryIds.join() === 'e1', `Unsorted entries: ${before.sections[0].entryIds.join()}`);
 assert(before.sections[1].entryIds.join() === 'e2,e3', `Openers entries: ${before.sections[1].entryIds.join()}`);

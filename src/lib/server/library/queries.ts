@@ -116,6 +116,8 @@ interface ListReleasesArgs {
   vetted?: boolean;
   hasStarred?: boolean;
   genre?: GenreFilter;
+  /** Only releases whose Discogs format names vinyl — what a vinyl-only gig can bring. */
+  vinyl?: boolean;
 }
 
 export function listReleases(
@@ -150,6 +152,21 @@ export function listReleases(
       `release.id IN (
          SELECT release_id FROM track
           WHERE starred_at IS NOT NULL AND release_id IS NOT NULL
+       )`,
+    );
+  }
+  // Format comes only from Discogs, so a local-only (digital) release never
+  // matches. A vinyl rip shares its record's release row, so it still does.
+  // The link is checked too: a record that left the Discogs collection can
+  // keep its old format facet, and it isn't on the shelf any more.
+  if (args.vinyl) {
+    where.push(
+      `release.id IN (
+         SELECT sf.entity_id FROM source_facets sf
+           JOIN source_link sl
+             ON sl.entity_kind='release' AND sl.entity_id = sf.entity_id AND sl.source='discogs'
+          WHERE sf.entity_kind='release' AND sf.source='discogs' AND sf.key='format'
+            AND sf.value LIKE '%Vinyl%'
        )`,
     );
   }
