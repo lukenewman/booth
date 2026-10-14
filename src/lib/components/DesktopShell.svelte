@@ -152,7 +152,7 @@ import RecordingPill from './RecordingPill.svelte';
     onAddReleaseToPlaylist={async (playlistId, releaseId) => {
       const { added } = await playlists.addRelease(playlistId, releaseId);
       const name = playlists.items.find((p) => p.id === playlistId)?.name ?? 'gig';
-      toast.show(added ? `Crated in ${name}` : 'Already in the crate', { kind: added ? 'success' : 'info' });
+      toast.show(added ? `Added to the ${name} crate` : 'Already in the crate', { kind: added ? 'success' : 'info' });
     }}
   />
 

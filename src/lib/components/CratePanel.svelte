@@ -38,7 +38,7 @@
   async function add(r: { id: string; title: string }) {
     if (!open) return;
     const { added } = await playlists.addRelease(open.id, r.id);
-    toast.show(added ? `Crated ${r.title}` : 'Already in the crate', { kind: added ? 'success' : 'info' });
+    toast.show(added ? `Added ${r.title} to the crate` : 'Already in the crate', { kind: added ? 'success' : 'info' });
     q = '';
     results = [];
   }
