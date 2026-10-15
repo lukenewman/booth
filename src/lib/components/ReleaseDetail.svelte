@@ -36,6 +36,8 @@
     cover_url?: string | null;
     /** Set when the cover was chosen by hand. */
     cover_override?: string | null;
+    /** Set when the title was edited by hand. */
+    title_override?: string | null;
     country?: string | null;
     label?: string | null;
     catno?: string | null;
@@ -64,6 +66,7 @@
     autoEditTags = false,
     stylesFilter = true,
     onSetCover,
+    onRename,
   }: {
     release: Release;
     sources: SourceLink[];
@@ -95,7 +98,25 @@
     stylesFilter?: boolean;
     /** Set (a file) or clear (null) a hand-picked cover. Absent where covers can't be changed. */
     onSetCover?: (releaseId: string, file: File | null) => void;
+    /** Set (a string) or clear (null) a hand-set title. Absent where titles can't be changed. */
+    onRename?: (releaseId: string, title: string | null) => void;
   } = $props();
+
+  let renaming = $state(false);
+  let titleDraft = $state('');
+  $effect(() => {
+    release.id;
+    renaming = false;
+  });
+  function startRename() {
+    titleDraft = release.title;
+    renaming = true;
+  }
+  function commitRename() {
+    renaming = false;
+    const next = titleDraft.trim();
+    if (next && next !== release.title) onRename?.(release.id, next);
+  }
 
   let coverInput: HTMLInputElement | undefined = $state();
   let coverDropOver = $state(false);
@@ -233,13 +254,37 @@
   {/if}
   <div class="release-header">
     <div class="title-row">
-      <div class="title">{release.title}</div>
+      {#if renaming}
+        <!-- svelte-ignore a11y_autofocus -->
+        <input
+          class="title title-input"
+          bind:value={titleDraft}
+          autofocus
+          aria-label="Release title"
+          onblur={commitRename}
+          onkeydown={(e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') e.currentTarget.blur();
+            if (e.key === 'Escape') renaming = false;
+          }}
+        />
+      {:else if onRename}
+        <button type="button" class="title title-edit" title="Click to rename" onclick={startRename}>{release.title}</button>
+      {:else}
+        <div class="title">{release.title}</div>
+      {/if}
       <!-- Inline with the title rather than stacked under the header: which
            sources contribute is an attribute of the release, and it reads as
            one fact alongside the name instead of a separate block. -->
       <SourceGrid present={sources.map((src) => src.source)} />
     </div>
     <div class="artist">{release.artist}{release.year ? ` · ${release.year}` : ''}</div>
+    {#if onRename && release.title_override && !renaming}
+      <div class="renamed">
+        renamed by hand
+        <button type="button" class="title-reset" onclick={() => onRename(release.id, null)}>use the source’s title</button>
+      </div>
+    {/if}
     {#if release.label || release.catno || release.country || release.format}
       <div class="release-meta">
         {[
@@ -580,6 +625,18 @@
     line-height: 1.3;
   }
   .release-header { margin-bottom: 14px; }
+  .title-edit {
+    background: none; border: 0; padding: 0; text-align: left; font-family: inherit;
+    cursor: text; border-bottom: 1px dashed transparent;
+  }
+  .title-edit:hover { border-bottom-color: var(--text-subtle); }
+  .title-input {
+    width: 100%; background: var(--bg-input); border: 1px solid var(--accent-border);
+    border-radius: 4px; padding: 1px 6px; font-family: inherit; outline: none;
+  }
+  .renamed { font-size: 11px; color: var(--text-subtle); margin-top: 2px; }
+  .title-reset { background: none; border: 0; padding: 0 0 0 6px; color: var(--accent); font: inherit; cursor: pointer; }
+  .title-reset:hover { text-decoration: underline; }
   .artist {
     color: var(--text-muted);
     font-size: 13px;

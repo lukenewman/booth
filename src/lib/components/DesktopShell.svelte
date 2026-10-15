@@ -312,6 +312,7 @@ import RecordingPill from './RecordingPill.svelte';
             onAddTrack={isGig ? addToGig : undefined}
             onSaveTags={c.tagPlaylistRelease}
             onSetCover={c.setReleaseCover}
+            onRename={c.renameRelease}
             stylesFilter={false}
           />
         {:else}
@@ -356,6 +357,7 @@ import RecordingPill from './RecordingPill.svelte';
         onVet={c.vetAndAdvance}
         onSaveTags={c.tagAndAdvance}
         onSetCover={c.setReleaseCover}
+            onRename={c.renameRelease}
         autoEditTags={explorerState.nav.section === 'library' && explorerState.nav.item === 'untagged'}
         recordDisabled={recordingRelease !== null}
         onRecord={() => {
