@@ -422,7 +422,7 @@ export function getReleaseDetail(
       `SELECT release.id, release.title, artist.name AS artist,
               release.artist_id,
               release.year, release.country, release.label, release.catno,
-              release.thumb_url, release.cover_url, release.vetted_at, release.cover_override, release.title_override
+              release.thumb_url, release.cover_url, release.vetted_at, release.cover_override
          FROM release
          JOIN artist ON artist.id = release.artist_id
          WHERE release.id = ?`,

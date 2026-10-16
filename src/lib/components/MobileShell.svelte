@@ -198,7 +198,6 @@
           recordDisabled={true}
           onSaveTags={c.tagAndAdvance}
           onSetCover={c.setReleaseCover}
-          onRename={c.renameRelease}
         />
       {:else if detailKind === 'track' && detailData}
         <TrackDetail

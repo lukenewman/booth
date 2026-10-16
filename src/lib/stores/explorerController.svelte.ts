@@ -916,40 +916,6 @@ export function createExplorerController() {
   }
 
   /**
-   * Set (string) or clear (null) a release's hand-set title. A new title that
-   * matches the record's other copy merges the two, and the release then lives
-   * on under the surviving id — so every pane showing it reloads by that id,
-   * and the merged-away row leaves the list.
-   */
-  async function renameRelease(releaseId: string, title: string | null) {
-    const res = await fetch(`/api/library/releases/${encodeURIComponent(releaseId)}/title`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title }),
-    });
-    if (!res.ok) {
-      const msg = res.status === 409 ? (await res.json().catch(() => null))?.message : null;
-      toast.show(msg ?? 'Couldn’t rename', { kind: 'error', duration: msg ? 6000 : 3000 });
-      return;
-    }
-    const { releaseId: id, mergedId } = (await res.json()) as { releaseId: string; mergedId: string | null };
-    const gone = new Set([releaseId, mergedId].filter((x): x is string => !!x && x !== id));
-    const detail = await (await fetch(`/api/library/releases/${encodeURIComponent(id)}`)).json();
-    const shown = (rid: string | undefined) => rid === releaseId || (!!rid && gone.has(rid)) || rid === id;
-    if (shown(detailData?.release?.id)) {
-      if (explorerState.id !== id) explorerState.setEntity(id);
-      detailData = detail;
-    }
-    if (plDetail?.kind === 'release' && shown(plDetail.data?.release?.id)) plDetail = { kind: 'release', data: detail };
-    listItems = listItems
-      .filter((it) => !gone.has(it.id))
-      .map((it) => (it.id === id ? { ...it, title: detail.release.title } : it));
-    if (playlists.openPlaylist) void playlists.loadPlaylist(playlists.openPlaylist.id);
-    if (mergedId) toast.show('Renamed, and merged the local and Discogs copies', { kind: 'success' });
-    else if (title === null) toast.show('Title handed back — the source’s returns on the next sync');
-  }
-
-  /**
    * Tag a release from the playlist view's detail pane (plDetail), which has
    * no queue to advance — save, then reload that pane.
    */
@@ -1057,6 +1023,5 @@ export function createExplorerController() {
     tagAndAdvance,
     tagPlaylistRelease,
     setReleaseCover,
-    renameRelease,
   };
 }

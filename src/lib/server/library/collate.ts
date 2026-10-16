@@ -285,7 +285,7 @@ export function resolveReleaseEntity(
  * is claimed first-come, or two same-titled albums would trade it back and forth
  * on every sync and the fallback would never resolve to a stable entity.
  */
-export function upsertReleaseMatchKeys(
+function upsertReleaseMatchKeys(
   db: Database,
   entityId: string,
   r: { artist: string; album: string; year?: number | null },
@@ -303,18 +303,7 @@ function upsertRelease(
   summary: CollateSummary,
   artistCache: Map<string, string>,
 ): string {
-  // A title set by hand (see releaseTitle.ts) stands in for the source's own,
-  // for matching as well as display — that is how an edited title keeps a
-  // local album paired with its Discogs copy across syncs. It is found through
-  // this record's existing link, since its own title can no longer find it.
-  const override = db
-    .prepare(
-      `SELECT r.title_override AS t FROM source_link sl JOIN release r ON r.id = sl.entity_id
-        WHERE sl.entity_kind='release' AND sl.source=? AND sl.external_id=?`,
-    )
-    .get(sourceId, r.externalId) as { t: string | null } | undefined;
-  const title = override?.t ?? r.title;
-  const matched = resolveReleaseEntity(db, { artist: r.artist, album: title, year: r.year });
+  const matched = resolveReleaseEntity(db, { artist: r.artist, album: r.title, year: r.year });
 
   let entityId: string | undefined = matched?.entityId;
   let method: MatchMethod = matched?.method ?? 'first_seen';
@@ -339,22 +328,22 @@ function upsertRelease(
     db.prepare(
       `INSERT INTO release (id, title, artist_id, year, country, label, catno, thumb_url, cover_url)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(entityId, title, artistId, r.year ?? null, r.country ?? null, r.label ?? null, r.catno ?? null, r.thumbUrl ?? null, r.coverUrl ?? null);
+    ).run(entityId, r.title, artistId, r.year ?? null, r.country ?? null, r.label ?? null, r.catno ?? null, r.thumbUrl ?? null, r.coverUrl ?? null);
   } else {
     db.prepare(
       `UPDATE release
-         SET title=COALESCE(title_override, ?), artist_id=?, year=?, country=?, label=?, catno=?,
+         SET title=?, artist_id=?, year=?, country=?, label=?, catno=?,
              -- A hand-set cover (cover_override) outranks any source's.
              thumb_url=CASE WHEN cover_override IS NOT NULL THEN thumb_url ELSE COALESCE(?, thumb_url) END,
              cover_url=CASE WHEN cover_override IS NOT NULL THEN cover_url ELSE COALESCE(?, cover_url) END,
              updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
        WHERE id=?`,
-    ).run(title, artistId, r.year ?? null, r.country ?? null, r.label ?? null, r.catno ?? null, r.thumbUrl ?? null, r.coverUrl ?? null, entityId);
+    ).run(r.title, artistId, r.year ?? null, r.country ?? null, r.label ?? null, r.catno ?? null, r.thumbUrl ?? null, r.coverUrl ?? null, entityId);
   }
 
   upsertSourceLink(db, 'release', entityId, sourceId, r.externalId, r.externalUrl, method, summary,
-    `${r.artist} — ${title}${r.year ? ` (${r.year})` : ''}`);
-  upsertReleaseMatchKeys(db, entityId, { artist: r.artist, album: title, year: r.year });
+    `${r.artist} — ${r.title}${r.year ? ` (${r.year})` : ''}`);
+  upsertReleaseMatchKeys(db, entityId, { artist: r.artist, album: r.title, year: r.year });
   upsertFacets(db, 'release', entityId, sourceId, r.facets);
 
   summary.releasesUpserted++;

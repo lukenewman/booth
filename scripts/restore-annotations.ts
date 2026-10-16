@@ -181,13 +181,6 @@ const toCovers = [...target.covers].filter(([id, url]) => {
   return existsSync(join(homedir(), '.booth', 'artwork', url.replace('/api/artwork/', '').replace(/\?.*$/, '')));
 });
 
-// Hand-set titles: by id only. A merge the rename caused is not replayed —
-// the surviving release keeps its id, so its title lands on it here.
-const toTitles = [...target.titles].filter(([id, title]) => {
-  const row = db.prepare(`SELECT title_override FROM release WHERE id = ?`).get(id) as { title_override: string | null } | undefined;
-  return !!row && row.title_override !== title;
-});
-
 // Colour pins: style names, so they need no id matching. Re-pin any that differ.
 const livePins = new Map(
   (db.prepare(`SELECT style, slot FROM style_color WHERE pinned = 1`).all() as { style: string; slot: number }[])
@@ -204,7 +197,7 @@ console.log(
     `+${toVet.length} vetted, -${toUnvet.length} vetted, ` +
     `~${toNote.length} notes, -${toClearNote.length} notes, ` +
     `~${toBpm.length} tapped BPMs, -${toClearBpm.length} tapped BPMs, ` +
-    `+${toPin.length} colour pins, ~${toTags.length} tag overrides, ~${toCovers.length} covers, ~${toTitles.length} titles` +
+    `+${toPin.length} colour pins, ~${toTags.length} tag overrides, ~${toCovers.length} covers` +
     (unmatched ? `, ${unmatched} unmatched (row gone, no name match)` : '') +
     (prune ? '' : '\n(additive only — pass --prune to also remove annotations the journal dropped)'),
 );
@@ -232,9 +225,6 @@ db.transaction(() => {
   for (const id of toClearBpm) setBpm.run(null, null, id);
   for (const [style, slot] of toPin) pinStyleColor(db, style, slot);
   for (const [id, url] of toCovers) setReleaseCover(db, id, url);
-  for (const [id, title] of toTitles) {
-    db.prepare(`UPDATE release SET title_override = ?, title = COALESCE(?, title) WHERE id = ?`).run(title, title, id);
-  }
   for (const [rid, value] of toTags) setManualTags(db, rid, value ? JSON.parse(value) : null);
 })();
 
