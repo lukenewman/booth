@@ -154,7 +154,20 @@ export function commitRegions(
           `UPDATE track SET title=?, duration_ms=COALESCE(duration_ms, ?),
                   updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?`,
         ).run(region.title, Math.round(region.endMs - region.startMs), region.trackId);
+        // First rip of a track is when it entered the local library; a re-rip keeps it.
+        db.prepare(
+          `INSERT OR IGNORE INTO source_facets (entity_kind, entity_id, source, key, value)
+           VALUES ('track', ?, 'local', 'dateAdded', ?)`,
+        ).run(region.trackId, JSON.stringify(now));
       }
+      // The release is local too: that drives its Local dot and the Local
+      // filter. Keyed by the rip folder, so the Apple Music prune (which spares
+      // anything under the recordings root) leaves it alone. Ignored when the
+      // release already has a local link, e.g. from an Apple Music import.
+      db.prepare(
+        `INSERT OR IGNORE INTO source_link (entity_kind, entity_id, source, external_id, external_url, match_method)
+         VALUES ('release', ?, 'local', ?, NULL, 'file_path')`,
+      ).run(session.releaseId, dir);
     });
     tx();
   } catch (err) {

@@ -15,6 +15,7 @@ export interface TakeState {
   sampleRate: number;
   channels: number;
   finalized: boolean;
+  sideGuess?: string | null; // set on finalize; later takes avoid it
 }
 
 export interface SessionState {

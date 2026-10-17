@@ -138,5 +138,23 @@ const t = (
   assert(Math.abs(r2.startMs - (12000 - PAD_MS)) <= HOP, `r2 in-point padded into gap (got ${r2.startMs})`);
 }
 
+// --- No durations, equal-length sides: earlier take's side is skipped ---
+{
+  const sideA = [t('a1', 'A1', null, '1', 'A1'), t('a2', 'A2', null, '2', 'A2')];
+  const sideB = [t('b1', 'B1', null, '3', 'B1'), t('b2', 'B2', null, '4', 'B2')];
+  const e = env([
+    [500, 0.004],
+    [180000, 0.3],
+    [1500, 0.004],
+    [200000, 0.3],
+    [500, 0.004],
+  ]);
+  const first = proposeRegions(e, HOP, [sideA, sideB]);
+  assert(first.sideGuess === 'A', `first take guesses A (got ${first.sideGuess})`);
+  const second = proposeRegions(e, HOP, [sideA, sideB], new Set(['A']));
+  assert(second.sideGuess === 'B', `second take guesses B (got ${second.sideGuess})`);
+  assert(second.regions[0].trackId === 'b1', `second take proposes B1 (got ${second.regions[0].trackId})`);
+}
+
 if (failures > 0) process.exit(1);
 console.log('verify-splitter: all passed');

@@ -110,6 +110,14 @@ const origin = db
 assert(origin?.value === '"vinyl"', `origin facet = vinyl (got ${origin?.value})`);
 const dur = db.prepare(`SELECT duration_ms FROM track WHERE id='trk1'`).get() as { duration_ms: number };
 assert(Math.abs(dur.duration_ms - 2000) < 5, `duration backfilled ~2000 (got ${dur.duration_ms})`);
+const relLink = db
+  .prepare(`SELECT external_id FROM source_link WHERE entity_kind='release' AND entity_id='rel' AND source='local'`)
+  .get() as { external_id: string } | undefined;
+assert(relLink?.external_id === dir, `release linked to local by its rip folder (got ${relLink?.external_id})`);
+const added = db
+  .prepare(`SELECT value FROM source_facets WHERE entity_id='trk1' AND source='local' AND key='dateAdded'`)
+  .get() as { value: string } | undefined;
+assert(!!added, 'dateAdded facet written');
 
 // Conflict: committing again without replace → 409 path (written 0, conflicts listed).
 const r2 = commitRegions(db, root, session, regions, false);
@@ -120,6 +128,10 @@ const r3 = commitRegions(db, root, session, regions, true);
 assert(r3.written === 2, `replace writes 2 (got ${r3.written})`);
 const linkCount = (db.prepare(`SELECT COUNT(*) n FROM source_link WHERE entity_id='trk1' AND source='local'`).get() as { n: number }).n;
 assert(linkCount === 1, `still one local link after replace (got ${linkCount})`);
+const addedAfter = db
+  .prepare(`SELECT value FROM source_facets WHERE entity_id='trk1' AND source='local' AND key='dateAdded'`)
+  .get() as { value: string } | undefined;
+assert(addedAfter?.value === added?.value, 're-rip keeps the original dateAdded');
 
 rmSync(root, { recursive: true, force: true });
 if (failures > 0) process.exit(1);

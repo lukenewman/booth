@@ -19,7 +19,11 @@ export const POST: RequestHandler = async ({ params }) => {
   const scan = scanWav(take.path, HOP_MS);
 
   const { blocks } = loadExpectedTracks(getDb(), session.releaseId);
-  const proposal = proposeRegions(scan.rms, HOP_MS, blocks);
+  const claimed = new Set(
+    session.takes.filter((t) => t !== take && t.sideGuess).map((t) => t.sideGuess as string),
+  );
+  const proposal = proposeRegions(scan.rms, HOP_MS, blocks, claimed);
+  take.sideGuess = proposal.sideGuess;
 
   // Downsample peaks to a fixed bucket count for rendering.
   const peaks: number[] = [];

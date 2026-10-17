@@ -38,16 +38,26 @@ interface Boundary {
  * Propose regions for a take against candidate track blocks (one block per
  * side; a single block when positions carry no side letters). Picks the
  * best-fitting block by alignment cost.
+ *
+ * Sides already claimed by earlier takes in the session are skipped while any
+ * other side is left. Without this, a release whose Discogs tracklist has no
+ * durations scores every equal-length side the same, and the tie goes to
+ * side A for every take.
  */
 export function proposeRegions(
   rms: Float32Array,
   hopMs: number,
   candidateBlocks: ExpectedTrack[][],
+  claimedSides: ReadonlySet<string> = new Set(),
 ): TakeProposal {
   const gaps = findGaps(rms, hopMs);
   const extent = audioExtent(rms, hopMs);
+  const unclaimed = candidateBlocks.filter(
+    (b) => b.length > 0 && !(b[0].side && claimedSides.has(b[0].side)),
+  );
+  const blocks = unclaimed.length > 0 ? unclaimed : candidateBlocks;
   let best: { cost: number; proposal: TakeProposal } | null = null;
-  for (const block of candidateBlocks) {
+  for (const block of blocks) {
     if (block.length === 0) continue;
     const { cost, regions } = alignBlock(extent, gaps, block);
     if (!best || cost < best.cost) {
