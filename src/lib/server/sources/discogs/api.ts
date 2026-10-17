@@ -3,6 +3,7 @@ import type { ApiError } from '$lib/types';
 
 export const BASE = 'https://api.discogs.com';
 export const USER_AGENT = 'booth/0.1 +https://github.com/luke';
+const REQUEST_TIMEOUT_MS = 30_000;
 
 export class DiscogsError extends Error {
   constructor(public payload: ApiError, public status: number) {
@@ -30,8 +31,14 @@ export async function discogsFetch(path: string, init: RequestInit = {}): Promis
   const token = getToken();
   const url = path.startsWith('http') ? path : `${BASE}${path}`;
 
+  // Without a deadline a request in flight when the Mac sleeps (scheduled syncs
+  // fire during dark wakes) sits on a dead socket until macOS's own TCP timeout,
+  // often hours later. The scheduler skips a source while its run is in flight,
+  // so one stuck request silently stops every sync until the lid opens.
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   const res = await fetch(url, {
     ...init,
+    signal: init.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
     headers: {
       Authorization: `Discogs token=${token}`,
       'User-Agent': USER_AGENT,
