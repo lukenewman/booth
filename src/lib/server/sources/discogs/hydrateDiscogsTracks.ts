@@ -197,6 +197,59 @@ export async function hydrateDiscogsTracks(
   return result;
 }
 
+/**
+ * Drop Discogs track links whose record no longer has a Discogs release link,
+ * deleting the track when Discogs was its only source.
+ *
+ * Neither removal path cleaned these up: removing a record from the collection
+ * dropped only the release link, and a sync never prunes Discogs tracks because
+ * the collection sync returns no tracks (see the prune guard in collate). The
+ * leftover rows sat with a null release, and because hydration skips track ids
+ * that are already linked, re-adding the same record later left it with no
+ * tracks at all. Tracks already stranded that way are pruned too, so the next
+ * hydration rebuilds them. A local track merged onto a Discogs one just loses
+ * the link.
+ */
+export function pruneDiscogsTracks(db: Database): number {
+  const linkedReleases = new Set(
+    (db
+      .prepare(`SELECT external_id FROM source_link WHERE entity_kind='release' AND source='discogs'`)
+      .all() as { external_id: string }[]).map((r) => r.external_id),
+  );
+  const trackLinks = db
+    .prepare(
+      `SELECT sl.entity_id, sl.external_id, t.release_id FROM source_link sl
+         JOIN track t ON t.id = sl.entity_id
+        WHERE sl.entity_kind='track' AND sl.source='discogs'`,
+    )
+    .all() as { entity_id: string; external_id: string; release_id: string | null }[];
+
+  let deleted = 0;
+  const tx = db.transaction(() => {
+    for (const { entity_id, external_id, release_id } of trackLinks) {
+      const cut = external_id.lastIndexOf('-t');
+      if (cut < 0) continue;
+      // A track whose release went away is stranded even once the record is
+      // re-added: the new release is a different row, so it never gets them.
+      if (release_id && linkedReleases.has(external_id.slice(0, cut))) continue;
+      db.prepare(`DELETE FROM source_link WHERE entity_kind='track' AND source='discogs' AND external_id=?`).run(external_id);
+      const remaining = db
+        .prepare(`SELECT 1 FROM source_link WHERE entity_kind='track' AND entity_id=? LIMIT 1`)
+        .get(entity_id);
+      if (remaining) {
+        db.prepare(`DELETE FROM source_facets WHERE entity_kind='track' AND entity_id=? AND source='discogs'`).run(entity_id);
+        continue;
+      }
+      db.prepare(`DELETE FROM track WHERE id=?`).run(entity_id);
+      db.prepare(`DELETE FROM match_key WHERE entity_kind='track' AND entity_id=?`).run(entity_id);
+      db.prepare(`DELETE FROM source_facets WHERE entity_kind='track' AND entity_id=?`).run(entity_id);
+      deleted++;
+    }
+  });
+  tx();
+  return deleted;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

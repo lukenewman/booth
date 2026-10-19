@@ -12,7 +12,7 @@ import { refreshBandcamp, fetchPendingPages, type BandcampSummary } from '../gen
 import { bandcampUsername } from '../genres/bandcamp_env';
 import { getSource } from '../sources/registry';
 import { NotImplementedError, type IngestReport, type SyncInput } from '../sources/types';
-import { hydrateDiscogsTracks } from '../sources/discogs/hydrateDiscogsTracks';
+import { hydrateDiscogsTracks, pruneDiscogsTracks } from '../sources/discogs/hydrateDiscogsTracks';
 import { resolvedRecordingsRoot } from '../recording/env';
 import {
   hasFfmpeg,
@@ -128,6 +128,7 @@ async function runSyncNow(db: Database, sourceId: string): Promise<SyncRunRow> {
     // have track rows yet.  Results are folded into the summary so the
     // sync_run row reflects the full work done this run.
     if (sourceId === 'discogs') {
+      summary.tracksDeleted += pruneDiscogsTracks(db);
       const hydration = await hydrateDiscogsTracks(db);
       summary.tracksUpserted += hydration.tracksAdded;
       summary.rowsIn += hydration.tracksAdded;

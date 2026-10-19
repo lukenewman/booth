@@ -7,6 +7,7 @@ import { env } from '$lib/server/env';
 import { getDb } from '../../db';
 import { normalizeArtistAlbum, normalizeArtistAlbumYear } from '../../library/normalize';
 import { resolveReleaseEntity, upsertArtist, upsertMatchKey } from '../../library/collate';
+import { pruneDiscogsTracks } from './hydrateDiscogsTracks';
 
 const FOLDER_ID = env.DISCOGS_FOLDER_ID ?? '1';
 
@@ -79,6 +80,7 @@ export const discogsSource: MusicSource & CollectionWritable = {
         `DELETE FROM source_facets WHERE entity_kind='release' AND entity_id=?`,
       ).run(entityId);
     }
+    pruneDiscogsTracks(db);
   },
 };
 
