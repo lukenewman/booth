@@ -829,7 +829,6 @@ export function createExplorerController() {
       return {
         variant: 'quiet' as const,
         label: '✓ In your Discogs collection — undo',
-        kbdHint: 'u',
         onClick: () => handleRemove(discogsReleaseId),
       };
     }

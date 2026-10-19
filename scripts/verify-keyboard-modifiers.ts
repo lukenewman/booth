@@ -37,4 +37,5 @@ eq(press('c', { altKey: true }), { calls: [], prevented: false }, '⌥c left to 
 eq(press('c').calls, ['addToCrate'], 'c still adds to crate');
 eq(press('s').calls.length, 1, 's still acts');
 eq(press('z', { metaKey: true }).calls, ['undoLast'], '⌘Z still undoes');
+eq(press('u').calls, [], 'bare u does nothing (it used to remove from Discogs)');
 console.log('ok verify-keyboard-modifiers');

@@ -12,7 +12,7 @@
   <div class="log">
     <span>Added this session: {session.count}</span>
     <button type="button" class="undo" onclick={onUndo}>
-      undo last <span class="kbd">u</span>
+      undo last
     </button>
   </div>
 {/if}
@@ -40,15 +40,4 @@
     font-size: 12px;
   }
   .undo:hover { text-decoration: underline; }
-  .kbd {
-    display: inline-block;
-    background: var(--bg-input);
-    border: 1px solid var(--border-strong);
-    border-radius: 3px;
-    padding: 1px 5px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-left: 4px;
-  }
 </style>

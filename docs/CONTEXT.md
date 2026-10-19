@@ -271,10 +271,10 @@ docs/
 ### Add / undo
 - The old `ConfirmModal` is gone. Add is a detail-pane CTA on a Discogs search-hit that isn't already owned: blue `+ Add to Discogs collection ⏎` button.
 - On add: `POST /api/discogs/collection/add` → Discogs API call → on success, the route writes the `release` row, the `source_link` row (so the D dot fills in the grid), AND appends the returned `instance_id` to the release's `source_facets.instanceIds` JSON array. Session log gets the entry; toast confirms; collection store marks added.
-- On a release already in the user's Discogs collection (whether reached via the Library rail or as an owned hit in Add → Discogs search), the detail CTA flips to a quiet `✓ In your Discogs collection — undo u` row. Clicking or pressing `u` calls `DELETE /api/discogs/collection/remove`.
+- On a release already in the user's Discogs collection (whether reached via the Library rail or as an owned hit in Add → Discogs search), the detail CTA flips to a quiet `✓ In your Discogs collection — undo` row. Clicking it calls `DELETE /api/discogs/collection/remove`.
 - `DELETE` body accepts `{releaseId, instanceId?}`. If `instanceId` is omitted, the server falls back to `source_facets.instanceIds[0]` — so removal still works for adds made before the facet-persistence change, after a Discogs sync repopulates the facet.
-- Session log (32px footer strip, only visible in `Add → Discogs`) shows count + "undo last (u)" button.
-- Keyboard `u` / `Cmd|Ctrl+Z`: prefer the visible detail-pane Remove button; fall back to undoing the most-recent session-log entry if no Remove is on screen.
+- Session log (32px footer strip, only visible in `Add → Discogs`) shows count + "undo last" button.
+- Keyboard `Cmd|Ctrl+Z`: prefer the visible detail-pane Remove button; fall back to undoing the most-recent session-log entry if no Remove is on screen.
 - Add/undo errors surface via toast.
 
 ### Playback
@@ -510,7 +510,7 @@ Goal: write a USB stick Pioneer players read, with no rekordbox in between. `scr
 - `Space` toggles play/pause for the loaded track (no-op when nothing is playing; suppressed when focus is in an input/textarea).
 - `Enter` — context-aware: on a focused row, opens its detail (same as clicking); otherwise clicks the visible primary Add CTA.
 - `Esc` closes scanner overlay; otherwise clears search-input value, then blurs it.
-- `u` or `Cmd/Ctrl+Z` — prefer visible detail-pane Remove (handles persistent removal via facet); else undoes most-recent session add.
+- `Cmd/Ctrl+Z` — prefer visible detail-pane Remove (handles persistent removal via facet); else undoes most-recent session add. **No bare-key shortcut on purpose:** this removes the record from the Discogs collection, and a stray `u` used to do that silently on any owned release.
 - Auto-focus on search bar on initial page load.
 - Keyboard wiring is DOM-driven: `installKeyboard(actions, guards)` in `+page.svelte` looks up elements by class (`input.search`, `.body button.row-btn`, `button.add-btn`, `button.remove-btn`, `.scanner-overlay`, `.bar .toggle`) at event time rather than holding component refs.
 
@@ -641,7 +641,7 @@ Limitations of code that's currently in production. For deferred features and no
 
 - **No automated tests.** Verification is via `bun verify scripts/<name>.ts`, curl, sqlite3, and manual browser testing.
 - **`scripts/verify-itunes-parse.ts` is stale** — it still imports from `sources/itunes/parse`, a path that stopped existing when the source was renamed to `local` (migration `006`). It does not run.
-- **`Cmd+Z` is intercepted by the browser** when the search input is focused (it'll undo typed text first). The on-screen button and `u` key still work.
+- **`Cmd+Z` is intercepted by the browser** when the search input is focused (it'll undo typed text first). The on-screen button still works.
 - **Source-grid on listview rows doesn't refresh after a Discogs-remove** for other rows of the same release still on screen. Only the currently-detail-open row updates. Likely benign until duplicate-release scenarios appear.
 - **Playback affordance is on list/tracklist rows only.** `TrackDetail` (the track right-pane) has no play control; only `TrackList` rows and the `ReleaseDetail` tracklist support double-click-to-play.
 - **The playback queue is in-memory only** — a reload loses it, exactly as the loaded track is already lost.

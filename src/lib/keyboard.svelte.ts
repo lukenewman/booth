@@ -8,7 +8,7 @@
  *   ↑/↓        move highlight in listview
  *   ⏎          add CTA in detail (when present)
  *   Esc        clear search input / close scanner / blur input
- *   u, ⌘Z      undo last add
+ *   ⌘Z         undo last add (no bare-key shortcut: it removes from Discogs)
  *   a          add focused track to a playlist
  *   c          add focused release to a gig's crate
  *   ?          toggle shortcut overlay
@@ -129,7 +129,6 @@ export function installKeyboard(actions: KeyboardActions, guards: KeyboardGuards
     if (e.key === 'ArrowDown')                              { e.preventDefault(); actions.moveDown();       return; }
     if (e.key === 'ArrowUp')                                { e.preventDefault(); actions.moveUp();         return; }
     if (e.key === 'Enter')                                  { e.preventDefault(); actions.commit();         return; }
-    if (e.key === 'u' || e.key === 'U')                     { e.preventDefault(); actions.undoLast();       return; }
     if (e.key === 'a' || e.key === 'A')                     { e.preventDefault(); actions.addToPlaylist();      return; }
     if (e.key === 'c' || e.key === 'C')                     { e.preventDefault(); actions.addToCrate();         return; }
     if (e.key === 'Delete' || e.key === 'Backspace')        { e.preventDefault(); actions.removeFromPlaylist(); return; }
