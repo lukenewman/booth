@@ -8,6 +8,7 @@
   import SourceGrid from './SourceGrid.svelte';
   import StarButton from './StarButton.svelte';
   import TrackNote from './TrackNote.svelte';
+  import TapTempo from './TapTempo.svelte';
   import { annotations } from '$lib/stores/annotations.svelte';
   import { player } from '$lib/stores/player.svelte';
   import { translucentDragImage } from '$lib/dnd';
@@ -64,6 +65,8 @@
     autoEditTags = false,
     stylesFilter = true,
     onSetCover,
+    tappable = true,
+    onBpmSaved,
   }: {
     release: Release;
     sources: SourceLink[];
@@ -95,6 +98,10 @@
     stylesFilter?: boolean;
     /** Set (a file) or clear (null) a hand-picked cover. Absent where covers can't be changed. */
     onSetCover?: (releaseId: string, file: File | null) => void;
+    /** Empty BPM cells open a tap pad. Off for things that aren't library tracks (Discogs search hits). */
+    tappable?: boolean;
+    /** After a tapped BPM is saved, so a surface showing the same track elsewhere (a gig sketch) can refresh. */
+    onBpmSaved?: (trackId: string, bpm: number) => void;
   } = $props();
 
   let coverInput: HTMLInputElement | undefined = $state();
@@ -134,11 +141,22 @@
       annotations.hydrateReleases([payloadRelease]);
     });
   });
+  /** The one track whose tap pad is open, and tempi tapped since the payload loaded. */
+  let tappingTrackId = $state<string | null>(null);
+  let tapped = $state<Record<string, number>>({});
+  $effect(() => {
+    release.id;
+    untrack(() => { tappingTrackId = null; tapped = {}; });
+  });
+  const bpmOf = (t: Track): ResolvedBpm | null =>
+    tapped[t.id] != null ? { value: tapped[t.id], provider: 'tapped' } : (t.bpm ?? null);
+
   /**
-   * Only shown when this record's tracks actually carry tempi — most releases
-   * have none, and an always-on column would narrow every title for nothing.
+   * Shown when this record's tracks carry tempi, or when an empty cell is the
+   * way in to tapping one. Most records you'd sequence from vinyl have no
+   * audio to analyse, so that blank is the case worth a column.
    */
-  const anyBpm = $derived(tracks.some((t) => t.bpm != null));
+  const anyBpm = $derived(tappable || tracks.some((t) => t.bpm != null));
   const trackGrid = $derived(
     ['14px', '22px', 'minmax(0, 1fr)', anyBpm ? '40px' : null, '44px', onAddTrack ? '24px' : null].filter(Boolean).join(' '),
   );
@@ -310,7 +328,7 @@
             // being swallowed and the note editor opened instead. (Synthetic
             // dispatchEvent bubbles natively and hid this in testing.)
             const origin = e.target as HTMLElement | null;
-            if (origin?.closest('.index.playable, .star, .add-to-gig')) return;
+            if (origin?.closest('.index.playable, .star, .add-to-gig, .tap-bpm')) return;
             // Real click opens the note editor. Double-click-to-play is gone —
             // the transport in the index cell covers playback, which frees this
             // gesture without the click/dblclick race a delayed handler needs.
@@ -357,7 +375,23 @@
           </span>
           <span class="track-title" title={t.title}>{t.title}</span>
           {#if anyBpm}
-            <span class="track-bpm">{t.bpm ? formatBpm(t.bpm.value) : ''}</span>
+            {@const bpm = bpmOf(t)}
+            {#if bpm}
+              <span class="track-bpm">{formatBpm(bpm.value)}</span>
+            {:else if tappable}
+              <span
+                class="track-bpm tap-bpm"
+                class:open={tappingTrackId === t.id}
+                role="button"
+                tabindex="-1"
+                aria-label="Tap the tempo of {t.title}"
+                title="Tap along to measure the BPM"
+                onclick={(e) => { e.stopPropagation(); tappingTrackId = tappingTrackId === t.id ? null : t.id; }}
+                onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); tappingTrackId = tappingTrackId === t.id ? null : t.id; } }}
+              >tap</span>
+            {:else}
+              <span class="track-bpm"></span>
+            {/if}
           {/if}
           <span class="track-dur">{durationLabel(t.duration_ms)}</span>
           {#if onAddTrack}
@@ -372,6 +406,19 @@
             >＋</span>
           {/if}
         </button>
+        {#if tappingTrackId === t.id}
+          <div class="tap-inline">
+            <TapTempo
+              trackId={t.id}
+              autofocus
+              onSaved={(value) => {
+                tapped[t.id] = value;
+                tappingTrackId = null;
+                onBpmSaved?.(t.id, value);
+              }}
+            />
+          </div>
+        {/if}
         <TrackNote
           trackId={t.id}
           editing={editingTrackId === t.id}
@@ -757,6 +804,12 @@
     text-align: right;
   }
   .track-row.playing .track-title { color: var(--accent); }
+  /* Resting state is near-invisible so a column of blanks doesn't shout; the
+     row hover is what says it's there. */
+  .tap-bpm { color: var(--text-subtle); cursor: pointer; opacity: 0.35; font-size: 10px; }
+  .track-row:hover .tap-bpm { opacity: 1; }
+  .tap-bpm:hover, .tap-bpm.open { color: var(--accent); opacity: 1; }
+  .tap-inline { padding: 4px 0 0 44px; }
 
   .identify {
     margin-top: 18px;

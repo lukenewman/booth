@@ -310,6 +310,7 @@ import RecordingPill from './RecordingPill.svelte';
             data={plDetail.data}
             onArtistSelect={(id) => openPlaylistEntity('artist', id)}
             onAddTrack={isGig ? addToGig : undefined}
+            onBpmSaved={() => { if (playlists.openPlaylist) playlists.loadPlaylist(playlists.openPlaylist.id); }}
             onSaveTags={c.tagPlaylistRelease}
             onSetCover={c.setReleaseCover}
             stylesFilter={false}

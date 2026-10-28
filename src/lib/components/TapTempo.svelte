@@ -1,7 +1,12 @@
 <script lang="ts">
   import { emptyTapState, estimate, tap, MIN_TAPS } from '$lib/tapTempo';
 
-  let { trackId, onSaved }: { trackId: string; onSaved?: (bpm: number) => void } = $props();
+  let { trackId, onSaved, autofocus = false }: { trackId: string; onSaved?: (bpm: number) => void; autofocus?: boolean } = $props();
+
+  let pad: HTMLButtonElement | undefined = $state();
+  // Opened inline from a tracklist, the pad should take space/T straight away
+  // rather than leaving them to reach the global play/pause binding.
+  $effect(() => { if (autofocus) pad?.focus(); });
 
   let run = $state(emptyTapState);
   let saving = $state(false);
@@ -69,6 +74,7 @@
   <button
     class="pad"
     class:armed={taps > 0}
+    bind:this={pad}
     onpointerdown={doTap}
     onkeydown={onKey}
     aria-label="Tap in time with the record to measure its tempo"
