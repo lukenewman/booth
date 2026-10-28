@@ -1,7 +1,18 @@
 <script lang="ts">
   import { emptyTapState, estimate, tap, MIN_TAPS } from '$lib/tapTempo';
 
-  let { trackId, onSaved, autofocus = false }: { trackId: string; onSaved?: (bpm: number) => void; autofocus?: boolean } = $props();
+  let {
+    trackId,
+    onSaved,
+    autofocus = false,
+    current = null,
+  }: {
+    trackId: string;
+    onSaved?: (bpm: number) => void;
+    autofocus?: boolean;
+    /** An earlier tap being re-measured; saving replaces it. */
+    current?: number | null;
+  } = $props();
 
   let pad: HTMLButtonElement | undefined = $state();
   // Opened inline from a tracklist, the pad should take space/T straight away
@@ -65,7 +76,7 @@
 
 <div class="tap">
   <div class="tap-head">
-    <span class="tap-label">No BPM for this track</span>
+    <span class="tap-label">{current != null ? `Tapped at ${current} — tap again to replace it` : 'No BPM for this track'}</span>
     {#if taps > 0}
       <button class="tap-reset" onclick={reset}>reset</button>
     {/if}

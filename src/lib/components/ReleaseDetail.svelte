@@ -122,6 +122,12 @@
 
   /** The one track whose note editor is open, if any. */
   let editingTrackId = $state<string | null>(null);
+  /**
+   * Which note was open when the current press began. Pressing the row blurs
+   * the note input, which commits and closes it before the click lands — so
+   * without this, a click meant to close the editor reopened it straight away.
+   */
+  let noteOpenAtPress: string | null = null;
 
   // Detail can be reached by deep link with no list page behind it, so the
   // tracklist payload is its own hydration source for the star state.
@@ -317,6 +323,7 @@
           style="grid-template-columns: {trackGrid}"
           type="button"
           draggable="true"
+          onpointerdown={() => (noteOpenAtPress = editingTrackId)}
           ondragstart={(e) => { e.dataTransfer?.setData('application/x-booth-track', t.id); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; if (e.currentTarget instanceof HTMLElement) translucentDragImage(e, e.currentTarget); }}
           onclick={(e) => {
             if (e.detail === 0) { onTrackSelect?.(t.id); return; }
@@ -329,6 +336,9 @@
             // dispatchEvent bubbles natively and hid this in testing.)
             const origin = e.target as HTMLElement | null;
             if (origin?.closest('.index.playable, .star, .add-to-gig, .tap-bpm')) return;
+            const wasOpen = noteOpenAtPress === t.id;
+            noteOpenAtPress = null;
+            if (wasOpen) { editingTrackId = null; return; }
             // Real click opens the note editor. Double-click-to-play is gone —
             // the transport in the index cell covers playback, which frees this
             // gesture without the click/dblclick race a delayed handler needs.
@@ -376,19 +386,23 @@
           <span class="track-title" title={t.title}>{t.title}</span>
           {#if anyBpm}
             {@const bpm = bpmOf(t)}
-            {#if bpm}
+            <!-- A tapped value stays a way back into the pad, so a hurried
+                 first measurement can be re-tapped. Other sources outrank a
+                 tap, so re-tapping over them would change nothing. -->
+            {#if bpm && !(tappable && bpm.provider === 'tapped')}
               <span class="track-bpm">{formatBpm(bpm.value)}</span>
             {:else if tappable}
               <span
                 class="track-bpm tap-bpm"
+                class:has-value={!!bpm}
                 class:open={tappingTrackId === t.id}
                 role="button"
                 tabindex="-1"
                 aria-label="Tap the tempo of {t.title}"
-                title="Tap along to measure the BPM"
+                title={bpm ? 'Tapped — click to re-tap' : 'Tap along to measure the BPM'}
                 onclick={(e) => { e.stopPropagation(); tappingTrackId = tappingTrackId === t.id ? null : t.id; }}
                 onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); tappingTrackId = tappingTrackId === t.id ? null : t.id; } }}
-              >tap</span>
+              >{bpm ? formatBpm(bpm.value) : 'tap'}</span>
             {:else}
               <span class="track-bpm"></span>
             {/if}
@@ -410,6 +424,7 @@
           <div class="tap-inline">
             <TapTempo
               trackId={t.id}
+              current={bpmOf(t)?.value ?? null}
               autofocus
               onSaved={(value) => {
                 tapped[t.id] = value;
@@ -807,6 +822,7 @@
   /* Resting state is near-invisible so a column of blanks doesn't shout; the
      row hover is what says it's there. */
   .tap-bpm { color: var(--text-subtle); cursor: pointer; opacity: 0.35; font-size: 10px; }
+  .tap-bpm.has-value { color: var(--text-muted); opacity: 1; font-size: 11px; }
   .track-row:hover .tap-bpm { opacity: 1; }
   .tap-bpm:hover, .tap-bpm.open { color: var(--accent); opacity: 1; }
   .tap-inline { padding: 4px 0 0 44px; }
