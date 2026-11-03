@@ -55,7 +55,7 @@
   function losses(i: Impact): string {
     if (!i.tracks) return 'No tracks leave the library: Music.app or another folder still lists all of them.';
     const extra = [i.starred && `${i.starred} starred`, i.withNotes && `${i.withNotes} with notes`, i.inPlaylists && `${i.inPlaylists} in playlists`].filter(Boolean);
-    return `${i.tracks.toLocaleString()} track${i.tracks === 1 ? '' : 's'} leave the library${extra.length ? ` (${extra.join(', ')})` : ''}. The files stay on disk.`;
+    return `${i.tracks.toLocaleString()} ${i.tracks === 1 ? 'track leaves' : 'tracks leave'} the library${extra.length ? ` (${extra.join(', ')})` : ''}. The files stay on disk.`;
   }
 
   onMount(() => { void load(); });
