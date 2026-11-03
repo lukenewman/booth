@@ -3,7 +3,7 @@ import { ulid } from 'ulid';
 import { collate, type CollateSummary } from './collate';
 import type { FileScanSummary } from './fileList';
 import { refreshFindings, type FindingsSummary } from './findings';
-import { importRekordbox, type RekordboxImportSummary } from './rekordbox';
+import { clearRekordboxFacts, importRekordbox, type RekordboxImportSummary } from './rekordbox';
 import { rekordboxXmlPath } from './rekordbox_env';
 import { readRekordboxCollection } from '../cdj/rekordbox-xml';
 import { relinkMissing, type RelinkSummary } from './relink';
@@ -144,6 +144,9 @@ async function runSyncNow(db: Database, sourceId: string): Promise<SyncRunRow> {
       } catch (e) {
         summary.rekordbox = { path: rbPath, error: e instanceof Error ? e.message : String(e) };
       }
+    } else if (sourceId === 'local') {
+      // Not connected (any more): nothing rekordbox said may still decide a BPM.
+      clearRekordboxFacts(db);
     }
 
     if (result.input) {

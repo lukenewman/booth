@@ -50,8 +50,26 @@
       const body = await res.json();
       if (!res.ok) { problem = PROBLEMS[body.problem] ?? 'Something went wrong.'; return; }
       await load();
-      // The import runs with a sync started by the connect; check back once it's had time.
-      setTimeout(async () => { await load(); onConnected?.(); }, 4000);
+      // The import runs with the sync the connect started, which may first
+      // wait out one already running: check back until it lands.
+      const before = status?.last?.at;
+      for (let i = 0; i < 30; i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        await load();
+        if (status?.last && status.last.at !== before) break;
+      }
+      onConnected?.();
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function disconnect() {
+    busy = true;
+    try {
+      await fetch('/api/setup/rekordbox', { method: 'DELETE' });
+      await load();
+      onConnected?.();
     } finally {
       busy = false;
     }
@@ -84,12 +102,13 @@
           </ul>
         </details>
       {/if}
-      <p class="note">Re-export after changing cues or grids in rekordbox. Cues set on a USB stick inside rekordbox stay on the stick and never reach the export.</p>
+      <p class="note">Re-export after changing cues or grids in rekordbox. Cues set on a USB stick inside rekordbox stay on the stick and never reach the export.
+        <button class="link" disabled={busy} onclick={disconnect}>Disconnect</button></p>
     {:else}
       <div class="line muted">Reading it with the next sync…</div>
     {/if}
   {:else if status}
-    <p>Connect rekordbox’s collection export to bring its tempo, key, beat grids and cues into Booth. Booth only reads it. rekordbox’s tempo then takes over from Booth’s own analysis.</p>
+    <p>Connect rekordbox’s collection export to bring its tempo, key, beat grids and cues into Booth. Booth only reads it. Where rekordbox has a tempo, Booth shows it instead of its own analysis, file tags or taps.</p>
     <form onsubmit={(e) => { e.preventDefault(); void connect(); }}>
       <label class="visually-hidden" for="rekordbox-path">rekordbox export file</label>
       <input id="rekordbox-path" bind:value={path} placeholder="~/Documents/rekordbox.xml" spellcheck="false" autocomplete="off" disabled={busy} />
@@ -108,6 +127,7 @@
   p { margin: 0 0 8px; line-height: 1.5; color: var(--text-muted); }
   .note { margin-top: 6px; font-size: 11px; color: var(--text-subtle); }
   .problem { color: var(--danger); margin-top: 8px; }
+  .link { background: none; border: 0; padding: 0; color: var(--text-subtle); text-decoration: underline; cursor: pointer; font: inherit; }
   details { margin-top: 4px; font-size: 12px; }
   summary { cursor: pointer; color: var(--text-muted); }
   ul { margin: 4px 0 0; padding-left: 16px; max-height: 180px; overflow-y: auto; }

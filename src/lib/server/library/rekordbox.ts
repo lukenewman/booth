@@ -16,6 +16,7 @@ import type { RekordboxTrack } from '../cdj/rekordbox-xml';
 
 export interface RekordboxImportSummary {
   path: string;
+  /** Distinct files the export lists. */
   entries: number;
   matched: number;
   withGrid: number;
@@ -53,12 +54,13 @@ export function importRekordbox(db: Database, xmlPath: string, tracks: Rekordbox
   }
 
   const summary: RekordboxImportSummary = {
-    path: xmlPath, entries: tracks.length, matched: 0, withGrid: 0, withCues: 0, unmatchedCount: 0, unmatched: [],
+    path: xmlPath, entries: 0, matched: 0, withGrid: 0, withCues: 0, unmatchedCount: 0, unmatched: [],
   };
   // rekordbox can list one file twice; the last entry wins, and each file is
   // counted once.
   const byFile = new Map<string, RekordboxTrack>();
   for (const t of tracks) byFile.set(t.path.normalize('NFC'), t);
+  summary.entries = byFile.size;
   const factsByTrack = new Map<string, Record<string, unknown>>();
   for (const [path, t] of byFile) {
     const trackId = trackByPath.get(path);
@@ -133,4 +135,9 @@ export function lastRekordboxImport(db: Database): (RekordboxImportSummary | { p
   } catch {
     return null;
   }
+}
+
+/** Disconnected: rekordbox's facts leave every track, so nothing it said still decides a BPM. */
+export function clearRekordboxFacts(db: Database): number {
+  return db.prepare(`DELETE FROM source_facets WHERE source = ?`).run(SOURCE).changes;
 }

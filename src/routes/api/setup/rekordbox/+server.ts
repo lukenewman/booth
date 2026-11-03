@@ -1,11 +1,12 @@
 import { json } from '@sveltejs/kit';
+import { statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { setEnv } from '$lib/server/env';
 import { writeSetting } from '$lib/server/settings';
 import { expandHome, tildePath } from '$lib/server/sources/local/music_library';
-import { checkRekordboxXml, defaultRekordboxXmlPath, lastRekordboxImport } from '$lib/server/library/rekordbox';
+import { checkRekordboxXml, clearRekordboxFacts, defaultRekordboxXmlPath, lastRekordboxImport } from '$lib/server/library/rekordbox';
 import { rekordboxXmlPath } from '$lib/server/library/rekordbox_env';
 import { runFreshSync } from '$lib/server/library/sync_run';
 
@@ -13,14 +14,18 @@ import { runFreshSync } from '$lib/server/library/sync_run';
  * GET → { path, last, suggested }: the connected export (or null), the last
  * import's counts, and the standard location when a file is there.
  */
+const mtimeOf = (path: string) => {
+  try { return statSync(path).mtime.toISOString(); } catch { return null; }
+};
+
 export const GET: RequestHandler = () => {
   const path = rekordboxXmlPath();
   const fallback = defaultRekordboxXmlPath(homedir());
-  const suggested = !path && checkRekordboxXml(fallback).ok ? tildePath(fallback) : null;
+  const suggested = !path && mtimeOf(fallback) ? tildePath(fallback) : null;
   const last = path ? lastRekordboxImport(getDb()) : null;
   return json({
     path: path ? tildePath(path) : null,
-    modifiedAt: path ? (checkRekordboxXml(path) as { modifiedAt?: string }).modifiedAt ?? null : null,
+    modifiedAt: path ? mtimeOf(path) : null,
     last: last ? { ...last, path: tildePath(last.path) } : null,
     suggested,
   });
@@ -42,4 +47,12 @@ export const POST: RequestHandler = async ({ request }) => {
   setEnv('REKORDBOX_XML_PATH', check.path);
   void runFreshSync(getDb(), 'local').catch((e) => console.warn('[rekordbox] sync after connect failed:', e));
   return json({ path: tildePath(check.path), trackCount: check.trackCount });
+};
+
+/** DELETE → disconnect: forget the export and take rekordbox's facts off every track. */
+export const DELETE: RequestHandler = () => {
+  writeSetting('REKORDBOX_XML_PATH', '');
+  setEnv('REKORDBOX_XML_PATH', '');
+  const cleared = clearRekordboxFacts(getDb());
+  return json({ disconnected: true, cleared });
 };

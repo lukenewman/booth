@@ -24,7 +24,7 @@ import type { FileListDeps } from '../src/lib/server/library/fileList';
 import { buildLocalResult } from '../src/lib/server/sources/local/localResult';
 import { releaseIdForTags } from '../src/lib/server/sources/local/sync';
 import { readRekordboxCollection } from '../src/lib/server/cdj/rekordbox-xml';
-import { checkRekordboxXml, importRekordbox } from '../src/lib/server/library/rekordbox';
+import { checkRekordboxXml, clearRekordboxFacts, importRekordbox } from '../src/lib/server/library/rekordbox';
 import { getTracksByIds } from '../src/lib/server/library/queries';
 
 function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
@@ -45,7 +45,7 @@ function exportXml(opts: { dropTwo?: boolean } = {}) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <DJ_PLAYLISTS Version="1.0.0">
   <PRODUCT Name="rekordbox" Version="7.2.14" Company="AlphaTheta"/>
-  <COLLECTION Entries="4">
+  <COLLECTION Entries="${opts.dropTwo ? 3 : 4}">
     <TRACK TrackID="101" Name="One &amp; Only" Artist="Artist" AverageBpm="122.00" Tonality="Am"
            DateAdded="2025-08-25" PlayCount="3" Rating="0" Location="${url(p('A/01 One.mp3'))}">
       <TEMPO Inizio="0.049" Bpm="122.00" Metro="4/4" Battito="1"/>
@@ -90,6 +90,11 @@ const tracks = readRekordboxCollection(xmlPath);
   assert(two.bpm === null && two.key === null && two.grid.length === 0 && two.rating === 255, `blank values are null, got ${JSON.stringify(two)}`);
   const cafe = tracks.find((t) => t.trackId === '103')!;
   assert(cafe.grid.length === 2, 'variable tempo keeps every grid section');
+  writeFileSync(p('selfclosing.xml'), `<?xml version="1.0"?><DJ_PLAYLISTS><COLLECTION Entries="1">
+    <TRACK TrackID="9" Name="Never analysed" AverageBpm="0.00" PlayCount="2" Location="${url(p('A/01 One.mp3'))}"/>
+  </COLLECTION><PLAYLISTS><NODE Type="1" Name="P"><TRACK Key="9"/></NODE></PLAYLISTS></DJ_PLAYLISTS>`);
+  const sc = readRekordboxCollection(p('selfclosing.xml'));
+  assert(sc.length === 1 && sc[0].playCount === 2 && sc[0].grid.length === 0, `a never-analysed (self-closing) track is read, got ${JSON.stringify(sc)}`);
   console.log('ok reader');
 }
 
@@ -153,8 +158,31 @@ const facetsOf = (id: string) => Object.fromEntries((db.prepare(`SELECT key, val
 {
   const twice = [...readRekordboxCollection(xmlPath), ...readRekordboxCollection(xmlPath)];
   const s = importRekordbox(db, xmlPath, twice);
-  assert(s.entries === twice.length && s.matched === 2 && s.unmatchedCount === 1 && s.unmatched.length === 1, `duplicates counted once, got ${JSON.stringify(s)}`);
+  assert(s.entries === 3 && s.matched === 2 && s.unmatchedCount === 1 && s.unmatched.length === 1, `duplicates counted once, got ${JSON.stringify(s)}`);
   console.log('ok duplicate entries');
+}
+
+// --- an export cut off mid-write is refused, not half-imported ---------------
+{
+  const full = readFileSync(xmlPath, 'utf8');
+  writeFileSync(p('cut.xml'), full.slice(0, full.indexOf('<TRACK TrackID="103"')));
+  let threw = false;
+  try { readRekordboxCollection(p('cut.xml')); } catch { threw = true; }
+  assert(threw, 'a truncated export throws, so the sync records an error and removes nothing');
+  writeFileSync(p('short.xml'), full.replace('<COLLECTION Entries="3">', '<COLLECTION Entries="5">'));
+  threw = false;
+  try { readRekordboxCollection(p('short.xml')); } catch { threw = true; }
+  assert(threw, 'fewer tracks than the export says it holds throws');
+  console.log('ok incomplete export refused');
+}
+
+// --- disconnecting takes rekordbox's facts away --------------------------------
+{
+  assert(facetRows().length > 0, 'scenario: facts present');
+  clearRekordboxFacts(db);
+  assert(facetRows().length === 0, 'no rekordbox facts after disconnecting');
+  importRekordbox(db, xmlPath, readRekordboxCollection(xmlPath));
+  console.log('ok disconnect clears');
 }
 
 // --- setup check ------------------------------------------------------------

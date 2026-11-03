@@ -97,16 +97,35 @@ const positive = (s: string | undefined) => {
 };
 const text = (s: string | undefined) => (s && s.trim() ? s : null);
 
-/** Every collection track with a local file. Playlist entries (self-closing `<TRACK Key=…/>`) are not tracks. */
+/** The export can't be trusted: cut off mid-write, or not holding what it says it holds. */
+export class IncompleteExportError extends Error {}
+
+/**
+ * Every collection track with a local file. Reads only the COLLECTION
+ * section: playlist entries there are `<TRACK Key=…/>` references, not tracks.
+ * A track rekordbox never analysed is written self-closing, with no body.
+ *
+ * Refuses an export that is cut off or holds fewer tracks than its `Entries`
+ * count: read while rekordbox is still writing it, a partial file would make
+ * the import drop the facts of every track after the cut.
+ */
 export function readRekordboxCollection(xmlPath: string): RekordboxTrack[] {
 	const xml = readFileSync(xmlPath, 'utf8');
+	const open = /<COLLECTION\b([^>]*)>/.exec(xml);
+	const close = xml.indexOf('</COLLECTION>');
+	if (!open || close < 0 || !xml.includes('</DJ_PLAYLISTS>')) throw new IncompleteExportError('the rekordbox export looks cut off');
+	const collection = xml.slice(open.index + open[0].length, close);
+	const declared = Number(attrs(open[1]).Entries);
 	const out: RekordboxTrack[] = [];
-	for (const m of xml.matchAll(/<TRACK\s([^>]*[^/])>([\s\S]*?)<\/TRACK>/g)) {
+	let seen = 0;
+	for (const m of collection.matchAll(/<TRACK\s([^>]*?)(?:\/>|>([\s\S]*?)<\/TRACK>)/g)) {
+		seen++;
 		const t = attrs(m[1]);
+		const body = m[2] ?? '';
 		const path = t.Location && decodedPath(t.Location);
 		if (!path || !t.TrackID) continue;
 		const grid: GridSection[] = [];
-		for (const tm of m[2].matchAll(/<TEMPO\s([^>]*)\/?>/g)) {
+		for (const tm of body.matchAll(/<TEMPO\s([^>]*)\/?>/g)) {
 			const a = attrs(tm[1]);
 			const start = Number(a.Inizio);
 			const bpm = Number(a.Bpm);
@@ -114,7 +133,7 @@ export function readRekordboxCollection(xmlPath: string): RekordboxTrack[] {
 			grid.push({ start, bpm, meter: a.Metro ?? '4/4', beat: Number(a.Battito ?? 1) });
 		}
 		const cues: Cue[] = [];
-		for (const pm of m[2].matchAll(/<POSITION_MARK\s([^>]*)\/?>/g)) {
+		for (const pm of body.matchAll(/<POSITION_MARK\s([^>]*)\/?>/g)) {
 			const a = attrs(pm[1]);
 			const type = Number(a.Type);
 			if (type !== 0 && type !== 4) continue;
@@ -136,6 +155,9 @@ export function readRekordboxCollection(xmlPath: string): RekordboxTrack[] {
 			playCount: positive(t.PlayCount),
 			dateAdded: text(t.DateAdded),
 		});
+	}
+	if (Number.isFinite(declared) && seen < declared) {
+		throw new IncompleteExportError(`the rekordbox export lists ${declared} tracks but holds ${seen}`);
 	}
 	return out;
 }
