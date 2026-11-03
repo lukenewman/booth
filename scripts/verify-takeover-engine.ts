@@ -29,6 +29,7 @@ import { buildLocalResult } from '../src/lib/server/sources/local/localResult';
 import { listAudioFiles } from '../src/lib/server/sources/local/ingest';
 import { releaseIdForTags } from '../src/lib/server/sources/local/sync';
 import { createTakeoverRun, runTakeover, type TakeoverDeps } from '../src/lib/server/takeover/engine';
+import { rebuildCheck, undoPreview, undoRelease } from '../src/lib/server/takeover/undo';
 
 function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
 function assert(cond: unknown, msg: string): asserts cond { if (!cond) fail(msg); }
@@ -192,6 +193,59 @@ const origBefore = originals();
   free = 1e12;
   assert(r.state === 'failed' && /space/i.test(r.error ?? '') && !listAudioFiles(booth).some((x) => x.includes('Fourth')), `refused for space before copying, got ${JSON.stringify(r)}`);
   console.log('ok space');
+}
+
+// --- undo and the rebuild check ---------------------------------------------------------------
+{
+  const full = () => JSON.stringify({
+    base: JSON.parse(snapshot()),
+    links: db.prepare(`SELECT entity_id, external_id FROM source_link WHERE source = 'local' ORDER BY entity_id`).all(),
+    files: db.prepare(`SELECT id, path, ownership, copy_of FROM audio_file ORDER BY id`).all(),
+  });
+  const rel = releaseOf('S');
+  const before = full();
+  const r = await runTakeover(db, deps, createTakeoverRun(db, [rel]), { root: booth });
+  const copy = fileOfTrack('S');
+  assert(r.done === 1 && copy.ownership === 'booth', 'scenario: S taken over');
+
+  const check = await rebuildCheck(db, rel, deps);
+  assert(check.matches && check.files === 1, `the copy's tags rebuild what Booth knows, got ${JSON.stringify(check)}`);
+  const text = readFileSync(copy.path, 'utf8').split('\n');
+  const w = JSON.parse(text[1]); w.names.title = 'Changed elsewhere';
+  writeFileSync(copy.path, `${text[0]}\n${JSON.stringify(w)}\n`);
+  const bad = await rebuildCheck(db, rel, deps);
+  assert(!bad.matches && bad.differences.some((d) => d.field === 'title' && d.got === 'Changed elsewhere'), `a changed tag is reported, got ${JSON.stringify(bad)}`);
+  console.log('ok rebuild check');
+
+  const preview = undoPreview(db, rel);
+  assert(preview.files.length === 1 && preview.lost.length === 0, `undo says what it does, got ${JSON.stringify(preview)}`);
+  await undoRelease(db, deps, rel);
+  assert(full() === before, 'undo restores the database exactly');
+  assert(!existsSync(copy.path), 'and deletes the copy');
+  await sync();
+  assert(full() === before && listOpenFindings(db).length === 0, `a sync afterwards agrees, got ${JSON.stringify(listOpenFindings(db))}`);
+  console.log('ok undo');
+
+  // The original gone: refused, nothing deleted.
+  const relEP = releaseOf('A');
+  const a = p('Music/Third/EP/01 A.mp3');
+  const aside = a + '.aside';
+  const { renameSync, utimesSync } = await import('node:fs');
+  const stamp = statSync(a);
+  renameSync(a, aside);
+  let refused = '';
+  try { await undoRelease(db, deps, relEP); } catch (e) { refused = (e as Error).message; }
+  renameSync(aside, a);
+  assert(/original/i.test(refused) && fileOfTrack('A').ownership === 'booth' && existsSync(fileOfTrack('A').path), `undo refuses without the original, got "${refused}"`);
+  // An original whose audio changed since is not the original either.
+  const bytes = readFileSync(a, 'utf8');
+  writeFileSync(a, bytes.replace('AUD4', 'AUD4-edited'));
+  refused = '';
+  try { await undoRelease(db, deps, relEP); } catch (e) { refused = (e as Error).message; }
+  writeFileSync(a, bytes);
+  utimesSync(a, stamp.atime, stamp.mtime); // put the original back exactly, for the final check
+  assert(/original/i.test(refused) && fileOfTrack('A').ownership === 'booth', `undo refuses a changed original, got "${refused}"`);
+  console.log('ok undo refuses');
 }
 
 assert(originals() === origBefore, 'after everything, the originals are untouched');
