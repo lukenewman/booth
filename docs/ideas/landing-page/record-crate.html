@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>booth</title>
+<style>
+  :root {
+    --bg-sunken: #1f1f1d;
+    --bg: #262624;
+    --bg-raised: #2e2e2b;
+    --border: #42423e;
+    --text: #e6e3dc;
+    --text-muted: #a39f96;
+    --text-subtle: #8d8a82;
+    --accent: #a58cf0;
+    --accent-strong: #bba8f7;
+    --accent-bg: #373249;
+    --accent-border: #594c84;
+    --discogs: #c89a5b;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+    --sleeve: min(54vh, 38vw);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg-sunken); color: var(--text); font-family: var(--font); font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  a { color: var(--accent-strong); }
+
+  /* scroll track: the page scrolls, the stage stays put */
+  .track { position: relative; }
+  .stage { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden;
+    background: radial-gradient(ellipse 70% 60% at 68% 62%, #2b2b28 0%, var(--bg-sunken) 70%); }
+
+  /* ---------- left column ---------- */
+  .copy { position: absolute; left: clamp(24px, 6vw, 96px); top: 0; bottom: 0; width: min(34vw, 460px);
+    display: flex; flex-direction: column; justify-content: space-between; padding: clamp(24px, 5vh, 48px) 0; z-index: 2; pointer-events: none; }
+  .copy > * { pointer-events: auto; }
+  .mark { display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: 600; }
+  .mark i { width: 30px; height: 30px; border-radius: 7px; background: radial-gradient(circle, var(--bg) 0 7%, var(--accent) 8% 34%, transparent 35%), repeating-radial-gradient(circle, #1f1f1d 0 1.5px, #3a3a36 2px 2.5px); }
+  h1 { font-size: clamp(30px, 3.4vw, 50px); line-height: 1.06; letter-spacing: -0.025em; margin: 0 0 18px; text-wrap: balance; }
+  .btn { display: inline-block; padding: 11px 20px; border-radius: 9px; background: var(--accent); color: #17151f; font-weight: 600; text-decoration: none; font-size: 15px; }
+  .btn:hover { background: var(--accent-strong); }
+  .alt { display: block; margin-top: 8px; font-size: 13px; color: var(--text-subtle); }
+  .alt a { color: var(--text-muted); }
+
+  .caption { position: relative; min-height: 9.5em; }
+  .caption .n { font-family: var(--mono); font-size: 12px; color: var(--text-subtle); letter-spacing: .04em; }
+  .caption h2 { font-size: 22px; letter-spacing: -0.015em; margin: 6px 0 8px; }
+  .caption p { margin: 0; color: var(--text-muted); text-wrap: pretty; max-width: 26em; }
+  .caption > div { position: absolute; inset: 0 0 auto 0; transition: opacity .35s, translate .35s; }
+  .caption > div:not(.on) { opacity: 0; translate: 0 8px; pointer-events: none; }
+  .soon { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-subtle); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; margin-left: 8px; vertical-align: 3px; }
+
+  .scrollhint { font-size: 13px; color: var(--text-subtle); transition: opacity .3s; }
+
+  /* ---------- 3D crate ---------- */
+  .scene { position: absolute; inset: 0; z-index: 3; pointer-events: none; perspective: 1500px; perspective-origin: 62% 38%; }
+  .crate { position: absolute; left: 66%; top: 62%; width: 0; height: 0; transform-style: preserve-3d;
+    transform: rotateX(-7deg) rotateY(-26deg); }
+  .rec { position: absolute; width: var(--sleeve); height: var(--sleeve); left: calc(var(--sleeve) / -2); top: calc(var(--sleeve) / -2);
+    transform-style: preserve-3d; will-change: transform, opacity; }
+  .sleeve { position: absolute; inset: 0; border-radius: 3px; overflow: hidden;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), -1px 0 0 rgba(0,0,0,.4); }
+  /* light falloff on records further back */
+  .sleeve::after { content: ""; position: absolute; inset: 0; background: #000; opacity: var(--dim, 0); pointer-events: none; }
+  .sleeve h3 { position: absolute; left: 7%; top: 5%; right: 7%; margin: 0; font-size: calc(var(--sleeve) * .058); font-weight: 600; letter-spacing: -0.01em; line-height: 1.15; }
+  .sleeve .lbl { position: absolute; left: 7%; top: 6%; font-size: calc(var(--sleeve) * .03); font-weight: 600; opacity: .7; }
+  .floor { position: absolute; left: 66%; top: calc(62% + var(--sleeve) * .5); width: calc(var(--sleeve) * 1.5); height: 60px; translate: -50% -30%;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,.55), transparent 70%); filter: blur(6px); }
+
+  .wall { position: absolute; width: calc(var(--sleeve) * 1.08); height: calc(var(--sleeve) * .3);
+    left: calc(var(--sleeve) * -.54); top: calc(var(--sleeve) * .2);
+    background: linear-gradient(#34342f, #2a2a26); border-radius: 3px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(0,0,0,.3); }
+  .wall::before { content: ""; position: absolute; left: 50%; top: 22%; width: 18%; height: 18%; translate: -50% 0; border-radius: 99px; background: #1b1b19; box-shadow: inset 0 2px 3px #000; }
+
+  /* ---------- covers: muted, one idea each ---------- */
+  .cv { position: absolute; inset: 0; }
+  .cv-title { background: #232321; color: var(--text); }
+  .cv-title .disc { position: absolute; left: 50%; top: 52%; width: 66%; aspect-ratio: 1; translate: -50% -50%; border-radius: 50%;
+    background: radial-gradient(circle, #232321 0 4%, var(--accent) 4.3% 31%, transparent 31.5%), repeating-radial-gradient(circle, #1a1a18 0 2px, #2c2c29 2.5px 3.5px); }
+  .cv-title h3 { font-size: calc(var(--sleeve) * .1); letter-spacing: -0.04em; font-weight: 700; }
+
+  .cv-library { background: #e6e3dc; color: #262624; }
+  .cv-library::before, .cv-library::after { content: ""; position: absolute; top: 22%; width: 48%; aspect-ratio: 1; border-radius: 50%; mix-blend-mode: multiply; }
+  .cv-library::before { left: 14%; background: var(--discogs); }
+  .cv-library::after { right: 14%; background: var(--accent); }
+
+  .cv-add { background: #b5643c; color: #1e120b; }
+  .cv-add::before { content: ""; position: absolute; left: 14%; right: 14%; top: 24%; height: 42%;
+    background: repeating-linear-gradient(90deg, #1e120b 0 3px, transparent 3px 6px, #1e120b 6px 8px, transparent 8px 12px, #1e120b 12px 17px, transparent 17px 20px); opacity: .85; }
+
+  .cv-rip { background: #141413; color: var(--text); }
+  .cv-rip .wave { position: absolute; left: 10%; right: 10%; top: 24%; height: 36%; display: flex; align-items: center; gap: 2px; }
+  .cv-rip .wave i { flex: 1; background: var(--accent); border-radius: 1px; }
+  .cv-rip .wave i.gap { background: transparent; }
+  .cv-rip .wave i.cut { flex: 0 0 1px; background: #8d8a82; height: 125% !important; }
+
+  .cv-tempo { background: #2c3a44; color: #d6e6ec; }
+  .cv-tempo span { position: absolute; left: 7%; top: 20%; font-family: var(--mono); font-size: calc(var(--sleeve) * .26); font-weight: 500; letter-spacing: -0.05em; line-height: 1; }
+  .cv-tempo::after { content: ""; position: absolute; left: 7%; right: 7%; top: 60%; height: 9%; background: repeating-linear-gradient(90deg, currentColor 0 2px, transparent 2px 12.5%); opacity: .45; }
+
+  .cv-gigs { background: #2f3b33; color: #e3e3d4; }
+  .cv-gigs .set { position: absolute; left: 7%; right: 7%; top: 20%; display: grid; gap: 4%; height: 52%; }
+  .cv-gigs .set i { display: block; border-radius: 2px; }
+  .cv-gigs .set i:nth-child(1) { background: #43564a; width: 60%; }
+  .cv-gigs .set i:nth-child(2) { background: #6a8259; width: 75%; }
+  .cv-gigs .set i:nth-child(3) { background: #b9a24a; width: 100%; }
+  .cv-gigs .set i:nth-child(4) { background: #c4693e; width: 68%; }
+
+  .cv-stars { background: #6e2f38; color: #f3dfd3; }
+  .cv-stars span { position: absolute; left: 50%; top: 46%; translate: -50% -50%; font-size: calc(var(--sleeve) * .5); line-height: 1; color: #e8b54d; }
+
+  .cv-keys { background: #d5d0c4; color: #262420; }
+  .cv-keys .k { position: absolute; left: 14%; right: 14%; top: 20%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5%; }
+  .cv-keys .k b { aspect-ratio: 1; display: grid; place-items: center; background: #efebe2; border-radius: 8%; box-shadow: 0 calc(var(--sleeve) * .01) 0 #a59f92; font-family: var(--mono); font-weight: 500; font-size: calc(var(--sleeve) * .05); }
+  .cv-keys .k b.on { background: var(--accent); box-shadow: 0 calc(var(--sleeve) * .01) 0 #6b56b0; }
+
+  .cv-cdj { background: #181818; color: #ddd; }
+  .cv-cdj::before { content: ""; position: absolute; left: 50%; top: 48%; translate: -50% -50%; width: 62%; aspect-ratio: 1; border-radius: 50%;
+    background: radial-gradient(circle, #222 0 27%, #3a3a3a 27.5% 29%, #111 29.5% 70%, #2e2e2e 70.5% 72%, #1a1a1a 72.5%); }
+  .cv-cdj::after { content: ""; position: absolute; left: 50%; top: 20%; width: 3px; height: 8%; background: #c4693e; translate: -50% 0; border-radius: 2px; }
+
+  /* ---------- progress ---------- */
+  .dots { position: absolute; right: clamp(16px, 2.5vw, 36px); top: 50%; translate: 0 -50%; display: grid; gap: 10px; z-index: 2; }
+  .dots button { all: unset; width: 6px; height: 6px; border-radius: 50%; background: var(--border); cursor: pointer; transition: background .2s, scale .2s; }
+  .dots button.on { background: var(--accent); scale: 1.4; }
+
+  /* ---------- below ---------- */
+  .below { position: relative; background: var(--bg-sunken); border-top: 1px solid var(--border); padding: 0 clamp(24px, 6vw, 96px); }
+  .placeholder { padding: 96px 0; color: var(--text-subtle); font-size: 14px; text-align: center; }
+  footer { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 24px 0 40px; border-top: 1px solid var(--border); color: var(--text-subtle); font-size: 14px; }
+  footer a { color: var(--text-muted); }
+
+  @media (max-width: 760px) {
+    :root { --sleeve: min(70vw, 42vh); }
+    .copy { width: auto; right: 24px; }
+    .crate, .floor { left: 50%; top: 60%; }
+    .scene { perspective-origin: 50% 40%; }
+    .caption { min-height: 8em; }
+    .dots { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="track" id="track">
+  <div class="stage">
+    <div class="scene"><div class="floor"></div><div class="crate" id="crate"></div></div>
+
+    <div class="copy">
+      <div class="mark"><i aria-hidden="true"></i>booth</div>
+      <div>
+        <h1>Your records and files, all in one place.</h1>
+        <a class="btn" href="https://github.com/lukenewman/booth/releases/latest/download/booth-apple-silicon.dmg">Download for Mac</a>
+        <span class="alt">Apple Silicon · <a href="https://github.com/lukenewman/booth/releases/latest/download/booth-intel.zip">Intel version</a> · free</span>
+      </div>
+      <div class="caption" id="caption" aria-live="polite"></div>
+    </div>
+
+    <nav class="dots" id="dots" aria-label="Features"></nav>
+  </div>
+</div>
+
+<div class="below">
+  <div class="placeholder">Install &amp; setup steps — unchanged from the current page</div>
+  <footer>
+    <span>A personal project by New Man</span>
+    <span><a href="https://github.com/lukenewman/booth">GitHub</a> · <a href="https://github.com/lukenewman/booth/releases">Release notes</a></span>
+  </footer>
+</div>
+
+<script>
+const wave = (() => {
+  const h = [], seg = [20, 14, 17];
+  seg.forEach((n, s) => {
+    for (let i = 0; i < n; i++) h.push(`<i style="height:${20 + Math.round(Math.abs(Math.sin(i * 1.7 + s) * 55 + Math.sin(i * .4) * 20))}%"></i>`);
+    if (s < seg.length - 1) h.push('<i class="gap"></i><i class="cut"></i><i class="gap"></i>');
+  });
+  return h.join('');
+})();
+
+const records = [
+  { cls: 'cv-title', art: '<div class="disc"></div>', name: 'booth',
+    title: 'A Mac app for DJs and collectors', blurb: 'Your Discogs collection and your digital library, in one place. Scroll to flip through the crate.' },
+  { cls: 'cv-library', name: 'One library',
+    title: 'One library', blurb: 'Records from Discogs and files from Apple Music land in the same list. A record you own on vinyl and as a file is one release, not two.' },
+  { cls: 'cv-add', name: 'Add a record',
+    title: 'Add a record in seconds', blurb: 'Scan the barcode, or search Discogs by catalog number or runout etching.' },
+  { cls: 'cv-rip', art: `<div class="wave">${wave}</div>`, name: 'Rip your vinyl',
+    title: 'Rip your vinyl', blurb: 'Plug in your audio interface and drop the needle. booth finds the gaps between tracks, lines them up with the Discogs tracklist, and saves each one into your library.' },
+  { cls: 'cv-tempo', art: '<span>124</span>', name: 'Tempo',
+    title: 'Tempo for everything', blurb: 'BPMs worked out for every file, or tap one in by ear.' },
+  { cls: 'cv-gigs', art: '<div class="set"><i></i><i></i><i></i><i></i></div>', name: 'Plan the gig',
+    title: 'Plan your gigs', blurb: 'Build playlists and gig sets in sections, from the tracks you trust, with records and files side by side.' },
+  { cls: 'cv-stars', art: '<span>★</span>', name: 'Stars & notes',
+    title: 'Stars and notes', blurb: 'Star what works, write notes on what doesn’t. Every change is journaled, so nothing gets lost.' },
+  { cls: 'cv-keys', art: '<div class="k"><b>j</b><b class="on">k</b><b>/</b><b>s</b><b>v</b><b>?</b></div>', name: 'Keyboard first',
+    title: 'Keyboard first', blurb: 'Every view works without the mouse. Press ? for the full list.' },
+  { cls: 'cv-cdj', name: 'To the booth', soon: true,
+    title: 'Export to CDJs', blurb: 'Put your sets on a USB stick your CDJs and XDJs can read, without going through rekordbox.' },
+];
+
+const N = records.length;
+const wallEl = document.createElement('div'); wallEl.className = 'wall';
+const crate = document.getElementById('crate');
+const caption = document.getElementById('caption');
+const dots = document.getElementById('dots');
+const track = document.getElementById('track');
+crate.appendChild(wallEl);
+
+// One screen of scroll per record, plus the last one's resting screen.
+const STEP = 0.9; // viewport heights of scroll per record
+track.style.height = `${(N - 1) * STEP * 100 + 100}vh`;
+
+const els = records.map((r, i) => {
+  const el = document.createElement('div');
+  el.className = 'rec';
+  el.innerHTML = `<div class="sleeve"><div class="cv ${r.cls}">${r.art || ''}</div><h3>${r.name}</h3></div>`;
+  crate.appendChild(el);
+
+  const c = document.createElement('div');
+  c.innerHTML = `<div class="n">${String(i).padStart(2, '0')} / ${String(N - 1).padStart(2, '0')}</div><h2>${r.title}${r.soon ? '<span class="soon">Coming</span>' : ''}</h2><p>${r.blurb}</p>`;
+  caption.appendChild(c);
+
+  const d = document.createElement('button');
+  d.setAttribute('aria-label', r.title);
+  d.onclick = () => scrollTo({ top: i * STEP * innerHeight, behavior: 'smooth' });
+  dots.appendChild(d);
+  return el;
+});
+
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const smooth = t => t * t * (3 - 2 * t);
+// Each record holds at the front for a while, then sweeps out.
+const HOLD = 0.35;
+const shape = p => { const i = Math.floor(p), f = p - i; return i + (f < HOLD ? 0 : smooth((f - HOLD) / (1 - HOLD))); };
+
+let target = 0, current = 0, shown = -1;
+
+function render(pe) {
+  const S = els[0].offsetWidth;
+  wallEl.style.transform = `translateZ(${S * 0.05}px)`;
+  const G = S * 0.09;         // spacing between records in the crate
+  const LIFT = S * 0.3;       // how far the front record is pulled up
+  for (let i = 0; i < N; i++) {
+    const t = pe - i, el = els[i];
+    let x, y, z, ry = 0, rz = 0, op = 1, dim;
+    if (t <= 0) {
+      // waiting in the crate; the one coming to the front rises as it arrives
+      const d = -t;
+      x = d * S * 0.015; z = -d * G; y = -LIFT * clamp(1 - d, 0, 1) + d * S * 0.004;
+      dim = clamp(d * 0.11, 0, 0.6);
+      op = d > 7 ? 0 : 1;
+    } else {
+      // pulled out: sweeps left, toward the camera, turning to face right as it passes your shoulder
+      const u = clamp(t, 0, 1);
+      x = -u * S * 2.4;
+      z = u * S * 1.7;
+      y = -LIFT - Math.sin(u * Math.PI) * S * 0.1;
+      ry = -u * 38;
+      rz = -u * 3;
+      dim = 0;
+      op = 1 - smooth(clamp((u - 0.6) / 0.35, 0, 1));
+    }
+    el.style.transform = `translate3d(${x}px, ${y}px, ${z}px) rotateY(${ry}deg) rotateZ(${rz}deg)`;
+    el.style.opacity = op;
+    el.style.visibility = op <= 0.001 ? 'hidden' : 'visible';
+    el.firstChild.style.setProperty('--dim', dim);
+  }
+  const front = clamp(Math.round(pe), 0, N - 1);
+  if (front !== shown) {
+    caption.children[shown]?.classList.remove('on');
+    dots.children[shown]?.classList.remove('on');
+    caption.children[front].classList.add('on');
+    dots.children[front].classList.add('on');
+    shown = front;
+  }
+}
+
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function onScroll() { target = clamp(scrollY / (innerHeight * STEP), 0, N - 1); }
+function tick() {
+  current += (target - current) * (reduce ? 1 : 0.12);
+  if (Math.abs(target - current) < 0.0005) current = target;
+  render(shape(current));
+  requestAnimationFrame(tick);
+}
+addEventListener('scroll', onScroll, { passive: true });
+addEventListener('resize', onScroll);
+onScroll(); current = target; tick();
+</script>
+</body>
+</html>

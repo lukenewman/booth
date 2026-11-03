@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>booth</title>
+<style>
+  :root {
+    --bg-sunken: #1f1f1d;
+    --bg: #262624;
+    --bg-raised: #2e2e2b;
+    --border: #42423e;
+    --text: #e6e3dc;
+    --text-muted: #a39f96;
+    --text-subtle: #8d8a82;
+    --accent: #a58cf0;
+    --accent-strong: #bba8f7;
+    --accent-bg: #373249;
+    --accent-border: #594c84;
+    --discogs: #c89a5b;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+    --pad: clamp(16px, 1.6vw, 24px);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg-sunken); color: var(--text); font-family: var(--font); font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  a { color: var(--accent-strong); }
+
+  /* ---------- grids: edge to edge, 1px hairlines between tiles ---------- */
+  .crate { background: var(--border); display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-flow: dense; gap: 1px; }
+  /* first screen: exactly one viewport, every tile whole */
+  .crate.hero { height: 100vh; height: 100svh; grid-template-rows: repeat(3, minmax(0, 1fr)); }
+  .crate.rest { margin-top: 1px; }
+  .crate.rest > * { aspect-ratio: 1; }
+  .crate > * { min-width: 0; min-height: 0; }
+  .crate > .w2 { grid-column: span 2; }
+  .crate.rest > .w2 { aspect-ratio: 2 / 1; }
+  .crate > .s2 { grid-column: span 2; grid-row: span 2; }
+  .crate.rest > .s2 { aspect-ratio: auto; }
+  .crate > .title { grid-column: span 3; grid-row: span 2; }
+
+  /* ---------- title ---------- */
+  .title {
+    position: relative; overflow: hidden; background: var(--bg);
+    padding: clamp(24px, 3vw, 44px);
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .title .disc {
+    position: absolute; right: -22%; top: 50%; width: 72%; aspect-ratio: 1; translate: 0 -50%; border-radius: 50%;
+    background:
+      radial-gradient(circle, var(--bg) 0 4%, var(--accent) 4.3% 30%, transparent 30.5%),
+      repeating-radial-gradient(circle, #1c1c1a 0 3px, #2a2a27 3.5px 4.5px);
+    opacity: .55;
+  }
+  .title > *:not(.disc) { position: relative; }
+  .mark { display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: 600; }
+  .mark i { width: 32px; height: 32px; border-radius: 8px; background: radial-gradient(circle, #262624 0 7%, var(--accent) 8% 34%, transparent 35%), repeating-radial-gradient(circle, #1f1f1d 0 1.5px, #3a3a36 2px 2.5px); }
+  .title h1 { font-size: clamp(30px, 3.6vw, 52px); line-height: 1.06; letter-spacing: -0.025em; font-weight: 700; margin: 0; max-width: 11em; }
+  .title p { color: var(--text-muted); font-size: 17px; max-width: 26em; margin: 14px 0 0; text-wrap: pretty; }
+
+  /* ---------- download ---------- */
+  .get {
+    background: var(--accent); color: #17151f; text-decoration: none;
+    padding: var(--pad); display: flex; flex-direction: column; justify-content: space-between;
+    transition: background .15s;
+  }
+  .get:hover { background: var(--accent-strong); }
+  .get:focus-visible { outline: 2px solid var(--text); outline-offset: -4px; }
+  .get b { font-size: clamp(20px, 1.8vw, 26px); letter-spacing: -0.015em; }
+  .get span { font-size: 13px; opacity: .75; }
+
+  /* ---------- releases ---------- */
+  .release { perspective: 1600px; background: var(--bg); }
+  .release button {
+    all: unset; display: block; width: 100%; height: 100%; cursor: pointer;
+    position: relative; transform-style: preserve-3d;
+    transition: transform .6s cubic-bezier(.2,.7,.2,1);
+  }
+  .release button:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: -4px; }
+  .release.flipped button { transform: rotateY(180deg); }
+  .face { position: absolute; inset: 0; overflow: hidden; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+  .front { background: var(--bg); transition: background .15s; }
+  .release:hover .front { background: #2a2a28; }
+  .front h2 { position: absolute; left: var(--pad); bottom: calc(var(--pad) - 4px); right: var(--pad); margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.005em; }
+  .s2 .front h2 { font-size: 22px; letter-spacing: -0.015em; }
+  .w2 .front h2 { font-size: 17px; }
+  .front .art { position: absolute; inset: 0; }
+  .flip-hint { position: absolute; right: 14px; top: 12px; font-size: 13px; color: var(--text-subtle); opacity: 0; transition: opacity .15s; }
+  .release:hover .flip-hint { opacity: 1; }
+
+  .back {
+    transform: rotateY(180deg); background: var(--bg-raised);
+    padding: var(--pad); display: flex; flex-direction: column; justify-content: flex-end;
+    font-size: 14px; line-height: 1.45; color: var(--text-muted);
+  }
+  .back h3 { color: var(--text); font-size: 15px; font-weight: 600; margin: 0 0 6px; }
+  .back p { margin: 0; text-wrap: pretty; }
+  .s2 .back { padding: calc(var(--pad) + 8px); font-size: 17px; }
+  .s2 .back h3 { font-size: 22px; letter-spacing: -0.015em; margin-bottom: 10px; }
+  .w2 .back { font-size: 15px; }
+  .w2 .back h3 { font-size: 17px; }
+  .soon { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-subtle); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; margin-left: 8px; vertical-align: 2px; }
+
+  /* ---------- art: quiet, one idea each ---------- */
+  .a-library::before, .a-library::after { content: ""; position: absolute; top: 50%; translate: 0 -58%; height: 46%; aspect-ratio: 1; border-radius: 50%; }
+  .a-library::before { left: 50%; margin-left: -36%; border: 2px solid var(--discogs); }
+  .a-library::after { left: 50%; margin-left: -8%; border: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+
+  .a-add::before { content: ""; position: absolute; left: var(--pad); right: var(--pad); top: var(--pad); height: 38%;
+    background: repeating-linear-gradient(90deg, var(--text-muted) 0 2px, transparent 2px 4px, var(--text-muted) 4px 5px, transparent 5px 8px, var(--text-muted) 8px 11px, transparent 11px 13px); opacity: .5; }
+
+  .a-tempo span { position: absolute; left: var(--pad); top: calc(var(--pad) - 6px); font-family: var(--mono); font-size: clamp(34px, 3.4vw, 50px); font-weight: 500; letter-spacing: -0.03em; }
+  .a-tempo span small { font-size: 13px; color: var(--text-subtle); margin-left: 4px; letter-spacing: 0; }
+
+  .a-rip .wave { position: absolute; left: calc(var(--pad) + 8px); right: calc(var(--pad) + 8px); top: 22%; height: 40%; display: flex; align-items: center; gap: 2px; }
+  .a-rip .wave i { flex: 1; background: var(--accent); border-radius: 1px; opacity: .8; }
+  .a-rip .wave i.gap { background: transparent; }
+  .a-rip .wave i.cut { flex: 0 0 1px; background: var(--text-subtle); height: 120% !important; }
+
+  .a-gigs { display: flex; flex-direction: column; gap: 6px; padding: var(--pad) var(--pad) 0 50%; }
+  .a-gigs span { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); padding-bottom: 5px; }
+  .a-gigs span b { font-family: var(--mono); font-weight: 400; color: var(--text-subtle); }
+
+  .a-keys { display: grid; grid-template-columns: repeat(3, 44px); gap: 6px; padding: var(--pad); align-content: start; }
+  .a-keys b { height: 44px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 6px; font-family: var(--mono); font-weight: 400; font-size: 13px; color: var(--text-muted); }
+  .a-keys b.on { border-color: var(--accent-border); background: var(--accent-bg); color: var(--accent-strong); }
+
+  .a-stars span { position: absolute; left: var(--pad); top: calc(var(--pad) - 6px); font-size: 44px; color: var(--accent); line-height: 1; }
+
+  .a-play::before { content: ""; position: absolute; left: var(--pad); top: var(--pad); width: 30px; height: 34px; background: var(--text); clip-path: polygon(0 0, 100% 50%, 0 100%); }
+
+  .a-cdj::before { content: ""; position: absolute; right: var(--pad); top: 50%; translate: 0 -50%; height: 70%; aspect-ratio: 1; border-radius: 50%;
+    border: 1px solid var(--border); background: radial-gradient(circle, transparent 0 30%, var(--border) 30.5% 31.5%, transparent 32%); }
+
+  .a-lens::before { content: "Releases\A Tracks\A Artists"; white-space: pre; position: absolute; left: var(--pad); top: calc(var(--pad) - 4px); font-size: 13px; line-height: 1.7; color: var(--text-subtle); }
+
+  .a-backup { padding: var(--pad); font-family: var(--mono); font-size: 11px; line-height: 1.7; color: var(--text-subtle); white-space: nowrap; overflow: hidden; }
+
+  .a-update span { position: absolute; left: var(--pad); top: var(--pad); font-size: 12px; color: var(--accent-strong); border: 1px solid var(--accent-border); background: var(--accent-bg); border-radius: 5px; padding: 3px 8px; }
+
+  .a-mobile::before { content: ""; position: absolute; left: var(--pad); top: var(--pad); width: 30%; height: 52%; border: 1.5px solid var(--text-muted); border-radius: 9px; }
+
+  .a-wall { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; padding: var(--pad) var(--pad) 52px; align-content: start; }
+  .a-wall i { aspect-ratio: 1; border-radius: 2px; }
+
+  /* ---------- below ---------- */
+  .below { background: var(--bg-sunken); margin-top: 1px; padding: 0 var(--pad); }
+  .placeholder { padding: 64px 0; color: var(--text-subtle); font-size: 14px; text-align: center; }
+  footer { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 24px 0 40px; border-top: 1px solid var(--border); color: var(--text-subtle); font-size: 14px; }
+  footer a { color: var(--text-muted); }
+
+  /* Narrow screens: one viewport can't hold the hero tiles whole, so it
+     becomes a normal flowing grid and only the title fills the first screen. */
+  @media (max-width: 900px), (max-height: 560px) {
+    .crate { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .crate.hero { height: auto; grid-template-rows: none; }
+    .crate.hero > * { aspect-ratio: 1; }
+    .crate.hero > .w2 { aspect-ratio: 2 / 1; }
+    .crate > .title { grid-column: span 2; aspect-ratio: auto !important; min-height: 100svh; }
+    .crate.hero > .s2 { aspect-ratio: auto; }
+    .flip-hint { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .release button { transition: none; } }
+</style>
+</head>
+<body>
+  <main>
+    <div class="crate hero" id="hero">
+      <section class="title" aria-label="booth">
+        <div class="disc" aria-hidden="true"></div>
+        <div class="mark"><i aria-hidden="true"></i>booth</div>
+        <div>
+          <h1>Your records and files, all in one place.</h1>
+          <p>A Mac app for DJs and collectors. Click any tile to read more.</p>
+        </div>
+      </section>
+    </div>
+    <div class="crate rest" id="rest"></div>
+  </main>
+
+  <div class="below">
+    <div class="placeholder">Install &amp; setup steps — unchanged from the current page</div>
+    <footer>
+      <span>A personal project by New Man</span>
+      <span><a href="https://github.com/lukenewman/booth">GitHub</a> · <a href="https://github.com/lukenewman/booth/releases">Release notes</a></span>
+    </footer>
+  </div>
+
+<script>
+const wave = (() => {
+  const h = [], seg = [22, 16, 18];
+  seg.forEach((n, s) => {
+    for (let i = 0; i < n; i++) h.push(`<i style="height:${20 + Math.round(Math.abs(Math.sin(i * 1.7 + s) * 55 + Math.sin(i * .4) * 20))}%"></i>`);
+    if (s < seg.length - 1) h.push('<i class="gap"></i><i class="cut"></i><i class="gap"></i>');
+  });
+  return h.join('');
+})();
+const wall = ['#c89a5b','#a58cf0','#4f4f4a','#e6e3dc','#594c84','#353532','#8d8a82','#c89a5b','#42423e','#bba8f7','#a39f96','#373249'];
+
+const tiles = {
+  library: { size: 's2', title: 'One library',
+    art: `<div class="art a-library"></div>`,
+    blurb: 'Records from your Discogs collection and the files in your Apple Music library land in the same list. A record you own on vinyl and as a file is one release, not two.' },
+  add: { title: 'Add a record in seconds',
+    art: `<div class="art a-add"></div>`,
+    blurb: 'Scan the barcode, or search Discogs by catalog number or runout etching.' },
+  tempo: { title: 'Tempo',
+    art: `<div class="art a-tempo"><span>124<small>bpm</small></span></div>`,
+    blurb: 'BPMs worked out for every file, or tap one in by ear.' },
+  rip: { size: 's2', title: 'Rip your vinyl',
+    art: `<div class="art a-rip"><div class="wave">${wave}</div></div>`,
+    blurb: 'Plug in your audio interface, drop the needle, and rip a side. booth finds the gaps between tracks, lines them up with the Discogs tracklist, and saves each one into your library.' },
+  gigs: { size: 'w2', title: 'Plan your gigs',
+    art: `<div class="art a-gigs"><span>Warm-up<b>118</b></span><span>Build<b>122</b></span><span>Peak<b>126</b></span><span>Close<b>120</b></span></div>`,
+    blurb: 'Build playlists and gig sets in sections, from the tracks you trust, with records and files side by side.' },
+  keys: { title: 'Keyboard first',
+    art: `<div class="art a-keys"><b>j</b><b class="on">k</b><b>/</b><b>s</b><b>v</b><b>?</b></div>`,
+    blurb: 'Every view works without the mouse. Press ? for the list.' },
+  stars: { title: 'Stars and notes',
+    art: `<div class="art a-stars"><span>★</span></div>`,
+    blurb: 'Star what works, write notes on what doesn’t.' },
+  play: { title: 'Built-in player',
+    art: `<div class="art a-play"></div>`,
+    blurb: 'Anything backed by a file plays right in booth.' },
+  cdj: { size: 'w2', title: 'Export to CDJs', soon: true,
+    art: `<div class="art a-cdj"></div>`,
+    blurb: 'Put your sets on a USB stick your CDJs and XDJs can read, without going through rekordbox.' },
+  lens: { title: 'Browse three ways',
+    art: `<div class="art a-lens"></div>`,
+    blurb: 'The same library by release, track or artist.' },
+  backup: { title: 'Nothing gets lost',
+    art: `<div class="art a-backup">03:12 star  Late Room<br>03:14 note  too long<br>03:20 vet   Selected Wks<br>03:31 snapshot</div>`,
+    blurb: 'Every star, note and playlist edit is journaled, with hourly snapshots.' },
+  update: { title: 'Updates itself',
+    art: `<div class="art a-update"><span>Restart to Update</span></div>`,
+    blurb: 'New versions download quietly. Restart when it suits you.' },
+  mobile: { title: 'Works on your phone',
+    art: `<div class="art a-mobile"></div>`,
+    blurb: 'Open booth from your phone on the same network.' },
+  wall: { title: 'Cover wall',
+    art: `<div class="art a-wall">${wall.map(c => `<i style="background:${c}"></i>`).join('')}</div>`,
+    blurb: 'Your collection as a grid of sleeves.' },
+};
+
+// First screen: 6×3. title 3×2 · library 2×2 · add · tempo / get 2×1 · gigs 2×1 · keys · stars
+const layout = {
+  hero: ['library', 'add', 'tempo', 'GET', 'gigs', 'keys', 'stars'],
+  // Below the fold: 6×2. rip 2×2 · play · cdj 2×1 · lens / backup · update · mobile · wall
+  rest: ['rip', 'play', 'cdj', 'lens', 'backup', 'update', 'mobile', 'wall'],
+};
+
+const getTile = () => {
+  const a = document.createElement('a');
+  a.className = 'get w2';
+  a.href = 'https://github.com/lukenewman/booth/releases/latest/download/booth-apple-silicon.dmg';
+  a.innerHTML = '<b>Download for Mac ↓</b><span>Apple Silicon · <u>Intel version</u> · free, updates itself</span>';
+  return a;
+};
+
+for (const [gridId, ids] of Object.entries(layout)) {
+  const grid = document.getElementById(gridId);
+  for (const id of ids) {
+    if (id === 'GET') { grid.append(getTile()); continue; }
+    const r = tiles[id];
+    const el = document.createElement('article');
+    el.className = `release ${r.size || ''}`;
+    const soon = r.soon ? '<span class="soon">Coming</span>' : '';
+    el.innerHTML = `
+      <button aria-pressed="false" aria-label="${r.title}: show details">
+        <div class="face front">${r.art}<span class="flip-hint" aria-hidden="true">↻</span><h2>${r.title}${soon}</h2></div>
+        <div class="face back"><h3>${r.title}${soon}</h3><p>${r.blurb}</p></div>
+      </button>`;
+    grid.append(el);
+  }
+}
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.release button');
+  if (!btn) return;
+  btn.setAttribute('aria-pressed', btn.parentElement.classList.toggle('flipped'));
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  document.querySelectorAll('.flipped').forEach(c => { c.classList.remove('flipped'); c.querySelector('button').setAttribute('aria-pressed', 'false'); });
+});
+</script>
+</body>
+</html>
