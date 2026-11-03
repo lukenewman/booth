@@ -5,6 +5,10 @@ import { runSync } from '$lib/server/library/sync_run';
 import { listSources } from '$lib/server/sources/registry';
 import { createScheduler, parseIntervalMinutes } from '$lib/server/library/scheduler';
 import { maybeSnapshot, seedPlaylistJournal } from '$lib/server/backup';
+import { loadSettingsFile } from '$lib/server/settings';
+
+// What the app saved (connected sources, chosen folders) on top of .env.
+loadSettingsFile();
 
 const triggered = new Set<string>();
 
