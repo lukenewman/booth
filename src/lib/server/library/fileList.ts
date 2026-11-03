@@ -194,11 +194,18 @@ async function readJob(job: Job, deps: FileListDeps, summary: FileScanSummary): 
 
 function writeJob(db: Database, d: ReadResult, wanted: Map<string, Ownership>, summary: FileScanSummary): void {
   const stamp = now();
+  // A file whose tags couldn't be read is not cached: the cause may be
+  // passing (macOS refusing the Music folder until access is granted), so the
+  // next scan tries again. A genuinely corrupt file costs one retry per sync.
+  const cached = d.tags !== null;
+  const size = cached ? d.size : null;
+  const mtimeMs = cached ? d.mtimeMs : null;
+  const fingerprintTried = cached ? d.fingerprintTried : 0;
   if (d.row) {
     db.prepare(
       `UPDATE audio_file SET size = ?, mtime_ms = ?, tags = ?, fingerprint = ?, fingerprint_tried = ?,
               ownership = ?, present = 1, missing_since = NULL, last_seen_at = ? WHERE id = ?`,
-    ).run(d.size, d.mtimeMs, d.tags, d.fingerprint, d.fingerprintTried, d.ownership, stamp, d.row.id);
+    ).run(size, mtimeMs, d.tags, d.fingerprint, fingerprintTried, d.ownership, stamp, d.row.id);
     return;
   }
 
@@ -214,7 +221,7 @@ function writeJob(db: Database, d: ReadResult, wanted: Map<string, Ownership>, s
       db.prepare(
         `UPDATE audio_file SET path = ?, size = ?, mtime_ms = ?, tags = ?, fingerprint_tried = ?,
                 ownership = ?, present = 1, missing_since = NULL, last_seen_at = ? WHERE id = ?`,
-      ).run(d.path, d.size, d.mtimeMs, d.tags, d.fingerprintTried, d.ownership, stamp, candidates[0].id);
+      ).run(d.path, size, mtimeMs, d.tags, fingerprintTried, d.ownership, stamp, candidates[0].id);
       summary.moved++;
       return;
     }
@@ -223,5 +230,5 @@ function writeJob(db: Database, d: ReadResult, wanted: Map<string, Ownership>, s
   db.prepare(
     `INSERT INTO audio_file (id, path, fingerprint, fingerprint_tried, size, mtime_ms, tags, ownership, present, last_seen_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
-  ).run(ulid(), d.path, d.fingerprint, d.fingerprintTried, d.size, d.mtimeMs, d.tags, d.ownership, stamp);
+  ).run(ulid(), d.path, d.fingerprint, fingerprintTried, size, mtimeMs, d.tags, d.ownership, stamp);
 }

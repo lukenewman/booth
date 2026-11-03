@@ -152,7 +152,15 @@ const want = (...names: string[]) => names.map((n) => ({ path: p(n), ownership: 
   assert(r.summary.unreadable.some((u) => u.path === p('bad.mp3')), 'and it is reported');
   reset();
   await scanFiles(db, want('bad.mp3', 'good.mp3'), deps);
-  assert(calls.fingerprint === 0, 'a file ffmpeg already failed on is not retried while unchanged');
+  assert(calls.readTags === 1, `a file whose tags failed is tried again next scan: ${calls.readTags}`);
+
+  // Tags fine but ffmpeg can't hash it: that is not retried while unchanged.
+  write('nohash.mp3', 'AUDIO-NH', 'NH');
+  const noHash: FileListDeps = { ...deps, async fingerprint() { calls.fingerprint++; throw new Error('ffmpeg: invalid data'); } };
+  await scanFiles(db, want('nohash.mp3'), noHash);
+  reset();
+  await scanFiles(db, want('nohash.mp3'), noHash);
+  assert(calls.fingerprint === 0 && calls.readTags === 0, `an unhashable but readable file is not retried: ${JSON.stringify(calls)}`);
 }
 
 // --- no ffmpeg: everything still registers, fingerprints wait -------
@@ -225,6 +233,45 @@ const want = (...names: string[]) => names.map((n) => ({ path: p(n), ownership: 
   // The catalog now claims P1 lives where P2 is.
   assert(applyCatalogMoves(db, 'music', [{ catalogId: 'P1', path: p('x/2.mp3') }]) === 0, 'refused: path already has a file');
   assert(fileByPath(db, p('x/1.mp3')), 'the first file is left alone');
+}
+
+// --- a stale row for a long-gone file never blocks a catalog move ----
+// Review finding: refusing the move re-pointed the Persistent ID at the stale
+// row, the real track's link went unemitted, and the prune deleted it.
+{
+  const db = freshDb();
+  write('gone/01.mp3', 'AUDIO-GONE', 'Gone');
+  write('src/01.mp3', 'AUDIO-KEEP', 'Keep');
+  const s1 = await scanFiles(db, want('gone/01.mp3', 'src/01.mp3'), deps);
+  recordCatalogEntries(db, 'music', [{ catalogId: 'OLD', path: p('gone/01.mp3') }, { catalogId: 'KEEP', path: p('src/01.mp3') }], s1.files);
+  rmSync(p('gone/01.mp3'));
+  const s2 = await scanFiles(db, want('gone/01.mp3', 'src/01.mp3'), deps);
+  recordCatalogEntries(db, 'music', [{ catalogId: 'OLD', path: p('gone/01.mp3') }, { catalogId: 'KEEP', path: p('src/01.mp3') }], s2.files);
+  const keepId = s2.files.get(p('src/01.mp3'))!.id;
+  // Music.app drops the gone track, and renames KEEP's folder onto the old path.
+  renameSync(p('src/01.mp3'), p('gone/01.mp3'));
+  assert(applyCatalogMoves(db, 'music', [{ catalogId: 'KEEP', path: p('gone/01.mp3') }]) === 1, 'the move goes ahead over a stale row');
+  const s3 = await scanFiles(db, want('gone/01.mp3'), deps);
+  assert(s3.files.get(p('gone/01.mp3'))!.id === keepId, 'the moved file keeps its id');
+}
+
+// --- a file that couldn't be read is retried once it can be ----------
+// Review finding: a refused read (macOS's Music-folder prompt) was cached
+// like a corrupt file and never revisited while size and mtime held.
+{
+  const db = freshDb();
+  write('locked.mp3', 'AUDIO-L', 'Locked');
+  let refuse = true;
+  const gated: FileListDeps = {
+    async fingerprint(path) { if (refuse) throw new Error('EPERM'); return deps.fingerprint(path); },
+    async readTags(path) { if (refuse) throw new Error('EPERM'); return deps.readTags(path); },
+  };
+  const first = await scanFiles(db, want('locked.mp3'), gated);
+  assert(first.files.get(p('locked.mp3'))!.tags === null, 'nothing read while refused');
+  refuse = false;
+  const second = await scanFiles(db, want('locked.mp3'), gated);
+  const f = second.files.get(p('locked.mp3'))!;
+  assert(f.tags?.title === 'Locked' && f.fingerprint, `read once access is granted: ${JSON.stringify(f)}`);
 }
 
 rmSync(root, { recursive: true, force: true });

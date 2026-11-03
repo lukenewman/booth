@@ -147,5 +147,28 @@ const dropped = r6.tracks.find((t) => t.filePath === p('booth/Artist/Album/01 Dr
 assert(dropped && dropped.title === 'Dropped' && (dropped.facets as Record<string, unknown>).origin === 'download', `a dropped file becomes a track: ${JSON.stringify(dropped)}`);
 assert(r6.boothTracked === 1, 'counted as tracked in the folder');
 
+// --- a file name with an encoded percent keeps its track ------------
+// Review finding: Music.app's location was decoded in sync and again in
+// collate, so "100%2B.mp3" (stored as 100%252B) became "100+.mp3" and the
+// track lost its file-path match.
+{
+  write('Pct/Remix 100%2B.mp3', 'AUDIO-PCT', 'Pct');
+  const path = p('Pct/Remix 100%2B.mp3');
+  const url = Bun.pathToFileURL(path).href;
+  collate(db, 'local', {
+    releases: [{ externalId: 'itunes-album:pct', title: 'Pct', artist: 'Artist', year: 2021 }],
+    tracks: [{ externalId: 'PIDPCT', title: 'Pct', artist: 'Artist', album: 'Pct', position: '1', filePath: url, releaseExternalId: 'itunes-album:pct' }],
+  });
+  const pctId = (db.prepare(`SELECT entity_id FROM source_link WHERE source='local' AND external_id='PIDPCT'`).get() as { entity_id: string }).entity_id;
+  const pctCatalog: Catalog = {
+    id: 'pct',
+    releases: [{ externalId: 'itunes-album:pct', title: 'Pct', artist: 'Artist', year: 2021 }],
+    tracks: [{ catalogId: 'PIDPCT', path, track: { title: 'Pct', artist: 'Artist', album: 'Pct', position: '1', releaseExternalId: 'itunes-album:pct' } }],
+  };
+  const sp = collate(db, 'local', await buildLocalResult(db, { catalogs: [pctCatalog], boothFiles: [], groupIdFor: releaseIdForTags }, deps));
+  const key = db.prepare(`SELECT key_value FROM match_key WHERE entity_kind='track' AND entity_id=? AND key_type='file_path'`).get(pctId) as { key_value: string } | null;
+  assert(key?.key_value === path, `file path stays literal: ${key?.key_value} (summary ${JSON.stringify(sp)})`);
+}
+
 rmSync(root, { recursive: true, force: true });
 console.log('PASS: local result');

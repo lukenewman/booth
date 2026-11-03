@@ -28,8 +28,11 @@ export function applyCatalogMoves(db: Database, catalog: string, refs: CatalogRe
        FROM catalog_entry ce JOIN audio_file f ON f.id = ce.file_id
       WHERE ce.catalog = ? AND ce.catalog_id = ?`,
   );
-  const taken = db.prepare(`SELECT 1 FROM audio_file WHERE path = ?`);
+  const holder = db.prepare(`SELECT id, present FROM audio_file WHERE path = ?`);
+  const listingOf = db.prepare(`SELECT catalog, catalog_id FROM catalog_entry WHERE file_id = ?`);
+  const retire = db.prepare(`DELETE FROM audio_file WHERE id = ?`);
   const move = db.prepare(`UPDATE audio_file SET path = ? WHERE id = ?`);
+  const listedNow = new Set(refs.map((r) => r.catalogId));
 
   let moved = 0;
   db.transaction(() => {
@@ -37,7 +40,19 @@ export function applyCatalogMoves(db: Database, catalog: string, refs: CatalogRe
       const prev = prevOf.get(catalog, r.catalogId) as { location: string; fileId: string; path: string } | null;
       if (!prev || prev.location === r.path) continue;
       if (prev.path !== prev.location) continue;
-      if (taken.get(r.path)) continue;
+
+      // Another row at the destination refuses the move only while it is a
+      // real file: present at the last scan, or still listed by a catalog. A
+      // row left behind by a file deleted long ago is retired instead.
+      // Refusing over it re-pointed this catalog id at the stale row, the
+      // track's own link went unemitted, and the prune deleted the track.
+      const held = holder.get(r.path) as { id: string; present: number } | null;
+      if (held) {
+        const listings = listingOf.all(held.id) as { catalog: string; catalog_id: string }[];
+        const stillListed = listings.some((l) => l.catalog !== catalog || listedNow.has(l.catalog_id));
+        if (held.present === 1 || stillListed) continue;
+        retire.run(held.id);
+      }
       move.run(r.path, prev.fileId);
       moved++;
     }

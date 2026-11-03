@@ -60,6 +60,10 @@ export function normalizeFilePath(input: string): string {
   let p = input;
   if (p.startsWith('file://')) {
     p = decodeURIComponent(p.slice('file://'.length));
+  } else if (p.startsWith('/')) {
+    // Already a filesystem path (the local sync decodes Music.app's URLs
+    // itself). Decoding again turned a literal "100%2B.mp3" into "100+.mp3",
+    // and the track lost its file-path match.
   } else {
     try {
       p = decodeURIComponent(p);
