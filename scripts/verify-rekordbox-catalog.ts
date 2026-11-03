@@ -24,7 +24,7 @@ import type { FileListDeps } from '../src/lib/server/library/fileList';
 import { buildLocalResult } from '../src/lib/server/sources/local/localResult';
 import { releaseIdForTags } from '../src/lib/server/sources/local/sync';
 import { readRekordboxCollection } from '../src/lib/server/cdj/rekordbox-xml';
-import { importRekordbox } from '../src/lib/server/library/rekordbox';
+import { checkRekordboxXml, importRekordbox } from '../src/lib/server/library/rekordbox';
 import { getTracksByIds } from '../src/lib/server/library/queries';
 
 function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
@@ -147,6 +147,24 @@ const facetsOf = (id: string) => Object.fromEntries((db.prepare(`SELECT key, val
   assert(Object.keys(facetsOf(trackOf('A/02 Two.mp3'))).length === 0, 'an entry dropped from the export takes its facts with it');
   assert(facetsOf(trackOf('A/01 One.mp3')).key === 'Am', 'others keep theirs');
   console.log('ok re-import');
+}
+
+// --- one file listed twice by rekordbox: counted and listed once ---------------
+{
+  const twice = [...readRekordboxCollection(xmlPath), ...readRekordboxCollection(xmlPath)];
+  const s = importRekordbox(db, xmlPath, twice);
+  assert(s.entries === twice.length && s.matched === 2 && s.unmatchedCount === 1 && s.unmatched.length === 1, `duplicates counted once, got ${JSON.stringify(s)}`);
+  console.log('ok duplicate entries');
+}
+
+// --- setup check ------------------------------------------------------------
+{
+  const ok = checkRekordboxXml(xmlPath);
+  assert(ok.ok && ok.trackCount === 3, `an export is recognised and counted, got ${JSON.stringify(ok)}`);
+  assert(!checkRekordboxXml(p('nope.xml')).ok && (checkRekordboxXml(p('nope.xml')) as { problem: string }).problem === 'missing', 'a missing file says so');
+  writeFileSync(p('other.xml'), '<?xml version="1.0"?><plist><dict/></plist>');
+  assert((checkRekordboxXml(p('other.xml')) as { problem: string }).problem === 'not_an_export', 'a Music.app export is not a rekordbox export');
+  console.log('ok setup check');
 }
 
 console.log('PASS verify-rekordbox-catalog');

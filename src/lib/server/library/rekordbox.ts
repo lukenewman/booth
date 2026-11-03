@@ -1,4 +1,5 @@
 import type { Database } from 'bun:sqlite';
+import { readFileSync, statSync } from 'node:fs';
 import type { RekordboxTrack } from '../cdj/rekordbox-xml';
 
 /**
@@ -54,15 +55,19 @@ export function importRekordbox(db: Database, xmlPath: string, tracks: Rekordbox
   const summary: RekordboxImportSummary = {
     path: xmlPath, entries: tracks.length, matched: 0, withGrid: 0, withCues: 0, unmatchedCount: 0, unmatched: [],
   };
-  // Last entry wins when rekordbox lists one file twice.
+  // rekordbox can list one file twice; the last entry wins, and each file is
+  // counted once.
+  const byFile = new Map<string, RekordboxTrack>();
+  for (const t of tracks) byFile.set(t.path.normalize('NFC'), t);
   const factsByTrack = new Map<string, Record<string, unknown>>();
-  for (const t of tracks) {
-    const trackId = trackByPath.get(t.path.normalize('NFC'));
+  for (const [path, t] of byFile) {
+    const trackId = trackByPath.get(path);
     if (!trackId) {
       summary.unmatchedCount++;
       if (summary.unmatched.length < UNMATCHED_SHOWN) summary.unmatched.push({ path: t.path, title: t.title, artist: t.artist });
       continue;
     }
+    if (factsByTrack.has(trackId)) continue;
     summary.matched++;
     if (t.grid.length) summary.withGrid++;
     if (t.cues.length) summary.withCues++;
@@ -87,4 +92,45 @@ export function importRekordbox(db: Database, xmlPath: string, tracks: Rekordbox
     }
   })();
   return summary;
+}
+
+export type RekordboxXmlCheck =
+  | { ok: true; path: string; trackCount: number; modifiedAt: string }
+  | { ok: false; path: string; problem: 'missing' | 'no_permission' | 'not_an_export' };
+
+/** Where rekordbox's File → Export Collection in xml format suggests saving. */
+export function defaultRekordboxXmlPath(home: string): string {
+  return `${home}/Documents/rekordbox.xml`;
+}
+
+/** Confirm a file is a rekordbox collection export. A text check: the sync parses it properly. */
+export function checkRekordboxXml(path: string): RekordboxXmlCheck {
+  let text: string;
+  let modifiedAt: string;
+  try {
+    modifiedAt = statSync(path).mtime.toISOString();
+    text = readFileSync(path, 'utf8');
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT' || code === 'ENOTDIR') return { ok: false, path, problem: 'missing' };
+    if (code === 'EPERM' || code === 'EACCES') return { ok: false, path, problem: 'no_permission' };
+    return { ok: false, path, problem: 'not_an_export' };
+  }
+  if (!text.includes('<DJ_PLAYLISTS') || !text.includes('<COLLECTION')) return { ok: false, path, problem: 'not_an_export' };
+  const trackCount = (text.match(/<TRACK\s[^>]*TrackID=/g) ?? []).length;
+  return { ok: true, path, trackCount, modifiedAt };
+}
+
+/** The rekordbox part of the most recent local sync that read it. */
+export function lastRekordboxImport(db: Database): (RekordboxImportSummary | { path: string; error: string }) & { at: string } | null {
+  const rows = db
+    .prepare(`SELECT finished_at, summary FROM sync_run WHERE source = 'local' AND summary LIKE '%"rekordbox"%' ORDER BY started_at DESC LIMIT 1`)
+    .all() as { finished_at: string; summary: string }[];
+  if (!rows.length) return null;
+  try {
+    const s = JSON.parse(rows[0].summary) as { rekordbox?: RekordboxImportSummary | { path: string; error: string } };
+    return s.rekordbox ? { ...s.rekordbox, at: rows[0].finished_at } : null;
+  } catch {
+    return null;
+  }
 }

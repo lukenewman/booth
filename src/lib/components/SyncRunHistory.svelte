@@ -1,5 +1,6 @@
 <script lang="ts">
   import BandcampPanel from './BandcampPanel.svelte';
+  import RekordboxPanel from './RekordboxPanel.svelte';
   /**
    * Right-pane surface shown when a Sources rail item is selected with no
    * entity highlighted. Lists recent sync_run rows for that source.
@@ -222,7 +223,7 @@
     <span class="caption">Sync history</span>
   </div>
 
-  {#if sourceId === 'local'}<BandcampPanel />{/if}
+  {#if sourceId === 'local'}<BandcampPanel /><RekordboxPanel />{/if}
 
   {#snippet runRow(run: SyncRun)}
     {@const stale = staleLabel(run)}

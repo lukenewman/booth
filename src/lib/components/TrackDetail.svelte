@@ -67,6 +67,15 @@
       }));
   }
 
+  /** What rekordbox's export says about this track: key, whether it has a grid, how many cues. */
+  const rekordbox = $derived.by(() => {
+    const rb = facets.filter((f) => f.source === 'rekordbox');
+    if (!rb.length) return null;
+    const get = (k: string) => { const f = rb.find((x) => x.key === k); try { return f ? JSON.parse(f.value) : null; } catch { return null; } };
+    const cues = get('cues') as unknown[] | null;
+    return { key: get('key') as string | null, grid: !!get('grid'), cues: cues?.length ?? 0 };
+  });
+
   function durationLabel(ms: number | null): string {
     if (!ms) return '—';
     const s = Math.round(ms / 1000);
@@ -109,6 +118,14 @@
         <!-- Tapping only fills blanks, so clearing is how you re-measure. -->
         <button class="tempo-clear" onclick={clearTap}>clear and re-tap</button>
       {/if}
+    </div>
+  {/if}
+  {#if rekordbox}
+    <div class="rekordbox-line">
+      <span class="tempo-src">rekordbox</span>
+      {#if rekordbox.key}<span>key <strong>{rekordbox.key}</strong></span>{/if}
+      {#if rekordbox.grid}<span>beat grid</span>{/if}
+      {#if rekordbox.cues}<span>{rekordbox.cues} cue{rekordbox.cues === 1 ? '' : 's'}</span>{/if}
     </div>
   {:else}
     <TapTempo
@@ -184,6 +201,8 @@
   }
   .tempo-unit { font-size: 10px; color: var(--text-muted); letter-spacing: 0.05em; }
   .tempo-src { margin-left: auto; font-size: 10px; color: var(--text-subtle); }
+  .rekordbox-line { display: flex; gap: 10px; align-items: baseline; font-size: 12px; color: var(--text-muted); margin: -4px 0 14px; }
+  .rekordbox-line .tempo-src { margin-left: 0; text-transform: uppercase; letter-spacing: 0.06em; }
   .tempo-row {
     display: flex;
     justify-content: space-between;
