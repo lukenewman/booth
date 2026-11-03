@@ -233,4 +233,26 @@ const trackOfPath = (name: string) => (db.prepare(
   console.log('ok bulk, refusals');
 }
 
+// --- Task 4: a missing file isn't playable ----------------------------------
+const { getTracksByIds, listTracks } = await import('../src/lib/server/library/queries');
+{
+  const five: Listed[] = [
+    ...two,
+    { pid: 'P3', name: 'B/01 copy.mp3', pos: 3, title: 'One copy' },
+    { pid: 'P4', name: 'C/01 again.mp3', pos: 4, title: 'One again' },
+    { pid: 'P5', name: 'D/broken.mp3', pos: 5, title: 'Broken' },
+  ];
+  const one = trackOfPath('A/01.mp3')!;
+  assert(getTracksByIds(db, [one]).get(one)!.canPlay, 'present file plays');
+  renameSync(p('A/01.mp3'), p('gone-01.mp3'));
+  await sync(five);
+  assert(!getTracksByIds(db, [one]).get(one)!.canPlay, 'missing file: not playable (by id)');
+  const listed = listTracks(db, { limit: 50, offset: 0 } as Parameters<typeof listTracks>[1]).items.find((t) => t.id === one)!;
+  assert(!listed.canPlay, 'missing file: not playable (track list)');
+  renameSync(p('gone-01.mp3'), p('A/01.mp3'));
+  await sync(five);
+  assert(getTracksByIds(db, [one]).get(one)!.canPlay, 'file back: playable again');
+  console.log('ok missing not playable');
+}
+
 console.log('PASS verify-findings');

@@ -9,6 +9,23 @@ const playableSources = new Set(
   listSources().filter(isPlayable).map((s) => s.id),
 );
 
+/**
+ * Tracks whose local file is known to be missing. canPlay used to come only
+ * from having a playable source, so a deleted file kept a play button that
+ * failed on click (BOO-67). The file list already knows; this asks it.
+ */
+export function missingFileTrackIds(db: Database, trackIds: string[]): Set<string> {
+  if (trackIds.length === 0) return new Set();
+  const rows = db
+    .prepare(
+      `SELECT sl.entity_id AS id FROM source_link sl JOIN audio_file f ON f.id = sl.external_id
+        WHERE sl.source = 'local' AND sl.entity_kind = 'track' AND f.present = 0
+          AND sl.entity_id IN (${trackIds.map(() => '?').join(',')})`,
+    )
+    .all(...trackIds) as { id: string }[];
+  return new Set(rows.map((r) => r.id));
+}
+
 import { countStarredByRelease } from './annotations';
 import { genreWhere, stylesByRelease } from '../genres/filter';
 import type { GenreFilter } from '$lib/genreFilter';
@@ -387,6 +404,7 @@ export function listTracks(
   }
 
   const bpmMap = resolveBpmForTracks(db, ids);
+  const missing = missingFileTrackIds(db, ids);
   const styleMap = stylesByRelease(db, rows.map((r) => r.release_id).filter((x): x is string => !!x));
 
   return {
@@ -395,7 +413,7 @@ export function listTracks(
       return {
         ...r,
         sources,
-        canPlay: sources.some((s) => playableSources.has(s)),
+        canPlay: sources.some((s) => playableSources.has(s)) && !missing.has(r.id),
         bpm: bpmMap.get(r.id) ?? null,
         styles: r.release_id ? styleMap.get(r.release_id) ?? [] : [],
       };
@@ -474,6 +492,7 @@ export function getReleaseDetail(
   }
 
   const trackBpm = resolveBpmForTracks(db, trackIds);
+  const missing = missingFileTrackIds(db, trackIds);
 
   const genreRows = db
     .prepare(`SELECT kind, name, origin FROM release_genre WHERE release_id = ? ORDER BY kind, position`)
@@ -491,7 +510,7 @@ export function getReleaseDetail(
       return {
         ...t,
         sources,
-        canPlay: sources.some((s) => playableSources.has(s)),
+        canPlay: sources.some((s) => playableSources.has(s)) && !missing.has(t.id),
         bpm: trackBpm.get(t.id) ?? null,
       };
     }),
@@ -815,13 +834,14 @@ export function getTracksByIds(
   }
 
   const bpmMap = resolveBpmForTracks(db, ids);
+  const missing = missingFileTrackIds(db, ids);
 
   for (const r of rows) {
     const sources = sourceMap.get(r.id) ?? [];
     out.set(r.id, {
       ...r,
       sources,
-      canPlay: sources.some((s) => playableSources.has(s)),
+      canPlay: sources.some((s) => playableSources.has(s)) && !missing.has(r.id),
       bpm: bpmMap.get(r.id) ?? null,
     });
   }
