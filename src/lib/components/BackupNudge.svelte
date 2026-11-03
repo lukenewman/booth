@@ -19,18 +19,19 @@
   const s = $derived(backup.status);
   const message = $derived.by(() => {
     if (!s || s.running) return null;
-    if (!s.destination) return 'Booth isn’t backing up your music yet.';
+    if (!s.destinations.length) return 'Booth isn’t backing up your music yet.';
+    const stale = s.daysSince != null && s.daysSince >= STALE_DAYS;
     if (s.lastBackupAt == null) {
       if (!s.releasesNotBackedUp) return null;
-      return `${s.filesHeld ? 'The backup hasn’t finished.' : 'Nothing is backed up yet.'} ${s.releasesNotBackedUp.toLocaleString()} release${s.releasesNotBackedUp === 1 ? '' : 's'} to copy.`;
+      return `${s.destinations.some((d) => d.filesHeld) ? 'The backup hasn’t finished.' : 'Nothing is backed up yet.'} ${s.releasesNotBackedUp.toLocaleString()} release${s.releasesNotBackedUp === 1 ? '' : 's'} to copy.`;
     }
-    const stale = (s.daysSince ?? 0) >= STALE_DAYS;
     if (!stale && !s.releasesNotBackedUp) return null;
     const parts = [];
     if (stale) parts.push(`You haven’t backed up in ${s.daysSince} days.`);
-    if (s.releasesNotBackedUp) parts.push(`${s.releasesNotBackedUp.toLocaleString()} release${s.releasesNotBackedUp === 1 ? ' isn’t' : 's aren’t'} in the last backup.`);
+    if (s.releasesNotBackedUp) parts.push(`${s.releasesNotBackedUp.toLocaleString()} release${s.releasesNotBackedUp === 1 ? ' isn’t' : 's aren’t'} in any backup.`);
     return parts.join(' ');
   });
+  const anyOnline = $derived(!!s?.destinations.some((d) => d.destination.online));
   // Only nag when it matters: never backed up, a week old, or behind.
   const show = $derived(!!message && !(dismissedAt && Date.now() - dismissedAt < 86_400_000));
 
@@ -43,9 +44,9 @@
 {#if show}
   <div class="nudge" role="status">
     <span>{message}</span>
-    {#if s?.destination && !s.destination.online}
-      <span class="muted">Connect the backup drive to back up.</span>
-    {:else if s?.destination}
+    {#if s?.destinations.length && !anyOnline}
+      <span class="muted">Connect a backup drive to back up.</span>
+    {:else if s?.destinations.length}
       <button class="primary" onclick={async () => { await backup.start(); explorerState.setNav({ section: 'sources', item: 'local' }); }}>Back up now</button>
     {:else}
       <button class="primary" onclick={() => explorerState.setNav({ section: 'sources', item: 'local' })}>Pick a backup drive</button>

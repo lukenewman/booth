@@ -5,11 +5,12 @@ import { join } from 'node:path';
 import { audioFingerprint } from '../library/fingerprint';
 import { listFolderSources } from '../library/folders';
 import { resolvedInboxRoot, resolvedLibraryRoot } from '../sources/local/ingest_env';
-import { markInterruptedRuns, runLibraryBackup, type BackupDeps, type BackupResult } from './library';
+import { listDestinations, markInterruptedRuns, MUSIC_APP_PLACE, namePlaces, runLibraryBackup, type BackupDeps, type BackupResult, type Place } from './library';
 
 /**
- * The one backup run the server allows at a time, in the background, with
- * the real copy, fingerprint and snapshot. The API starts, stops and polls it.
+ * The server's backups, one destination at a time, in the background, with
+ * the real copy, fingerprint and snapshot. "Back up all" queues every
+ * connected destination. The API starts, stops and polls it.
  */
 
 // On globalThis, not module variables: the dev server reloads this module
@@ -22,6 +23,16 @@ const state: RunnerState = (g.__boothBackup ??= { running: null, stopRequested: 
 /** Places the music lives: a destination inside one is refused, one on the same disk is flagged. */
 export function libraryRoots(db: Database): string[] {
   return [join(homedir(), 'Music'), resolvedLibraryRoot(), resolvedInboxRoot(), join(homedir(), '.booth'), ...listFolderSources(db).map((f) => f.path)];
+}
+
+/**
+ * The places copies are kept under, most specific first: Booth's own folders,
+ * Music.app's media folder, then folder sources in the order they were added
+ * (so adding a folder never renames an earlier one's copies).
+ */
+export function backupPlaces(db: Database): Place[] {
+  const fixed: Place[] = [{ name: 'Booth', path: resolvedLibraryRoot() }, { name: 'Booth Inbox', path: resolvedInboxRoot() }, MUSIC_APP_PLACE];
+  return [...fixed, ...namePlaces(listFolderSources(db), [...fixed.map((f) => f.name), 'Other'])];
 }
 
 /** Once per server: a run the last process didn't finish is marked stopped, not left running. */
@@ -46,16 +57,25 @@ export function isBackupRunning(): boolean {
   return state.running !== null;
 }
 
-/** Start a run unless one is going. Returns false when one already was. */
-export function startBackup(db: Database, opts: { verify?: boolean } = {}): boolean {
+/**
+ * Back up to `destinationIds` in turn (every connected one when omitted),
+ * unless backups are already going. Returns false when they were. Stop ends
+ * the current one and skips the rest.
+ */
+export function startBackup(db: Database, opts: { destinationIds?: string[]; verify?: boolean } = {}): boolean {
   recoverOnce(db);
   if (state.running) return false;
   state.stopRequested = false;
-  state.running = runLibraryBackup(db, realDeps(db), { verify: opts.verify, shouldStop: () => state.stopRequested })
-    .then((r) => {
-      console.log(`[backup] ${r.state}: ${r.filesCopied} copied, ${r.filesSkipped} already there, ${r.failed.length} failed${r.error ? ` — ${r.error}` : ''}`);
-      return r;
-    })
+  const ids = opts.destinationIds ?? listDestinations(db).filter((d) => d.online).map((d) => d.id);
+  state.running = (async () => {
+    let last: BackupResult = { state: 'done', filesCopied: 0, filesSkipped: 0, bytesCopied: 0, failed: [] };
+    for (const destinationId of ids) {
+      if (state.stopRequested) break;
+      last = await runLibraryBackup(db, realDeps(db), { destinationId, places: backupPlaces(db), verify: opts.verify, shouldStop: () => state.stopRequested });
+      console.log(`[backup] ${destinationId} ${last.state}: ${last.filesCopied} copied, ${last.filesSkipped} already there, ${last.failed.length} failed${last.error ? ` — ${last.error}` : ''}`);
+    }
+    return last;
+  })()
     .catch((e) => {
       console.warn('[backup] run failed:', e);
       throw e;

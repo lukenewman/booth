@@ -7,7 +7,7 @@ import { runFreshSync } from '$lib/server/library/sync_run';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { resolvedInboxRoot, resolvedLibraryRoot } from '$lib/server/sources/local/ingest_env';
-import { getDestination } from '$lib/server/backup/library';
+import { listDestinations } from '$lib/server/backup/library';
 
 /** GET → { folders: [{ id, path, addedAt, files, online }] }; files/online are from the last sync (null before one). */
 export const GET: RequestHandler = () =>
@@ -22,7 +22,7 @@ export const POST: RequestHandler = async ({ request }) => {
   try {
     const folder = addFolderSource(db, expandHome(given), {
       // The backup folder too: a folder walk over it would read the copies back in.
-      forbidden: [resolvedLibraryRoot(), resolvedInboxRoot(), join(homedir(), '.booth'), ...(getDestination(db) ? [getDestination(db)!.path] : [])],
+      forbidden: [resolvedLibraryRoot(), resolvedInboxRoot(), join(homedir(), '.booth'), ...listDestinations(db).map((d) => d.path)],
     });
     void runFreshSync(db, 'local').catch((e) => console.warn('[folders] sync after add failed:', e));
     return json({ ...folder, path: tildePath(folder.path) });
