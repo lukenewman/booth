@@ -11,7 +11,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runMigrations } from '../src/lib/server/db/migrate';
 import { collate } from '../src/lib/server/library/collate';
-import { listAudioFiles, runInboxIngest, scanIngestedLibrary } from '../src/lib/server/sources/local/ingest';
+import { listAudioFiles, runInboxIngest } from '../src/lib/server/sources/local/ingest';
+import { buildLocalResult } from '../src/lib/server/sources/local/localResult';
+import { readTags } from '../src/lib/server/library/tags';
 import { releaseIdForTags } from '../src/lib/server/sources/local/sync';
 
 function fail(msg: string): never {
@@ -107,11 +109,20 @@ assert(withJunk.ingested === 0 && withJunk.waiting === 0, 'sidecar files are not
 assert(existsSync(join(inbox, 'cover.jpg')), 'and are left where they are');
 
 // --- The tree reads back as collatable tracks ----------------------
-const scanned = await scanIngestedLibrary(library, releaseIdForTags);
+const db = new Database(':memory:');
+runMigrations(db);
+const scan = () =>
+  buildLocalResult(db, { catalogs: [], boothFiles: listAudioFiles(library), groupIdFor: releaseIdForTags }, {
+    // Untagged WAV fixtures carry no audio worth hashing apart, and ffmpeg may
+    // be absent on CI; a path hash keeps them distinct and the test portable.
+    fingerprint: async (path) => Bun.hash(path).toString(16),
+    readTags,
+  });
+const scanned = await scan();
 assert(scanned.tracks.length === 3, `three ingested tracks, got ${scanned.tracks.length}`);
 assert(
-  scanned.tracks.every((t) => t.filePath && t.externalId === t.filePath),
-  'the absolute path identifies an ingested track, as it does for vinyl rips',
+  scanned.tracks.every((t) => t.filePath && t.durableId && t.externalId !== t.filePath),
+  'an ingested track is identified by its file-list id, not its path',
 );
 assert(
   scanned.tracks.every((t) => (t.facets as any)?.origin === 'download'),
@@ -136,16 +147,18 @@ const datesFirst = scanned.tracks.map((t) => (t.facets as any).dateAdded);
 // date stamped with the clock on every scan then looks identical to one read
 // off the file — which is exactly the bug this assertion exists to catch.
 await new Promise((r) => setTimeout(r, 25));
-const rescanned = await scanIngestedLibrary(library, releaseIdForTags);
+const rescanned = await scan();
 const datesAgain = rescanned.tracks.map((t) => (t.facets as any).dateAdded);
 assert(
   JSON.stringify(datesFirst) === JSON.stringify(datesAgain),
   'the date is stable across scans, not re-stamped each sync',
 );
+assert(
+  JSON.stringify(scanned.tracks.map((t) => t.externalId)) === JSON.stringify(rescanned.tracks.map((t) => t.externalId)),
+  'file ids are stable across scans',
+);
 
-const db = new Database(':memory:');
-runMigrations(db);
-const first = collate(db, 'local', { tracks: scanned.tracks, releases: scanned.releases });
+const first = collate(db, 'local', scanned);
 assert(first.tracksUpserted === 3, `collate takes them, got ${first.tracksUpserted}`);
 const playable = db
   .prepare(`SELECT COUNT(*) AS n FROM match_key WHERE entity_kind='track' AND key_type='file_path'`)
@@ -153,20 +166,15 @@ const playable = db
 assert(playable.n === 3, `each gets a file_path key so it can play, got ${playable.n}`);
 
 // --- Re-running changes nothing ------------------------------------
-const again = collate(db, 'local', { tracks: scanned.tracks, releases: scanned.releases });
+const again = collate(db, 'local', await scan());
 assert(again.tracksDeleted === 0, 'a second pass deletes nothing');
 const total = db.prepare('SELECT COUNT(*) AS n FROM track').get() as { n: number };
 assert(total.n === 3, `no duplicates on re-sync, got ${total.n}`);
 
 // --- Deleting the file removes the track ---------------------------
-// The whole reason ingested files ride in the sync result: the prune is the
-// mechanism, so removal needs no special case.
+// Unchanged in this step: replaced by a "missing file" finding in step 2.
 rmSync(scanned.tracks[0].filePath!);
-const afterDelete = await scanIngestedLibrary(library, releaseIdForTags);
-const pruned = collate(db, 'local', {
-  tracks: afterDelete.tracks,
-  releases: afterDelete.releases,
-});
+const pruned = collate(db, 'local', await scan());
 assert(pruned.tracksDeleted === 1, `deleted file prunes its track, got ${pruned.tracksDeleted}`);
 
 rmSync(root, { recursive: true, force: true });
