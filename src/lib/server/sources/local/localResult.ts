@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite';
 import { applyCatalogMoves, recordCatalogEntries, type CatalogRef } from '../../library/catalogs';
-import { filesUnder, knownPathsByNfc, scanFiles, type FileListDeps, type FileRow, type FileScanSummary } from '../../library/fileList';
+import { trackedFilesUnder, knownPathsByNfc, scanFiles, type FileListDeps, type FileRow, type FileScanSummary } from '../../library/fileList';
 import type { FileTags } from '../../library/tags';
 import type { SourceRelease, SourceTrack } from '../types';
 import { ingestedFromFiles } from './ingest';
@@ -52,6 +52,8 @@ export interface LocalResult {
   fileIds: string[];
   /** Each folder source: how many files, and whether it could be read. */
   folders: { root: string; files: number; online: boolean }[];
+  /** Files under offline folders: kept as they were, and findings about them are left alone. */
+  offlineFileIds: string[];
 }
 
 export async function buildLocalResult(
@@ -73,7 +75,17 @@ export async function buildLocalResult(
   };
   const catalogs = input.catalogs.map((c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, path: canon(t.path) })) }));
   const boothFiles = input.boothFiles.map(canon);
-  const folders = (input.folders ?? []).map((f) => ({ ...f, files: f.files.map(canon) }));
+  // A folder that can't be read is offline. So is one that reads as empty
+  // while tracks still come from it: an empty mount point (drive not
+  // attached, share not mounted) looks exactly like that, and pruning on it
+  // would take every star on the drive. Removing the folder is how its
+  // tracks really go.
+  const folders = (input.folders ?? []).map((f) => {
+    const kept = f.online && f.files.length > 0 ? [] : trackedFilesUnder(db, f.root);
+    const online = f.online && (f.files.length > 0 || kept.length === 0);
+    return { ...f, online, files: online ? f.files.map(canon) : [], kept: online ? [] : kept };
+  });
+  const offlineRows = folders.flatMap((f) => f.kept);
 
   const refsOf = (c: Catalog): CatalogRef[] => c.tracks.map((t) => ({ catalogId: t.catalogId, path: t.path }));
 
@@ -88,7 +100,7 @@ export async function buildLocalResult(
   const { files, summary } = await scanFiles(db, wanted, deps);
   summary.moved += catalogMoves;
   for (const c of catalogs) recordCatalogEntries(db, c.id, refsOf(c), files);
-  restoreOrphanedCopies(db, files);
+  restoreOrphanedCopies(db, files, offlineRows);
 
   const tracks: SourceTrack[] = [];
   const releases = new Map<string, SourceRelease>();
@@ -117,7 +129,7 @@ export async function buildLocalResult(
   // A folder that can't be read right now (an unplugged drive) keeps its
   // tracks as they were: emitted from the file list without a scan, and left
   // out of findings, so a drive coming and going never prunes or floods.
-  const folderFiles = folders.flatMap((f) => (f.online ? f.files.map((path) => files.get(path)) : filesUnder(db, f.root)));
+  const folderFiles = folders.flatMap((f) => (f.online ? f.files.map((path) => files.get(path)) : f.kept));
   const fromFolders = ingestedFromFiles(unlisted(folderFiles), input.groupIdFor, 'folder');
   for (const built of [ingested, fromFolders]) {
     tracks.push(...built.tracks);
@@ -130,6 +142,7 @@ export async function buildLocalResult(
     files: summary,
     boothTracked: ingested.tracks.length,
     fileIds: [...new Set([...files.values()].map((f) => f.id))],
-    folders: folders.map((f) => ({ root: f.root, files: f.files.length, online: f.online })),
+    folders: folders.map((f) => ({ root: f.root, files: f.online ? f.files.length : f.kept.length, online: f.online })),
+    offlineFileIds: offlineRows.map((f) => f.id),
   };
 }

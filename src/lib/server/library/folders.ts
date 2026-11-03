@@ -1,6 +1,8 @@
 import type { Database } from 'bun:sqlite';
 import { readdirSync, statSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { resolve, sep } from 'node:path';
+import { isUnder } from './fileList';
 import { ulid } from 'ulid';
 
 /**
@@ -29,8 +31,19 @@ export function folderIsReadable(path: string): boolean {
   }
 }
 
-export function addFolderSource(db: Database, path: string): FolderSource {
+/**
+ * `forbidden`: Booth's own places (its folder, the drop folder, its data),
+ * which are never folder sources. The whole disk and the home folder are
+ * refused too: walked on every sync, they'd pick up everything, downloads in
+ * progress included.
+ */
+export function addFolderSource(db: Database, path: string, opts: { forbidden?: string[] } = {}): FolderSource {
   const resolved = resolve(path).replace(/\/+$/, '') || '/';
+  if (resolved === '/' || resolved === homedir()) throw new FolderError('That’s too broad. Pick the folder your music is in.');
+  for (const f of opts.forbidden ?? []) {
+    const r = resolve(f);
+    if (resolved === r || resolved.startsWith(r + sep) || r.startsWith(resolved + sep)) throw new FolderError('Booth already looks after that folder.');
+  }
   if (!folderIsReadable(resolved)) throw new FolderError('That folder doesn’t exist, or Booth can’t read it.');
   const existing = db.prepare(`SELECT id, path, added_at AS addedAt FROM folder_source WHERE path = ?`).get(resolved) as FolderSource | null;
   if (existing) return existing;
@@ -43,8 +56,6 @@ export function removeFolderSource(db: Database, id: string): void {
   db.prepare(`DELETE FROM folder_source WHERE id = ?`).run(id);
 }
 
-const under = (root: string) => `substr(f.path, 1, ${root.length + 1}) = ?`;
-
 export interface FolderRemovalImpact { tracks: number; starred: number; withNotes: number; inPlaylists: number }
 
 /**
@@ -56,19 +67,20 @@ export function folderRemovalImpact(db: Database, id: string): FolderRemovalImpa
   const folder = db.prepare(`SELECT path FROM folder_source WHERE id = ?`).get(id) as { path: string } | null;
   if (!folder) throw new FolderError('No such folder.');
   const others = listFolderSources(db).filter((f) => f.id !== id && f.path !== folder.path);
-  const otherClauses = others.map((o) => `AND NOT ${under(o.path)}`).join(' ');
-  const rows = db
+  // A track another source also links (Discogs) stays when its file goes.
+  const rows = (db
     .prepare(
-      `SELECT t.id, t.starred_at, t.note,
+      `SELECT f.path, t.id, t.starred_at, t.note,
               EXISTS (SELECT 1 FROM playlist_track pt WHERE pt.track_id = t.id) AS listed
          FROM audio_file f
          JOIN source_link sl ON sl.source = 'local' AND sl.entity_kind = 'track' AND sl.external_id = f.id
          JOIN track t ON t.id = sl.entity_id
-        WHERE ${under(folder.path)} ${otherClauses}
-          AND f.ownership = 'in_place'
-          AND NOT EXISTS (SELECT 1 FROM catalog_entry ce WHERE ce.file_id = f.id)`,
+        WHERE f.ownership = 'in_place'
+          AND NOT EXISTS (SELECT 1 FROM catalog_entry ce WHERE ce.file_id = f.id)
+          AND NOT EXISTS (SELECT 1 FROM source_link o WHERE o.entity_kind = 'track' AND o.entity_id = t.id AND o.source <> 'local')`,
     )
-    .all(folder.path + '/', ...others.map((o) => o.path + '/')) as { id: string; starred_at: string | null; note: string | null; listed: number }[];
+    .all() as { path: string; id: string; starred_at: string | null; note: string | null; listed: number }[])
+    .filter((r) => isUnder(r.path, folder.path) && !others.some((o) => isUnder(r.path, o.path)));
   return {
     tracks: rows.length,
     starred: rows.filter((r) => r.starred_at).length,

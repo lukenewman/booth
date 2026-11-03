@@ -74,6 +74,8 @@ export interface SyncResult {
   files?: FileScanSummary;
   /** Local source: the file-list ids this sync asked about, for findings. */
   fileIds?: string[];
+  /** Local source: files under offline folders, which findings leave alone. */
+  offlineFileIds?: string[];
   /** Local source: each folder source, its file count and whether it could be read. */
   folders?: { root: string; files: number; online: boolean }[];
 }

@@ -191,6 +191,7 @@ export async function syncITunesLibrary(): Promise<SyncResult> {
     input,
     files: built.files,
     fileIds: built.fileIds,
+    offlineFileIds: built.offlineFileIds,
     ...(built.folders.length ? { folders: built.folders } : {}),
     ingest: {
       ingested: ingest.ingested,

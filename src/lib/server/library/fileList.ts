@@ -99,10 +99,27 @@ function toFileRow(r: DbRow): FileRow {
   };
 }
 
-/** Every known file under `root`, as last seen. For a folder that can't be read right now. */
-export function filesUnder(db: Database, root: string): FileRow[] {
-  const prefix = root.replace(/\/+$/, '') + '/';
-  return (db.prepare(`SELECT * FROM audio_file WHERE substr(path, 1, ?) = ?`).all(prefix.length, prefix) as DbRow[]).map(toFileRow);
+/** Is `path` under the folder `root`? Compared Unicode-normalised, in JavaScript (SQLite counts some characters differently). */
+export function isUnder(path: string, root: string): boolean {
+  const prefix = root.normalize('NFC').replace(/\/+$/, '') + '/';
+  return path.normalize('NFC').startsWith(prefix);
+}
+
+/**
+ * Files under `root` that back a track right now, as last seen. For a folder
+ * that can't be read: its tracks are kept as they were, and only those — a
+ * file deleted earlier must not come back as a track while the drive is out.
+ */
+export function trackedFilesUnder(db: Database, root: string): FileRow[] {
+  return (db
+    .prepare(
+      `SELECT f.* FROM audio_file f
+        WHERE f.excluded = 0
+          AND EXISTS (SELECT 1 FROM source_link sl WHERE sl.source = 'local' AND sl.entity_kind = 'track' AND sl.external_id = f.id)`,
+    )
+    .all() as DbRow[])
+    .filter((r) => isUnder(r.path, root))
+    .map(toFileRow);
 }
 
 /** Every known path, keyed by its NFC form: how a differently spelled name finds the row it already has. */

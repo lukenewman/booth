@@ -44,7 +44,15 @@ export function listAudioFiles(root: string): string[] {
   if (!existsSync(root)) return [];
   const out: string[] = [];
   const walk = (dir: string) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    // A folder the walk can't read (permissions, a vanished mount) is skipped,
+    // not fatal: one locked subfolder must not stop every local sync.
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
       // Skip dotted directories: Booth's own .tmp staging, Spotlight indexes,
       // and anything else that is not the user's music.
       if (entry.name.startsWith('.')) continue;

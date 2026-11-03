@@ -59,7 +59,9 @@ function currentProblems(db: Database, fileIds: string[]): Problem[] {
   return problems;
 }
 
-export function refreshFindings(db: Database, runId: string | null, fileIds: string[]): FindingsSummary {
+/** `leaveAlone`: files this sync couldn't look at (an offline folder); findings about them stay as they are. */
+export function refreshFindings(db: Database, runId: string | null, fileIds: string[], opts: { leaveAlone?: string[] } = {}): FindingsSummary {
+  const leaveAlone = new Set(opts.leaveAlone ?? []);
   const summary: FindingsSummary = { new: 0, cleared: 0, open: 0 };
   const problems = currentProblems(db, fileIds);
   const current = new Set(problems.map((p) => `${p.kind}\u0000${p.key}`));
@@ -82,9 +84,12 @@ export function refreshFindings(db: Database, runId: string | null, fileIds: str
         summary.new++;
       }
     }
-    const open = db.prepare(`SELECT id, kind, subject_key FROM finding WHERE state = 'open'`).all() as { id: string; kind: string; subject_key: string }[];
+    const open = db.prepare(`SELECT id, kind, subject_key, file_ids FROM finding WHERE state = 'open'`).all() as { id: string; kind: string; subject_key: string; file_ids: string }[];
     for (const f of open) {
-      if (!current.has(`${f.kind}\u0000${f.subject_key}`)) { clear.run(now(), f.id); summary.cleared++; }
+      if (current.has(`${f.kind}\u0000${f.subject_key}`)) continue;
+      if (leaveAlone.size && (JSON.parse(f.file_ids) as string[]).some((id) => leaveAlone.has(id))) continue;
+      clear.run(now(), f.id);
+      summary.cleared++;
     }
   })();
 
@@ -296,9 +301,10 @@ export const EXCLUDED_OTHER_COPY_KEPT = 2;
  * reason for leaving it out is gone, and otherwise the song would vanish from
  * Booth with nothing on the list to say so. Updates `files` in place.
  */
-export function restoreOrphanedCopies(db: Database, files: Map<string, FileRow>): number {
+export function restoreOrphanedCopies(db: Database, files: Map<string, FileRow>, offline: FileRow[] = []): number {
   const all = [...files.values()];
-  const keptPrints = new Set(all.filter((f) => f.present && !f.excluded && f.fingerprint).map((f) => f.fingerprint));
+  // A kept copy on a drive that's offline right now is still kept.
+  const keptPrints = new Set([...all, ...offline].filter((f) => f.present && !f.excluded && f.fingerprint).map((f) => f.fingerprint));
   const reasonOf = db.prepare(`SELECT excluded FROM audio_file WHERE id = ?`);
   const restore = db.prepare(`UPDATE audio_file SET excluded = 0 WHERE id = ?`);
   let restored = 0;

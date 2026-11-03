@@ -133,7 +133,7 @@ async function runSyncNow(db: Database, sourceId: string): Promise<SyncRunRow> {
     if (result.files) summary.files = result.files;
     if (result.folders) summary.folders = result.folders;
     // After collate, so a file the user excluded has already lost its track.
-    if (result.fileIds) summary.findings = refreshFindings(db, id, result.fileIds);
+    if (result.fileIds) summary.findings = refreshFindings(db, id, result.fileIds, { leaveAlone: result.offlineFileIds });
 
     // rekordbox describes the files this sync just mapped; a bad export is
     // reported on the run, never a failed sync.

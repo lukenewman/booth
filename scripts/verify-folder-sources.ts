@@ -75,7 +75,7 @@ async function sync(opts: { offline?: Set<string> } = {}) {
     groupIdFor: releaseIdForTags,
   }, deps);
   const c = collate(db, 'local', { tracks: built.tracks, releases: built.releases });
-  const f = refreshFindings(db, 'r', built.fileIds);
+  const f = refreshFindings(db, 'r', built.fileIds, { leaveAlone: built.offlineFileIds });
   return { built, collate: c, findings: f };
 }
 const titles = () => (db.prepare(`SELECT title FROM track ORDER BY title`).all() as { title: string }[]).map((r) => r.title).join(' | ');
@@ -131,6 +131,77 @@ const titles = () => (db.prepare(`SELECT title FROM track ORDER BY title`).all()
   await sync();
   assert(titles() === 'Café | One', `removing the folder removes only its own tracks, got ${titles()}`);
   console.log('ok remove folder');
+}
+
+// --- review fixes (2026-11-03): offline and odd folders -------------------------
+{
+  const { settleFinding } = await import('../src/lib/server/library/findings');
+  const { rmSync } = await import('node:fs');
+  const ids = () => new Set((db.prepare(`SELECT id FROM track`).all() as { id: string }[]).map((r) => r.id));
+
+  // #1: a folder whose name has an emoji survives going offline, and its removal preview counts its tracks.
+  const drive = p('🎧 Drive');
+  write('🎧 Drive/x.mp3', 'AUDX', 'Emoji drive song', 1);
+  const f1 = addFolderSource(db, drive);
+  await sync();
+  assert(titles().includes('Emoji drive song'), 'scenario: emoji-folder track exists');
+  assert(folderRemovalImpact(db, f1.id).tracks === 1, `removal preview counts it, got ${JSON.stringify(folderRemovalImpact(db, f1.id))}`);
+  const off = await sync({ offline: new Set([drive]) });
+  assert(off.collate.tracksDeleted === 0 && titles().includes('Emoji drive song'), 'offline emoji folder keeps its track');
+  console.log('ok emoji folder');
+
+  // #2: a file deleted while the folder was online doesn't come back when it goes offline.
+  write('🎧 Drive/gone.mp3', 'AUDG', 'Deleted later', 2);
+  await sync();
+  rmSync(p('🎧 Drive/gone.mp3'));
+  await sync();
+  assert(!titles().includes('Deleted later'), 'scenario: pruned while online');
+  await sync({ offline: new Set([drive]) });
+  assert(!titles().includes('Deleted later'), 'a deleted file is not resurrected by going offline');
+  console.log('ok offline does not resurrect');
+
+  // #4: an open finding involving offline files stays open, not cleared and re-raised.
+  write('🎧 Drive/x copy.mp3', 'AUDX', 'Emoji copy', 3);
+  let s = await sync();
+  assert(s.findings.new === 1, `scenario: a duplicate on the drive, got ${JSON.stringify(s.findings)}`);
+  s = await sync({ offline: new Set([drive]) });
+  assert(s.findings.cleared === 0 && s.findings.new === 0, `offline leaves it alone, got ${JSON.stringify(s.findings)}`);
+  s = await sync();
+  assert(s.findings.new === 0, `and it isn't raised again on return, got ${JSON.stringify(s.findings)}`);
+
+  // #3: a keep-one decision survives the kept copy's drive going offline.
+  const dup = listOpenFindings(db).find((x) => x.kind === 'duplicate' && x.files.some((y) => y.path.endsWith('x copy.mp3')))!;
+  settleFinding(db, dup.id, { type: 'keep_one', fileId: dup.files.find((y) => y.path.endsWith('/x.mp3'))!.fileId });
+  await sync();
+  await sync({ offline: new Set([drive]) });
+  assert(!titles().includes('Emoji copy'), 'the left-out copy is not restored while the kept one is offline');
+  await sync();
+  assert(!titles().includes('Emoji copy'), 'nor after it returns');
+  console.log('ok offline keeps decisions and findings');
+
+  // #5: a folder that is readable but suddenly empty keeps its tracks (an empty mount point looks like this).
+  const before = ids();
+  rmSync(drive, { recursive: true });
+  mkdirSync(drive);
+  const empty = await sync();
+  assert(empty.collate.tracksDeleted === 0 && [...before].every((id) => ids().has(id)), 'an emptied folder prunes nothing');
+  assert(empty.built.folders.find((f) => f.root === drive)?.online === false, 'it is reported as offline');
+  console.log('ok empty folder');
+
+  // #6: an unreadable subfolder doesn't fail the walk; home and Booth's own places are refused.
+  const { chmodSync } = await import('node:fs');
+  write('Music/Locked/secret.mp3', 'AUDL', 'Locked', 9);
+  chmodSync(p('Music/Locked'), 0o000);
+  let walked: string[] = [];
+  try { walked = listAudioFiles(p('Music')); } finally { chmodSync(p('Music/Locked'), 0o755); }
+  assert(walked.some((x) => x.endsWith('01 One.mp3')), 'the rest of the folder is still walked');
+  const { homedir } = await import('node:os');
+  for (const bad of ['/', homedir()]) {
+    let refused = false;
+    try { addFolderSource(db, bad); } catch { refused = true; }
+    assert(refused, `${bad} is refused`);
+  }
+  console.log('ok walk errors and refused folders');
 }
 
 console.log('PASS verify-folder-sources');
