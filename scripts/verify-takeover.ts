@@ -132,4 +132,45 @@ function fakeCopy(original: string, copyPath: string) {
   console.log('ok booth folder');
 }
 
+// --- findings, rekordbox and backups know about copies ------------------------------
+{
+  const { importRekordbox } = await import('../src/lib/server/library/rekordbox');
+  const { addDestination, backupStatus, runLibraryBackup } = await import('../src/lib/server/backup/library');
+  const one = tracks().find((t) => t.title === 'One')!;
+
+  // Original and copy share their audio: that's not a duplicate.
+  let s = await sync();
+  assert(!listOpenFindings(db).some((f) => f.kind === 'duplicate'), `original + copy is no duplicate, got ${JSON.stringify(listOpenFindings(db))}`);
+  // A superseded original going away (cutover moves it) is expected, not missing.
+  const orig = listed[0].path;
+  const kept = orig + '.kept';
+  copyFileSync(orig, kept); rmSync(orig);
+  s = await sync();
+  assert(!listOpenFindings(db).some((f) => f.kind === 'missing'), `a superseded original away is fine, got ${JSON.stringify(listOpenFindings(db))}`);
+  copyFileSync(kept, orig); rmSync(kept);
+  await sync();
+  // A takeover finding is the engine's, not the sync's: a sync doesn't clear it.
+  db.prepare(`INSERT INTO finding (id, kind, subject_key, file_ids, detail) VALUES ('tk1', 'takeover', 'release:x', '[]', 'disk full')`).run();
+  await sync();
+  assert((db.prepare(`SELECT state FROM finding WHERE id = 'tk1'`).get() as { state: string }).state === 'open', 'a takeover finding survives a sync');
+  db.prepare(`DELETE FROM finding WHERE id = 'tk1'`).run();
+  console.log('ok findings');
+
+  // rekordbox still lists the original's path: its facts land on the track.
+  const rb = importRekordbox(db, '/x/rekordbox.xml', [{ trackId: '1', path: orig, title: 'One', artist: 'Artist', bpm: 124, key: '8A', grid: [], cues: [], rating: null, playCount: null, dateAdded: null }]);
+  assert(rb.matched === 1, `rekordbox matches the original's path to the track, got ${JSON.stringify(rb)}`);
+  assert(db.prepare(`SELECT 1 FROM source_facets WHERE source = 'rekordbox' AND entity_id = ?`).get(one.id), 'onto that track');
+  console.log('ok rekordbox');
+
+  // Backups hold the copy and the original it replaced (the undo path).
+  const dest = p('Drive');
+  mkdirSync(dest);
+  addDestination(db, dest, { libraryRoots: [p('Music')] });
+  const st = backupStatus(db).destinations[0];
+  assert(st.filesToCopy === 3, `copy, original and the other file, got ${st.filesToCopy}`);
+  const r = await runLibraryBackup(db, { fingerprint: deps.fingerprint, snapshotDb: (to) => db.exec(`VACUUM INTO '${to}'`), freeBytes: () => 1e12 }, { places: [] });
+  assert(r.state === 'done' && r.filesCopied === 3 && backupStatus(db).releasesNotBackedUp === 0, `all three backed up, got ${JSON.stringify(r)}`);
+  console.log('ok backups');
+}
+
 console.log('PASS verify-takeover');

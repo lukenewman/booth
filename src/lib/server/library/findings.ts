@@ -13,7 +13,9 @@ import type { FileRow } from './fileList';
  * in it, so a third copy is a new finding rather than a reopened one.
  */
 
-export type FindingKind = 'missing' | 'duplicate' | 'unsupported';
+export type FindingKind = 'missing' | 'duplicate' | 'unsupported' | 'takeover';
+/** The kinds a sync raises and clears; a takeover finding is the takeover engine's. */
+const SYNC_KINDS = new Set<string>(['missing', 'duplicate', 'unsupported']);
 export type FindingState = 'open' | 'settled' | 'cleared';
 
 export interface FindingsSummary {
@@ -40,7 +42,10 @@ function currentProblems(db: Database, fileIds: string[]): Problem[] {
     .prepare(
       `SELECT f.id, f.present, f.tags IS NULL AS untagged, f.fingerprint
          FROM audio_file f JOIN finding_scope s ON s.id = f.id
-        WHERE f.excluded = 0`,
+        WHERE f.excluded = 0
+          -- An original Booth has a copy of is superseded: the copy shares its
+          -- audio by design, and the original leaving (cutover) is expected.
+          AND NOT EXISTS (SELECT 1 FROM audio_file c WHERE c.copy_of = f.id AND c.excluded = 0)`,
     )
     .all() as { id: string; present: number; untagged: number; fingerprint: string | null }[];
 
@@ -86,7 +91,7 @@ export function refreshFindings(db: Database, runId: string | null, fileIds: str
     }
     const open = db.prepare(`SELECT id, kind, subject_key, file_ids FROM finding WHERE state = 'open'`).all() as { id: string; kind: string; subject_key: string; file_ids: string }[];
     for (const f of open) {
-      if (current.has(`${f.kind}\u0000${f.subject_key}`)) continue;
+      if (!SYNC_KINDS.has(f.kind) || current.has(`${f.kind}\u0000${f.subject_key}`)) continue;
       if (leaveAlone.size && (JSON.parse(f.file_ids) as string[]).some((id) => leaveAlone.has(id))) continue;
       clear.run(now(), f.id);
       summary.cleared++;
@@ -110,9 +115,10 @@ const ACTIONS: Record<FindingKind, SettleAction['type'][]> = {
   duplicate: ['keep_both', 'keep_one'],
   missing: ['leave', 'forget'],
   unsupported: ['acknowledge'],
+  takeover: ['acknowledge'],
 };
 /** What "settle all like this" does per kind: never anything that removes a track. */
-const BULK: Record<FindingKind, SettleAction['type']> = { duplicate: 'keep_both', missing: 'leave', unsupported: 'acknowledge' };
+const BULK: Record<FindingKind, SettleAction['type']> = { duplicate: 'keep_both', missing: 'leave', unsupported: 'acknowledge', takeover: 'acknowledge' };
 
 export interface FindingFile {
   fileId: string;
@@ -125,7 +131,7 @@ export interface FindingFile {
   /** Other sources the track is in (e.g. discogs): forgetting this file doesn't remove the track. */
   alsoIn: string[];
 }
-export interface FindingView { id: string; kind: FindingKind; raisedAt: string; files: FindingFile[] }
+export interface FindingView { id: string; kind: FindingKind; raisedAt: string; files: FindingFile[]; /** Why, for a takeover finding. */ detail: string | null }
 
 function trackIdOf(db: Database, fileId: string): string | null {
   const r = db.prepare(`SELECT entity_id FROM source_link WHERE source = 'local' AND entity_kind = 'track' AND external_id = ?`).get(fileId) as { entity_id: string } | null;
@@ -182,13 +188,14 @@ function fileView(db: Database, fileId: string): FindingFile | null {
 
 export function listOpenFindings(db: Database): FindingView[] {
   const rows = db
-    .prepare(`SELECT id, kind, raised_at, file_ids FROM finding WHERE state = 'open' ORDER BY kind, raised_at`)
-    .all() as { id: string; kind: FindingKind; raised_at: string; file_ids: string }[];
+    .prepare(`SELECT id, kind, raised_at, file_ids, detail FROM finding WHERE state = 'open' ORDER BY kind, raised_at`)
+    .all() as { id: string; kind: FindingKind; raised_at: string; file_ids: string; detail: string | null }[];
   return rows.map((r) => ({
     id: r.id,
     kind: r.kind,
     raisedAt: r.raised_at,
     files: (JSON.parse(r.file_ids) as string[]).map((id) => fileView(db, id)).filter((f): f is FindingFile => !!f),
+    detail: r.detail,
   }));
 }
 

@@ -47,7 +47,12 @@ export function importRekordbox(db: Database, xmlPath: string, tracks: Rekordbox
     .prepare(
       `SELECT f.path, sl.entity_id FROM audio_file f
          JOIN source_link sl ON sl.source = 'local' AND sl.entity_kind = 'track' AND sl.external_id = f.id
-        WHERE f.excluded = 0`,
+        WHERE f.excluded = 0
+       UNION ALL
+       -- rekordbox still names the original of a release Booth took over.
+       SELECT o.path, sl.entity_id FROM audio_file o
+         JOIN audio_file c ON c.copy_of = o.id AND c.excluded = 0
+         JOIN source_link sl ON sl.source = 'local' AND sl.entity_kind = 'track' AND sl.external_id = c.id`,
     )
     .all() as { path: string; entity_id: string }[]) {
     trackByPath.set(r.path.normalize('NFC'), r.entity_id);

@@ -167,7 +167,11 @@ export function getDestination(db: Database, id: string, opts: { libraryRoots: s
 
 interface LibraryFile { id: string; path: string; fingerprint: string | null; size: number | null; mtime_ms: number | null; release_id: string | null }
 
-/** The files a backup protects: present, in the library, not taken out of it. */
+/**
+ * The files a backup protects: present, in the library, not taken out of it;
+ * plus the originals of releases Booth took over (kept as the undo path),
+ * counted under their copy's release.
+ */
 function libraryFiles(db: Database): LibraryFile[] {
   return db
     .prepare(
@@ -176,7 +180,15 @@ function libraryFiles(db: Database): LibraryFile[] {
          JOIN source_link sl ON sl.source = 'local' AND sl.entity_kind = 'track' AND sl.external_id = f.id
          JOIN track t ON t.id = sl.entity_id
         WHERE f.present = 1 AND f.excluded = 0
-        GROUP BY f.id`,
+        GROUP BY f.id
+       UNION
+       SELECT o.id, o.path, o.fingerprint, o.size, o.mtime_ms, t.release_id
+         FROM audio_file o
+         JOIN audio_file c ON c.copy_of = o.id AND c.excluded = 0
+         JOIN source_link sl ON sl.source = 'local' AND sl.entity_kind = 'track' AND sl.external_id = c.id
+         JOIN track t ON t.id = sl.entity_id
+        WHERE o.present = 1
+        GROUP BY o.id`,
     )
     .all() as LibraryFile[];
 }
