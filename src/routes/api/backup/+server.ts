@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { backupStatus, BackupError, setDestination } from '$lib/server/backup/library';
-import { libraryRoots, recoverOnce } from '$lib/server/backup/runner';
+import { isBackupRunning, libraryRoots, recoverOnce } from '$lib/server/backup/runner';
 import { expandHome, tildePath } from '$lib/server/sources/local/music_library';
 
 /** GET → the backup status: destination, last backup, what's not in it, a run in progress. */
@@ -20,7 +20,7 @@ export const POST: RequestHandler = async ({ request }) => {
   if (!given) return json({ error: 'Type a folder’s path.' }, { status: 400 });
   const db = getDb();
   try {
-    const d = setDestination(db, expandHome(given), { libraryRoots: libraryRoots(db) });
+    const d = setDestination(db, expandHome(given), { libraryRoots: libraryRoots(db), running: isBackupRunning() });
     return json({ ...d, path: tildePath(d.path) });
   } catch (e) {
     if (e instanceof BackupError) return json({ error: e.message }, { status: 400 });

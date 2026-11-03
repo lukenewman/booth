@@ -3,12 +3,13 @@
  * the library. Polls while a run is going.
  */
 export interface BackupStatus {
-  destination: { id: string; path: string; sameDisk: boolean } | null;
+  destination: { id: string; path: string; sameDisk: boolean; online: boolean } | null;
   lastBackupAt: string | null;
   daysSince: number | null;
   releasesNotBackedUp: number;
   filesToCopy: number;
   bytesToCopy: number;
+  filesHeld: number;
   running: { startedAt: string; filesTotal: number; filesDone: number; bytesTotal: number; bytesDone: number } | null;
   lastRun: { state: string; finishedAt: string | null; error: string | null; failed: number } | null;
 }

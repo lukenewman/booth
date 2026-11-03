@@ -15,7 +15,7 @@
  */
 import { Database } from 'bun:sqlite';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync, mkdtempSync, readFileSync, readdirSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -87,7 +87,7 @@ const copyOf = (n: string) => join(dest, 'Booth Backup', 'files', p(n).slice(1))
   try { setDestination(db, join(lib, 'A'), { libraryRoots: [lib] }); } catch { refused = true; }
   assert(refused, 'a destination inside the library is refused');
   const d = setDestination(db, dest, { libraryRoots: [lib] });
-  assert(d.path === dest && d.sameDisk === true, `temp dirs share a disk, and that is flagged, got ${JSON.stringify(d)}`);
+  assert(d.path === realpathSync(dest) && d.sameDisk === true, `temp dirs share a disk, and that is flagged, got ${JSON.stringify(d)}`);
   const s = backupStatus(db);
   assert(s.lastBackupAt === null && s.releasesNotBackedUp === 2, `nothing backed up yet: both releases outstanding, got ${JSON.stringify(s)}`);
   console.log('ok destination');
@@ -167,6 +167,83 @@ const copyOf = (n: string) => join(dest, 'Booth Backup', 'files', p(n).slice(1))
   assert(resumed.state === 'done' && resumed.filesCopied === 2, `the next run finishes the rest, got ${JSON.stringify(resumed)}`);
   assert(backupStatus(db).releasesNotBackedUp === 0, 'all held again');
   console.log('ok stop and resume');
+}
+
+// --- review fixes (2026-11-03) -------------------------------------------------
+{
+  const { rmSync, renameSync: mv } = await import('node:fs');
+  const items = () => (db.prepare(`SELECT COUNT(*) AS n FROM backup_item`).get() as { n: number }).n;
+
+  // A missing destination is offline: status says so and a run refuses, recreating nothing.
+  mv(dest, dest + '-unplugged');
+  let s = backupStatus(db);
+  assert(s.destination && s.destination.online === false, `an unplugged destination is offline, got ${JSON.stringify(s.destination)}`);
+  let r = await runLibraryBackup(db, deps);
+  assert(r.state === 'failed' && !existsSync(dest), `a run refuses and recreates nothing, got ${JSON.stringify(r)}`);
+  // Something else mounted at the same path (an empty folder) is not the backup either.
+  mkdirSync(dest);
+  assert(backupStatus(db).destination?.online === false, 'an empty folder at the same path is not the backup');
+  r = await runLibraryBackup(db, deps);
+  assert(r.state === 'failed' && readdirSync(dest).length === 0, 'and a run writes nothing into it');
+  rmSync(dest, { recursive: true });
+  mv(dest + '-unplugged', dest);
+  assert(backupStatus(db).destination?.online === true, 'plugged back in: online');
+  console.log('ok offline destination');
+
+  // Switching destinations keeps each one's record.
+  const other = join(root, 'Other');
+  mkdirSync(other);
+  const held = items();
+  setDestination(db, other, { libraryRoots: [lib] });
+  assert(backupStatus(db).releasesNotBackedUp === 2, 'a new destination holds nothing yet');
+  setDestination(db, dest, { libraryRoots: [lib] });
+  assert(items() === held && backupStatus(db).releasesNotBackedUp === 0, 'switching back finds its record intact');
+  let refused = false;
+  try { setDestination(db, other, { libraryRoots: [lib], running: true }); } catch { refused = true; }
+  assert(refused, 'no switching while a backup runs');
+  console.log('ok switching destinations');
+
+  // A file rewritten while it's being copied is not recorded as backed up.
+  write('A/01.mp3', 'AUD1', 'before');
+  await sync();
+  const orig = deps.copyFile!;
+  deps.copyFile = async (from, to) => { await orig(from, to); if (from === p('A/01.mp3')) write('A/01.mp3', 'AUD1', 'during'); };
+  r = await runLibraryBackup(db, deps);
+  deps.copyFile = orig;
+  assert(r.failed.some((x) => x.path === p('A/01.mp3')), `a torn copy fails, got ${JSON.stringify(r)}`);
+  await sync();
+  r = await runLibraryBackup(db, deps);
+  assert(r.failed.length === 0 && readFileSync(copyOf('A/01.mp3'), 'utf8').includes('during'), 'the next run copies it properly');
+
+  // "Check every copy" catches damage outside the audio (tags), same size.
+  const st = statSync(copyOf('A/02.mp3'));
+  const bytes = readFileSync(copyOf('A/02.mp3'), 'utf8');
+  writeFileSync(copyOf('A/02.mp3'), bytes.slice(0, -2) + 'Z\n');
+  utimesSync(copyOf('A/02.mp3'), st.atime, st.mtime);
+  r = await runLibraryBackup(db, deps, { verify: true });
+  assert(r.filesCopied === 1 && readFileSync(copyOf('A/02.mp3'), 'utf8') === readFileSync(p('A/02.mp3'), 'utf8'), `tag damage found and replaced, got ${JSON.stringify(r)}`);
+
+  // Stop is honoured while checking copies too.
+  let n2 = 0;
+  r = await runLibraryBackup(db, deps, { verify: true, shouldStop: () => n2++ >= 1 });
+  assert(r.state === 'stopped', `stop works during a check, got ${r.state}`);
+  console.log('ok torn copies, tag damage, stop during check');
+
+  // Another run holding the destination's lock: refused.
+  writeFileSync(join(dest, 'Booth Backup', '.booth-backup.lock'), JSON.stringify({ pid: process.pid, at: Date.now() }));
+  r = await runLibraryBackup(db, deps);
+  assert(r.state === 'failed' && /already/i.test(r.error ?? ''), `a second run is refused, got ${JSON.stringify(r)}`);
+  rmSync(join(dest, 'Booth Backup', '.booth-backup.lock'));
+  // A stale lock (dead process) is taken over.
+  writeFileSync(join(dest, 'Booth Backup', '.booth-backup.lock'), JSON.stringify({ pid: 999999, at: Date.now() - 3_600_000 }));
+  r = await runLibraryBackup(db, deps);
+  assert(r.state === 'done', `a stale lock is taken over, got ${JSON.stringify(r)}`);
+  console.log('ok lock');
+
+  // The folder walk never reads a backup back in.
+  const { listAudioFiles } = await import('../src/lib/server/sources/local/ingest');
+  assert(!listAudioFiles(root).some((x) => x.includes('/Booth Backup/')), 'a folder walk skips Booth Backup folders');
+  console.log('ok walk skips backups');
 }
 
 console.log('PASS verify-library-backup');

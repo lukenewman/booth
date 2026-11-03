@@ -56,6 +56,8 @@ export function listAudioFiles(root: string): string[] {
       // Skip dotted directories: Booth's own .tmp staging, Spotlight indexes,
       // and anything else that is not the user's music.
       if (entry.name.startsWith('.')) continue;
+      // Never read a Booth backup back in as library files.
+      if (entry.isDirectory() && entry.name === 'Booth Backup') continue;
       const path = join(dir, entry.name);
       if (entry.isDirectory()) walk(path);
       else if (entry.isFile() && isAudioFile(path)) out.push(path);

@@ -38,13 +38,15 @@
     {#if s.destination.sameDisk}
       <p class="warn">This folder is on the same disk as your music, so it won’t help if that disk fails. A separate drive is safer.</p>
     {/if}
-    {#if s.running}
-      <div class="line muted">Backing up… {n(s.running.filesDone)} of {n(s.running.filesTotal)} files · {formatBytes(s.running.bytesDone)} of {formatBytes(s.running.bytesTotal)}</div>
+    {#if !s.destination.online && !s.running}
+      <p class="warn">The backup drive isn’t connected{#if s.lastBackupAt}; the last backup was {when(s.lastBackupAt)}{/if}. Connect it to back up or check it.</p>
+    {:else if s.running}
+      <div class="line muted">{#if s.running.filesTotal}Backing up… {n(s.running.filesDone)} of {n(s.running.filesTotal)} files · {formatBytes(s.running.bytesDone)} of {formatBytes(s.running.bytesTotal)}{:else}Looking at what needs copying…{/if}</div>
       <progress max={s.running.bytesTotal || 1} value={s.running.bytesDone}></progress>
       <button class="button secondary" onclick={() => backup.stop()}>Stop</button>
     {:else}
       <div class="line muted">
-        {#if s.lastBackupAt}Last backup {when(s.lastBackupAt)}.{:else}No backup yet.{/if}
+        {#if s.lastBackupAt}Last backup {when(s.lastBackupAt)}.{:else if s.filesHeld}A backup was started but hasn’t finished.{:else}No backup yet.{/if}
         {#if s.releasesNotBackedUp}{n(s.releasesNotBackedUp)} release{s.releasesNotBackedUp === 1 ? '' : 's'} not in it ({formatBytes(s.bytesToCopy)} to copy).{:else if s.lastBackupAt}Everything is in it.{/if}
       </div>
       {#if s.lastRun && s.lastRun.state !== 'done'}
@@ -54,11 +56,11 @@
       {/if}
       <div class="row">
         <button class="button secondary" onclick={() => backup.start()}>Back up now</button>
-        {#if s.lastBackupAt}<button class="link" title="Re-read every copy and replace any that no longer match" onclick={() => backup.start(true)}>check every copy</button>{/if}
+        {#if s.lastBackupAt}<button class="link" title="Re-read every copy and replace any that differ from what was backed up" onclick={() => backup.start(true)}>check every copy</button>{/if}
       </div>
     {/if}
   {:else if s}
-    <p>Pick a folder on another drive (an external disk, a NAS, or a folder your cloud storage syncs). Booth copies your music and its database there, checks each copy, and keeps track of what isn’t backed up yet. Nothing in that folder is ever deleted.</p>
+    <p>Pick a folder on another drive (an external disk, a NAS, or a folder your cloud storage syncs). Booth copies your music and its database there, checks each copy, and keeps track of what isn’t backed up yet. It adds and updates copies and never removes your music from that folder; it keeps the newest 10 database snapshots.</p>
     <form onsubmit={(e) => { e.preventDefault(); if (path.trim()) void choose(); }}>
       <label class="visually-hidden" for="backup-path">Backup folder</label>
       <input id="backup-path" bind:value={path} placeholder="/Volumes/Backup" spellcheck="false" autocomplete="off" disabled={busy} />

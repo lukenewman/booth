@@ -1,5 +1,6 @@
 import type { Database } from 'bun:sqlite';
 import { ulid } from 'ulid';
+import { runMigrations } from '../db/migrate';
 import { collate, type CollateSummary } from './collate';
 import type { FileScanSummary } from './fileList';
 import { refreshFindings, type FindingsSummary } from './findings';
@@ -111,6 +112,11 @@ export function runSync(db: Database, sourceId: string): Promise<SyncRunRow> {
 }
 
 async function runSyncNow(db: Database, sourceId: string): Promise<SyncRunRow> {
+  // Migrations normally run when the database opens. Under `bun dev` the
+  // sync code is hot-reloaded without reopening it, so code needing a new
+  // table failed every sync until a restart (2026-11-03: "no such table:
+  // folder_source"). Cheap when there's nothing to apply.
+  runMigrations(db);
   const source = getSource(sourceId);
   if (!source) throw new Error(`unknown source: ${sourceId}`);
 

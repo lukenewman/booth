@@ -20,7 +20,10 @@
   const message = $derived.by(() => {
     if (!s || s.running) return null;
     if (!s.destination) return 'Booth isn’t backing up your music yet.';
-    if (s.lastBackupAt == null) return `Nothing is backed up yet. ${s.releasesNotBackedUp.toLocaleString()} releases to copy.`;
+    if (s.lastBackupAt == null) {
+      if (!s.releasesNotBackedUp) return null;
+      return `${s.filesHeld ? 'The backup hasn’t finished.' : 'Nothing is backed up yet.'} ${s.releasesNotBackedUp.toLocaleString()} release${s.releasesNotBackedUp === 1 ? '' : 's'} to copy.`;
+    }
     const stale = (s.daysSince ?? 0) >= STALE_DAYS;
     if (!stale && !s.releasesNotBackedUp) return null;
     const parts = [];
@@ -40,8 +43,10 @@
 {#if show}
   <div class="nudge" role="status">
     <span>{message}</span>
-    {#if s?.destination}
-      <button class="primary" onclick={() => backup.start()}>Back up now</button>
+    {#if s?.destination && !s.destination.online}
+      <span class="muted">Connect the backup drive to back up.</span>
+    {:else if s?.destination}
+      <button class="primary" onclick={async () => { await backup.start(); explorerState.setNav({ section: 'sources', item: 'local' }); }}>Back up now</button>
     {:else}
       <button class="primary" onclick={() => explorerState.setNav({ section: 'sources', item: 'local' })}>Pick a backup drive</button>
     {/if}
@@ -58,5 +63,6 @@
   .nudge span { flex: 1; min-width: 200px; }
   button { font: inherit; font-size: 12px; cursor: pointer; border-radius: var(--radius); padding: 3px 10px; }
   .primary { background: var(--bg-input); border: 1px solid var(--accent); color: var(--accent); }
+  .muted { color: var(--text-subtle); flex: 0 0 auto; min-width: 0; }
   .dismiss { background: none; border: 0; color: var(--text-subtle); text-decoration: underline; padding: 0; }
 </style>
