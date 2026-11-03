@@ -157,6 +157,8 @@ function pruneEmptyDirs(root: string): void {
 export function ingestedFromFiles(
   files: FileRow[],
   groupIdFor: (tags: FileTags) => string | undefined,
+  /** Where the files came from: the drop folder ('download') or a folder source ('folder'). */
+  origin: 'download' | 'folder' = 'download',
 ): { releases: SourceRelease[]; tracks: SourceTrack[] } {
   const tracks: SourceTrack[] = [];
   const releaseOf = new Map<string, SourceRelease>();
@@ -173,7 +175,7 @@ export function ingestedFromFiles(
         title: tags.album!,
         artist,
         year: tags.year,
-        facets: { origin: 'download' },
+        facets: { origin },
       });
     }
 
@@ -188,7 +190,7 @@ export function ingestedFromFiles(
       filePath: file.path,
       releaseExternalId,
       facets: pickDefined({
-        origin: 'download',
+        origin,
         [DATE_ADDED_KEY]: acquiredAt(file.path),
         [DATE_ADDED_ORIGIN_KEY]: 'witnessed',
         bpm: tags.bpm,

@@ -99,6 +99,22 @@ function toFileRow(r: DbRow): FileRow {
   };
 }
 
+/** Every known file under `root`, as last seen. For a folder that can't be read right now. */
+export function filesUnder(db: Database, root: string): FileRow[] {
+  const prefix = root.replace(/\/+$/, '') + '/';
+  return (db.prepare(`SELECT * FROM audio_file WHERE substr(path, 1, ?) = ?`).all(prefix.length, prefix) as DbRow[]).map(toFileRow);
+}
+
+/** Every known path, keyed by its NFC form: how a differently spelled name finds the row it already has. */
+export function knownPathsByNfc(db: Database): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const { path } of db.prepare(`SELECT path FROM audio_file`).all() as { path: string }[]) {
+    const k = path.normalize('NFC');
+    if (!out.has(k)) out.set(k, path);
+  }
+  return out;
+}
+
 export function fileByPath(db: Database, path: string): FileRow | null {
   const r = db.prepare(`SELECT * FROM audio_file WHERE path = ?`).get(path) as DbRow | null;
   return r ? toFileRow(r) : null;

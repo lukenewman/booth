@@ -60,6 +60,8 @@ export type SyncRunSummary = CollateSummary & {
   files?: FileScanSummary;
   /** Needs-attention findings after this run (local source only). */
   findings?: FindingsSummary;
+  /** Folder sources this run walked (local source, when any are set up). */
+  folders?: { root: string; files: number; online: boolean }[];
   /** rekordbox's collection export, read after the local sync when connected. */
   rekordbox?: RekordboxImportSummary | { path: string; error: string };
   /**
@@ -129,6 +131,7 @@ async function runSyncNow(db: Database, sourceId: string): Promise<SyncRunRow> {
       summary.ingest = result.ingest;
     }
     if (result.files) summary.files = result.files;
+    if (result.folders) summary.folders = result.folders;
     // After collate, so a file the user excluded has already lost its track.
     if (result.fileIds) summary.findings = refreshFindings(db, id, result.fileIds);
 

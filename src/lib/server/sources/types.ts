@@ -74,6 +74,8 @@ export interface SyncResult {
   files?: FileScanSummary;
   /** Local source: the file-list ids this sync asked about, for findings. */
   fileIds?: string[];
+  /** Local source: each folder source, its file count and whether it could be read. */
+  folders?: { root: string; files: number; online: boolean }[];
 }
 
 export interface MusicSource {

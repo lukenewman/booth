@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite';
 import { applyCatalogMoves, recordCatalogEntries, type CatalogRef } from '../../library/catalogs';
-import { scanFiles, type FileListDeps, type FileScanSummary } from '../../library/fileList';
+import { filesUnder, knownPathsByNfc, scanFiles, type FileListDeps, type FileRow, type FileScanSummary } from '../../library/fileList';
 import type { FileTags } from '../../library/tags';
 import type { SourceRelease, SourceTrack } from '../types';
 import { ingestedFromFiles } from './ingest';
@@ -35,6 +35,13 @@ export interface Catalog {
   releases: SourceRelease[];
 }
 
+/** A folder source as the sync found it. An offline folder (unplugged drive) has no files listed. */
+export interface FolderInput {
+  root: string;
+  files: string[];
+  online: boolean;
+}
+
 export interface LocalResult {
   tracks: SourceTrack[];
   releases: SourceRelease[];
@@ -43,32 +50,51 @@ export interface LocalResult {
   boothTracked: number;
   /** Every file this sync asked about, excluded ones included (findings filter them). */
   fileIds: string[];
+  /** Each folder source: how many files, and whether it could be read. */
+  folders: { root: string; files: number; online: boolean }[];
 }
 
 export async function buildLocalResult(
   db: Database,
-  input: { catalogs: Catalog[]; boothFiles: string[]; groupIdFor: (t: FileTags) => string | undefined },
+  input: { catalogs: Catalog[]; boothFiles: string[]; folders?: FolderInput[]; groupIdFor: (t: FileTags) => string | undefined },
   deps: FileListDeps,
 ): Promise<LocalResult> {
+  // One file, one row, however each place spells its name: Music.app writes
+  // some names decomposed, a folder walk returns them as stored on disk, and
+  // the file system treats both as the same file. The file list's existing
+  // spelling wins, then the first place to name it.
+  const known = knownPathsByNfc(db);
+  const chosen = new Map<string, string>();
+  const canon = (path: string) => {
+    const k = path.normalize('NFC');
+    let s = chosen.get(k);
+    if (!s) { s = known.get(k) ?? path; chosen.set(k, s); }
+    return s;
+  };
+  const catalogs = input.catalogs.map((c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, path: canon(t.path) })) }));
+  const boothFiles = input.boothFiles.map(canon);
+  const folders = (input.folders ?? []).map((f) => ({ ...f, files: f.files.map(canon) }));
+
   const refsOf = (c: Catalog): CatalogRef[] => c.tracks.map((t) => ({ catalogId: t.catalogId, path: t.path }));
 
   let catalogMoves = 0;
-  for (const c of input.catalogs) catalogMoves += applyCatalogMoves(db, c.id, refsOf(c));
+  for (const c of catalogs) catalogMoves += applyCatalogMoves(db, c.id, refsOf(c));
 
   const wanted = [
-    ...input.catalogs.flatMap((c) => c.tracks.map((t) => ({ path: t.path, ownership: 'in_place' as const }))),
-    ...input.boothFiles.map((path) => ({ path, ownership: 'booth' as const })),
+    ...catalogs.flatMap((c) => c.tracks.map((t) => ({ path: t.path, ownership: 'in_place' as const }))),
+    ...boothFiles.map((path) => ({ path, ownership: 'booth' as const })),
+    ...folders.filter((f) => f.online).flatMap((f) => f.files.map((path) => ({ path, ownership: 'in_place' as const }))),
   ];
   const { files, summary } = await scanFiles(db, wanted, deps);
   summary.moved += catalogMoves;
-  for (const c of input.catalogs) recordCatalogEntries(db, c.id, refsOf(c), files);
+  for (const c of catalogs) recordCatalogEntries(db, c.id, refsOf(c), files);
   restoreOrphanedCopies(db, files);
 
   const tracks: SourceTrack[] = [];
   const releases = new Map<string, SourceRelease>();
   const emitted = new Set<string>();
 
-  for (const c of input.catalogs) {
+  for (const c of catalogs) {
     for (const r of c.releases) if (!releases.has(r.externalId)) releases.set(r.externalId, r);
     for (const ct of c.tracks) {
       const file = files.get(ct.path);
@@ -78,12 +104,25 @@ export async function buildLocalResult(
     }
   }
 
-  const unlisted = input.boothFiles
-    .map((path) => files.get(path))
-    .filter((f): f is NonNullable<typeof f> => !!f && !f.excluded && !emitted.has(f.id));
-  const ingested = ingestedFromFiles(unlisted, input.groupIdFor);
-  tracks.push(...ingested.tracks);
-  for (const r of ingested.releases) if (!releases.has(r.externalId)) releases.set(r.externalId, r);
+  const unlisted = (rows: (FileRow | undefined)[]) => {
+    const out: FileRow[] = [];
+    for (const f of rows) {
+      if (!f || f.excluded || emitted.has(f.id)) continue;
+      emitted.add(f.id);
+      out.push(f);
+    }
+    return out;
+  };
+  const ingested = ingestedFromFiles(unlisted(boothFiles.map((path) => files.get(path))), input.groupIdFor);
+  // A folder that can't be read right now (an unplugged drive) keeps its
+  // tracks as they were: emitted from the file list without a scan, and left
+  // out of findings, so a drive coming and going never prunes or floods.
+  const folderFiles = folders.flatMap((f) => (f.online ? f.files.map((path) => files.get(path)) : filesUnder(db, f.root)));
+  const fromFolders = ingestedFromFiles(unlisted(folderFiles), input.groupIdFor, 'folder');
+  for (const built of [ingested, fromFolders]) {
+    tracks.push(...built.tracks);
+    for (const r of built.releases) if (!releases.has(r.externalId)) releases.set(r.externalId, r);
+  }
 
   return {
     tracks,
@@ -91,5 +130,6 @@ export async function buildLocalResult(
     files: summary,
     boothTracked: ingested.tracks.length,
     fileIds: [...new Set([...files.values()].map((f) => f.id))],
+    folders: folders.map((f) => ({ root: f.root, files: f.files.length, online: f.online })),
   };
 }

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { parseFile as parseAudioFile } from 'music-metadata';
 import { listAudioFiles, runInboxIngest } from './ingest';
 import { buildLocalResult, type Catalog } from './localResult';
+import { folderIsReadable, listFolderSources } from '../../library/folders';
 import { audioFingerprint } from '../../library/fingerprint';
 import { readTags } from '../../library/tags';
 import { normalizeFilePath } from '../../library/normalize';
@@ -170,9 +171,17 @@ export async function syncITunesLibrary(): Promise<SyncResult> {
   const libraryRoot = resolvedLibraryRoot();
   const ingest = await runInboxIngest(inboxRoot, libraryRoot);
 
+  // Folder sources: a folder that can't be read (an unplugged drive) is
+  // offline, and keeps its tracks as they were.
+  const db = getDb();
+  const folders = listFolderSources(db).map((f) => {
+    const online = folderIsReadable(f.path);
+    return { root: f.path, online, files: online ? listAudioFiles(f.path) : [] };
+  });
+
   const built = await buildLocalResult(
-    getDb(),
-    { catalogs: [catalog], boothFiles: listAudioFiles(libraryRoot), groupIdFor: releaseIdForTags },
+    db,
+    { catalogs: [catalog], boothFiles: listAudioFiles(libraryRoot), folders, groupIdFor: releaseIdForTags },
     { fingerprint: audioFingerprint, readTags },
   );
 
@@ -182,6 +191,7 @@ export async function syncITunesLibrary(): Promise<SyncResult> {
     input,
     files: built.files,
     fileIds: built.fileIds,
+    ...(built.folders.length ? { folders: built.folders } : {}),
     ingest: {
       ingested: ingest.ingested,
       waiting: ingest.waiting,
