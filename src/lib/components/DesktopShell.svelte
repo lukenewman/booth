@@ -22,6 +22,7 @@
   import RecordSession from './RecordSession.svelte';
   import RunoutFilter from './RunoutFilter.svelte';
   import AttentionView from './AttentionView.svelte';
+  import BackupNudge from './BackupNudge.svelte';
 import RecordingPill from './RecordingPill.svelte';
   import MusicLibraryBanner from './MusicLibraryBanner.svelte';
   import { musicLibrary } from '$lib/stores/musicLibrary.svelte';
@@ -236,6 +237,10 @@ import RecordingPill from './RecordingPill.svelte';
         ← {drilledMaster.versionCount} versions of “{drilledMaster.title}”
       </button>
       <RunoutFilter bind:value={c.runoutQuery} status={runoutStatus} />
+    {/if}
+
+    {#if explorerState.nav.section === 'library'}
+      <BackupNudge />
     {/if}
 
     {#if musicOffer}
