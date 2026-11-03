@@ -393,6 +393,22 @@ function upsertTrack(
     }
   }
 
+  // 1b. A durable external id outranks every weaker key. Without this, a file
+  //     Music.app moved (new path, so no file_path hit) would be matched by
+  //     release position, possibly onto a Discogs row, and lose its own entity.
+  if (!entityId && t.durableId) {
+    const carry = db
+      .prepare(
+        `SELECT entity_id FROM source_link
+          WHERE entity_kind='track' AND source=? AND external_id=?`,
+      )
+      .get(sourceId, t.externalId) as { entity_id: string } | undefined;
+    if (carry) {
+      entityId = carry.entity_id;
+      method = 'external_id_carryover';
+    }
+  }
+
   // 2. Release-position match — cross-source dedup when both Discogs and iTunes
   //    contribute tracks for the same canonical release. Key: "{releaseId}:{pos}".
   if (!entityId && releaseId && t.position) {

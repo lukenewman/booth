@@ -1,6 +1,7 @@
 import type { Database } from 'bun:sqlite';
 import { ulid } from 'ulid';
 import { collate, type CollateSummary } from './collate';
+import type { FileScanSummary } from './fileList';
 import { relinkMissing, type RelinkSummary } from './relink';
 import { resolveGenres } from '../genres/resolve';
 import { assignStyleColors } from '../genres/colors';
@@ -51,6 +52,8 @@ export type SyncRunSummary = CollateSummary & {
    * no-op summary stays uncluttered, which is the same rule `analysis` follows.
    */
   ingest?: IngestReport;
+  /** What the file list did this run (local source only). */
+  files?: FileScanSummary;
   /**
    * Playlist entries / crate records re-attached by name after this run.
    * Absent when nothing was re-linked, like `analysis` and `ingest`.
@@ -117,6 +120,7 @@ async function runSyncNow(db: Database, sourceId: string): Promise<SyncRunRow> {
     if (result.ingest && (result.ingest.tracked > 0 || result.ingest.waiting > 0 || result.ingest.failed.length > 0)) {
       summary.ingest = result.ingest;
     }
+    if (result.files) summary.files = result.files;
 
     if (result.input) {
       summary.input = result.input;

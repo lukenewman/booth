@@ -3,7 +3,11 @@ import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { parseFile as parseAudioFile } from 'music-metadata';
-import { runInboxIngest, scanIngestedLibrary } from './ingest';
+import { listAudioFiles, runInboxIngest } from './ingest';
+import { buildLocalResult, type Catalog } from './localResult';
+import { audioFingerprint } from '../../library/fingerprint';
+import { readTags } from '../../library/tags';
+import { normalizeFilePath } from '../../library/normalize';
 import { bandcampHostFrom } from '../../genres/bandcampHost';
 import { withCompilationArtist } from './compilation';
 import { resolvedInboxRoot, resolvedLibraryRoot } from './ingest_env';
@@ -17,7 +21,7 @@ import {
   mediaPathKey,
 } from './date_overlay';
 import { parseITunesLibrary, type ITunesTrack } from './parse';
-import type { SourceRelease, SourceTrack, SyncInput, SyncResult } from '../types';
+import type { SourceRelease, SyncInput, SyncResult } from '../types';
 
 const artworkDir = join(homedir(), '.booth', 'artwork');
 
@@ -121,57 +125,67 @@ export async function syncITunesLibrary(): Promise<SyncResult> {
   // every server boot and would overwrite a directly-written facet each time.
   const overlay = loadDateOverlay(getDb());
 
-  const tracks: SourceTrack[] = libTracks.map((t) => {
-    const groupKey = albumGroupKey(t);
-    const recovered = overlay.get(mediaPathKey(t.location));
-    return {
-      // Persistent ID, not Track ID: Music.app renumbers Track IDs on purge or
-      // re-export, and a changed external_id used to prune the link and delete
-      // the entity behind it. Fall back only if the XML somehow omits it.
-      externalId: t.persistentId ?? String(t.trackId),
-      title: t.name,
-      artist: t.artist,
-      album: t.album,
-      durationMs: t.totalTimeMs,
-      position: t.trackNumber != null ? String(t.trackNumber) : undefined,
-      filePath: t.location,
-      releaseExternalId: groupKey ? syntheticReleaseId(groupKey) : undefined,
-      facets: pickDefined({
-        bpm: t.bpm,
-        rating: t.rating,
-        playCount: t.playCount,
-        [DATE_ADDED_KEY]: recovered?.dateAdded ?? t.dateAdded,
-        [DATE_ADDED_REPORTED_KEY]: t.dateAdded,
-        [DATE_ADDED_ORIGIN_KEY]: recovered ? 'recovered' : 'reported',
-        kind: t.kind,
-        bitRate: t.bitRate,
-        sampleRate: t.sampleRate,
-        genre: t.genre,
-        bandcampHost: bandcampHostFrom(t.comment),
-      }),
-    };
-  });
+  // Music.app as a catalog: it describes files by location under its
+  // Persistent ID, and the file list turns locations into tracks. Names and
+  // facets are Music.app's, exactly as before; only identity has moved.
+  const catalog: Catalog = {
+    id: 'music',
+    releases,
+    tracks: libTracks.map((t) => {
+      const groupKey = albumGroupKey(t);
+      const recovered = overlay.get(mediaPathKey(t.location));
+      return {
+        // Persistent ID, not Track ID: Music.app renumbers Track IDs on purge
+        // or re-export. Fall back only if the XML somehow omits it.
+        catalogId: t.persistentId ?? String(t.trackId),
+        path: normalizeFilePath(t.location),
+        track: {
+          title: t.name,
+          artist: t.artist,
+          album: t.album,
+          durationMs: t.totalTimeMs,
+          position: t.trackNumber != null ? String(t.trackNumber) : undefined,
+          releaseExternalId: groupKey ? syntheticReleaseId(groupKey) : undefined,
+          facets: pickDefined({
+            bpm: t.bpm,
+            rating: t.rating,
+            playCount: t.playCount,
+            [DATE_ADDED_KEY]: recovered?.dateAdded ?? t.dateAdded,
+            [DATE_ADDED_REPORTED_KEY]: t.dateAdded,
+            [DATE_ADDED_ORIGIN_KEY]: recovered ? 'recovered' : 'reported',
+            kind: t.kind,
+            bitRate: t.bitRate,
+            sampleRate: t.sampleRate,
+            genre: t.genre,
+            bandcampHost: bandcampHostFrom(t.comment),
+          }),
+        },
+      };
+    }),
+  };
 
-  // The drop folder contributes to the same result rather than writing rows of
-  // its own. That is what keeps ingested files safe from the prune: a track
-  // present in the sync result is never deleted, so unlike vinyl rips they need
-  // no special-casing — and deleting a file from the tree still removes it.
+  // The drop folder moves settled files into Booth's folder first, so this
+  // sync already sees them.
   const inboxRoot = resolvedInboxRoot();
   const libraryRoot = resolvedLibraryRoot();
   const ingest = await runInboxIngest(inboxRoot, libraryRoot);
-  const ingested = await scanIngestedLibrary(libraryRoot, releaseIdForTags);
-  tracks.push(...ingested.tracks);
-  releases.push(...ingested.releases);
+
+  const built = await buildLocalResult(
+    getDb(),
+    { catalogs: [catalog], boothFiles: listAudioFiles(libraryRoot), groupIdFor: releaseIdForTags },
+    { fingerprint: audioFingerprint, readTags },
+  );
 
   return {
-    tracks,
-    releases,
+    tracks: built.tracks,
+    releases: built.releases,
     input,
+    files: built.files,
     ingest: {
       ingested: ingest.ingested,
       waiting: ingest.waiting,
       failed: ingest.failed,
-      tracked: ingested.tracks.length,
+      tracked: built.boothTracked,
     },
   };
 }

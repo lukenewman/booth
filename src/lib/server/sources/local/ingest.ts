@@ -1,6 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { readTags, type FileTags } from '../../library/tags';
+import type { FileRow } from '../../library/fileList';
 import { bandcampHostFrom } from '../../genres/bandcampHost';
 import type { SourceRelease, SourceTrack } from '../types';
 import { dedupePath, ingestTargetPath, isAudioFile, pickStable } from './ingest_paths';
@@ -145,73 +146,57 @@ function pruneEmptyDirs(root: string): void {
 }
 
 /**
- * Read the ingested library tree into the shape a sync contributes.
+ * Tracks for files in Booth's folder that no catalog lists, built from their
+ * own tags. The file list (library/fileList.ts) has already read and cached
+ * the tags; this only shapes them.
  *
- * These are emitted as part of the local source's normal result rather than
- * written directly, which is what keeps them safe: a track present in the sync
- * result is never pruned, so ingested files need none of the special-casing
- * vinyl rips require. Deleting a file from the tree correctly removes it.
+ * Emitted as part of the local source's normal result rather than written
+ * directly, which is what keeps them safe: a track present in the sync result
+ * is never pruned. Deleting a file from the tree still removes its track.
  */
-export async function scanIngestedLibrary(
-  libraryRoot: string,
+export function ingestedFromFiles(
+  files: FileRow[],
   groupIdFor: (tags: FileTags) => string | undefined,
-): Promise<{ releases: SourceRelease[]; tracks: SourceTrack[] }> {
-  const files = listAudioFiles(libraryRoot);
+): { releases: SourceRelease[]; tracks: SourceTrack[] } {
   const tracks: SourceTrack[] = [];
   const releaseOf = new Map<string, SourceRelease>();
 
-  const BATCH = 20;
-  for (let i = 0; i < files.length; i += BATCH) {
-    const read = await Promise.all(
-      files.slice(i, i + BATCH).map(async (path) => {
-        try {
-          return { path, tags: await readTags(path) };
-        } catch {
-          // An unreadable file is skipped rather than failing the whole sync —
-          // one corrupt download must not stop the library updating.
-          return null;
-        }
-      }),
-    );
+  for (const file of files) {
+    const tags = file.tags;
+    if (!file.present || !tags) continue;
+    const releaseExternalId = groupIdFor(tags);
+    const artist = (tags.albumArtist ?? tags.artist ?? '').trim();
 
-    for (const entry of read) {
-      if (!entry) continue;
-      const { path, tags } = entry;
-      const releaseExternalId = groupIdFor(tags);
-      const artist = (tags.albumArtist ?? tags.artist ?? '').trim();
-
-      if (releaseExternalId && !releaseOf.has(releaseExternalId)) {
-        releaseOf.set(releaseExternalId, {
-          externalId: releaseExternalId,
-          title: tags.album!,
-          artist,
-          year: tags.year,
-          facets: { origin: 'download' },
-        });
-      }
-
-      tracks.push({
-        // The absolute path, as vinyl rips already use: a file Booth moved has
-        // no persistent id from anywhere else, and the path is what identifies it.
-        externalId: path,
-        title: tags.title ?? path.split('/').pop()!,
-        artist: (tags.artist ?? artist).trim(),
-        album: tags.album,
-        durationMs: tags.durationMs,
-        position: tags.trackNumber != null ? String(tags.trackNumber) : undefined,
-        filePath: path,
-        releaseExternalId,
-        facets: pickDefined({
-          origin: 'download',
-          [DATE_ADDED_KEY]: acquiredAt(path),
-          [DATE_ADDED_ORIGIN_KEY]: 'witnessed',
-          bpm: tags.bpm,
-          genre: tags.genre,
-          bandcampHost: bandcampHostFrom(tags.comment),
-          rating: tags.rating,
-        }),
+    if (releaseExternalId && !releaseOf.has(releaseExternalId)) {
+      releaseOf.set(releaseExternalId, {
+        externalId: releaseExternalId,
+        title: tags.album!,
+        artist,
+        year: tags.year,
+        facets: { origin: 'download' },
       });
     }
+
+    tracks.push({
+      externalId: file.id,
+      durableId: true,
+      title: tags.title ?? file.path.split('/').pop()!,
+      artist: (tags.artist ?? artist).trim(),
+      album: tags.album,
+      durationMs: tags.durationMs,
+      position: tags.trackNumber != null ? String(tags.trackNumber) : undefined,
+      filePath: file.path,
+      releaseExternalId,
+      facets: pickDefined({
+        origin: 'download',
+        [DATE_ADDED_KEY]: acquiredAt(file.path),
+        [DATE_ADDED_ORIGIN_KEY]: 'witnessed',
+        bpm: tags.bpm,
+        genre: tags.genre,
+        bandcampHost: bandcampHostFrom(tags.comment),
+        rating: tags.rating,
+      }),
+    });
   }
 
   return { releases: [...releaseOf.values()], tracks };

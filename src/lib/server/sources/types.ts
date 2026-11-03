@@ -1,4 +1,5 @@
 import type { Database } from 'bun:sqlite';
+import type { FileScanSummary } from '../library/fileList';
 
 export type EntityKind = 'track' | 'release' | 'artist';
 
@@ -13,6 +14,12 @@ export interface SourceTrack {
   releaseExternalId?: string;
   facets?: Record<string, unknown>;
   externalUrl?: string;
+  /**
+   * The external id is a durable identity for this record, not a label that
+   * can be renumbered: resolve by it before any weaker key. Set by the local
+   * source, whose ids are file-list rows that survive moves and retags.
+   */
+  durableId?: boolean;
 }
 
 export interface SourceRelease {
@@ -63,6 +70,8 @@ export interface SyncResult {
   releases: SourceRelease[];
   input?: SyncInput;
   ingest?: IngestReport;
+  /** What the file list did this run. Only the local source populates it. */
+  files?: FileScanSummary;
 }
 
 export interface MusicSource {
