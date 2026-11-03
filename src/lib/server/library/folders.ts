@@ -76,3 +76,16 @@ export function folderRemovalImpact(db: Database, id: string): FolderRemovalImpa
     inPlaylists: rows.filter((r) => r.listed).length,
   };
 }
+
+/** Each folder source with its file count and reachability from the most recent local sync that walked it. */
+export function folderStatus(db: Database): (FolderSource & { files: number | null; online: boolean | null })[] {
+  const row = db
+    .prepare(`SELECT summary FROM sync_run WHERE source = 'local' AND summary LIKE '%"folders"%' ORDER BY started_at DESC LIMIT 1`)
+    .get() as { summary: string } | null;
+  let seen: { root: string; files: number; online: boolean }[] = [];
+  try { seen = row ? (JSON.parse(row.summary).folders ?? []) : []; } catch { seen = []; }
+  return listFolderSources(db).map((f) => {
+    const s = seen.find((x) => x.root === f.path);
+    return { ...f, files: s?.files ?? null, online: s?.online ?? null };
+  });
+}
