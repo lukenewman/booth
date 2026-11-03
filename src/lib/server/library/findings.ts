@@ -102,6 +102,25 @@ export function refreshFindings(db: Database, runId: string | null, fileIds: str
   return summary;
 }
 
+/**
+ * Files replaced by others (a takeover swaps originals for Booth's copies;
+ * undo swaps back): findings about them follow, so a decision the user made
+ * about a duplicate isn't asked again about the same files under new ids.
+ */
+export function remapFindingFiles(db: Database, map: Map<string, string>): void {
+  const rows = db.prepare(`SELECT id, kind, subject_key, file_ids FROM finding WHERE kind IN ('missing', 'duplicate', 'unsupported')`).all() as { id: string; kind: FindingKind; subject_key: string; file_ids: string }[];
+  const taken = db.prepare(`SELECT 1 FROM finding WHERE kind = ? AND subject_key = ? AND id <> ?`);
+  const update = db.prepare(`UPDATE finding SET subject_key = ?, file_ids = ? WHERE id = ?`);
+  for (const r of rows) {
+    const ids = JSON.parse(r.file_ids) as string[];
+    if (!ids.some((x) => map.has(x))) continue;
+    const next = ids.map((x) => map.get(x) ?? x);
+    const key = r.kind === 'duplicate' ? `${r.subject_key.split(':')[0]}:${[...next].sort().join(',')}` : next[0];
+    if (taken.get(r.kind, key, r.id)) continue;
+    update.run(key, JSON.stringify(r.kind === 'duplicate' ? [...next].sort() : next), r.id);
+  }
+}
+
 export class FindingError extends Error {}
 
 export type SettleAction =

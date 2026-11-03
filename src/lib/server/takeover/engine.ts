@@ -1,8 +1,9 @@
 import type { Database } from 'bun:sqlite';
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, realpathSync, renameSync, rmSync, statSync, unlinkSync } from 'node:fs';
 import { copyFile } from 'node:fs/promises';
 import { dirname, extname, join, relative } from 'node:path';
 import { ulid } from 'ulid';
+import { remapFindingFiles } from '../library/findings';
 import { WRITABLE } from '../library/migration';
 import type { BoothTrackFacts } from '../library/tag_schema';
 import type { FileTags } from '../library/tags';
@@ -32,6 +33,7 @@ export interface TakeoverDeps {
   fingerprint(path: string): Promise<string>;
   freeBytes(dir: string): number;
   copyFile?(from: string, to: string): Promise<void>;
+  rename?(from: string, to: string): void;
 }
 
 export const STAGING = '.booth-takeover';
@@ -143,6 +145,18 @@ function jobsFor(db: Database, releaseId: string): { jobs: FileJob[] } | { probl
   return { jobs };
 }
 
+/**
+ * A free name for a copy. Claimed names are compared ignoring case and
+ * Unicode spelling, because a Mac's disk treats "At the Store" and "At The
+ * Store" as one folder: two copies under those names would be one file.
+ */
+export function claimTarget(target: string, claimed: Set<string>): string {
+  const key = (x: string) => x.normalize('NFC').toLowerCase();
+  const final = dedupePath(target, (x) => claimed.has(key(x)) || existsSync(x));
+  claimed.add(key(final));
+  return final;
+}
+
 async function sha256(path: string): Promise<string> {
   const h = new Bun.CryptoHasher('sha256');
   for await (const chunk of Bun.file(path).stream()) h.update(chunk);
@@ -210,8 +224,7 @@ async function takeOverRelease(db: Database, deps: TakeoverDeps, runId: string, 
         albumArtist: job.facts.names?.albumArtist, artist: job.facts.names?.artist, album: job.facts.names?.album,
         title: job.facts.names?.title, trackNumber: job.facts.names?.trackNumber,
       }, job.source);
-      const final = dedupePath(target, (x) => claimed.has(x) || existsSync(x));
-      claimed.add(final);
+      const final = claimTarget(target, claimed);
       const staged = join(staging, relative(root, final));
       mkdirSync(dirname(staged), { recursive: true });
 
@@ -247,16 +260,50 @@ async function takeOverRelease(db: Database, deps: TakeoverDeps, runId: string, 
   );
   const repoint = db.prepare(`UPDATE source_link SET external_id = ? WHERE source = 'local' AND entity_kind = 'track' AND external_id = ?`);
   db.transaction(() => {
+    const swapped = new Map<string, string>();
     for (const d of done) {
       const st = statSync(d.staged);
       const id = ulid();
       insert.run(id, d.final, d.fingerprint, st.size, Math.floor(st.mtimeMs), d.tags ? JSON.stringify(d.tags) : null, d.job.fileId, nowIso());
       repoint.run(id, d.job.fileId);
+      swapped.set(d.job.fileId, id);
     }
+    remapFindingFiles(db, swapped);
   })();
+  const rename = deps.rename ?? renameSync;
+  const placed: typeof done = [];
+  try {
+    for (const d of done) {
+      mkdirSync(dirname(d.final), { recursive: true });
+      if (existsSync(d.final)) throw new Error(`a file is already at ${d.final}`);
+      rename(d.staged, d.final);
+      placed.push(d);
+    }
+  } catch (e) {
+    // Put everything back: the tracks on the originals, no copy rows, no copies.
+    db.transaction(() => {
+      const back = new Map<string, string>();
+      for (const d of done) {
+        const row = db.prepare(`SELECT id FROM audio_file WHERE path = ? AND copy_of = ?`).get(d.final, d.job.fileId) as { id: string } | null;
+        if (!row) continue;
+        repoint.run(d.job.fileId, row.id);
+        back.set(row.id, d.job.fileId);
+        db.prepare(`DELETE FROM audio_file WHERE id = ?`).run(row.id);
+      }
+      remapFindingFiles(db, back);
+    })();
+    for (const d of placed) { try { unlinkSync(d.final); } catch { /* best effort */ } }
+    rmSync(staging, { recursive: true, force: true });
+    throw new TakeoverError(`Couldn’t put the copies in place: ${message(e)}`);
+  }
+  // On a Mac's disk "At the Store" and "At The Store" are one folder, named
+  // by whichever came first: record each copy as the disk spells it, which is
+  // how every later folder walk will see it.
+  const realRoot = realpathSync(root);
+  const respell = db.prepare(`UPDATE audio_file SET path = ? WHERE path = ? AND copy_of = ?`);
   for (const d of done) {
-    mkdirSync(dirname(d.final), { recursive: true });
-    renameSync(d.staged, d.final);
+    const onDisk = join(root, relative(realRoot, realpathSync(d.final)));
+    if (onDisk !== d.final) respell.run(onDisk, d.final, d.job.fileId);
   }
   rmSync(staging, { recursive: true, force: true });
   return bytes;

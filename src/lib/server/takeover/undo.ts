@@ -1,6 +1,7 @@
 import type { Database } from 'bun:sqlite';
 import { existsSync, readdirSync, rmdirSync, unlinkSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { remapFindingFiles } from '../library/findings';
 import type { FileTags } from '../library/tags';
 import { factsForTrack, TakeoverError } from './engine';
 import { tagDifferences, type TagDifference } from './rebuild';
@@ -53,6 +54,7 @@ export async function undoRelease(db: Database, deps: { fingerprint(path: string
   }
   const repoint = db.prepare(`UPDATE source_link SET external_id = ? WHERE source = 'local' AND entity_kind = 'track' AND external_id = ?`);
   db.transaction(() => {
+    remapFindingFiles(db, new Map(rows.map((r) => [r.copyId, r.originalId])));
     for (const r of rows) {
       repoint.run(r.originalId, r.copyId);
       db.prepare(`DELETE FROM audio_file WHERE id = ? AND ownership = 'booth' AND copy_of IS NOT NULL`).run(r.copyId);

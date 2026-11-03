@@ -15,7 +15,7 @@
  */
 import { Database } from 'bun:sqlite';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { runMigrations } from '../src/lib/server/db/migrate';
@@ -57,7 +57,12 @@ const listDeps: FileListDeps = { async fingerprint(path) { return md5(audioOf(pa
 let free = 1e12;
 let corrupt: string | null = null;
 let crashAfter: string | null = null;
+let failRename: string | null = null;
 const deps: TakeoverDeps = {
+  rename(from: string, to: string) {
+    if (failRename && to.endsWith(failRename)) throw new Error('simulated rename failure');
+    renameSync(from, to);
+  },
   fingerprint: listDeps.fingerprint,
   readTags: async (path) => fakeTags(path),
   freeBytes: () => free,
@@ -246,6 +251,81 @@ const origBefore = originals();
   utimesSync(a, stamp.atime, stamp.mtime); // put the original back exactly, for the final check
   assert(/original/i.test(refused) && fileOfTrack('A').ownership === 'booth', `undo refuses a changed original, got "${refused}"`);
   console.log('ok undo refuses');
+}
+
+// --- a duplicate inside a taken-over release keeps its decision ------------------------------
+{
+  const { settleFinding } = await import('../src/lib/server/library/findings');
+  write('Music/Dup/Mix/01 X.mp3', 'AUD7', 'X', 1);
+  write('Music/Dup/Mix/02 X again.mp3', 'AUD7', 'X again', 2);
+  listed.push(
+    { pid: 'P7', name: 'Music/Dup/Mix/01 X.mp3', rel: 'rel5', album: 'Mix', artist: 'Dup', pos: 1, title: 'X' },
+    { pid: 'P8', name: 'Music/Dup/Mix/02 X again.mp3', rel: 'rel5', album: 'Mix', artist: 'Dup', pos: 2, title: 'X again' },
+  );
+  await sync();
+  const dup = listOpenFindings(db).find((x) => x.kind === 'duplicate');
+  assert(dup, 'scenario: a duplicate inside one release');
+  settleFinding(db, dup.id, { type: 'keep_both' });
+  const rel = releaseOf('X');
+  await runTakeover(db, deps, createTakeoverRun(db, [rel]), { root: booth });
+  const s1 = await sync();
+  assert(s1.findings.new === 0 && !listOpenFindings(db).some((x) => x.kind === 'duplicate'), `the settled duplicate stays settled after takeover, got ${JSON.stringify(listOpenFindings(db))}`);
+  await undoRelease(db, deps, rel);
+  const s2 = await sync();
+  assert(s2.findings.new === 0 && !listOpenFindings(db).some((x) => x.kind === 'duplicate'), `and after undo, got ${JSON.stringify(listOpenFindings(db))}`);
+  console.log('ok duplicate decision follows the files');
+}
+
+// --- names that differ only in case (one folder on a Mac's disk) ------------------------------
+{
+  const { claimTarget } = await import('../src/lib/server/takeover/engine');
+  const claimed = new Set<string>();
+  const first = claimTarget(join(booth, 'Case', 'At the Store', '04 Less.mp3'), claimed);
+  const second = claimTarget(join(booth, 'Case', 'At The Store', '04 Less.mp3'), claimed);
+  assert(first.toLowerCase() !== second.toLowerCase(), `names differing only in case get distinct names, got ${first} / ${second}`);
+  const third = claimTarget(join(booth, 'Case', 'At the Store', '04 Less.mp3'), claimed);
+  assert(![first, second].map((x) => x.toLowerCase()).includes(third.toLowerCase()), `and a third, got ${third}`);
+  console.log('ok case-insensitive names');
+
+  // Album names differing only in case land in one folder on disk: each copy is recorded under its real path,
+  // so the folder walk recognises it and a sync raises nothing.
+  write('Music/Case2/A/01 Less.mp3', 'AUD11', 'Less2', 1);
+  write('Music/Case2/B/02 More.mp3', 'AUD12', 'More2', 2);
+  listed.push(
+    { pid: 'P11', name: 'Music/Case2/A/01 Less.mp3', rel: 'rel7', album: 'Always More at the Store', artist: 'Case2', pos: 1, title: 'Less2' },
+    { pid: 'P12', name: 'Music/Case2/B/02 More.mp3', rel: 'rel7', album: 'Always More At The Store', artist: 'Case2', pos: 2, title: 'More2' },
+  );
+  await sync();
+  const rel7 = releaseOf('Less2');
+  const r7 = await runTakeover(db, deps, createTakeoverRun(db, [rel7]), { root: booth });
+  const disk = listAudioFiles(booth).filter((x) => x.includes('/Case2/'));
+  const recorded = [fileOfTrack('Less2').path, fileOfTrack('More2').path].sort();
+  assert(r7.done === 1 && JSON.stringify(disk.sort()) === JSON.stringify(recorded), `copies are recorded as the disk spells them, got ${JSON.stringify({ disk, recorded })}`);
+  const s7 = await sync();
+  assert(s7.findings.new === 0 && (db.prepare(`SELECT COUNT(*) AS n FROM audio_file WHERE path LIKE ?`).get(`${booth}/Case2/%`) as { n: number }).n === 2, `and a sync adds no third file, got ${JSON.stringify(listOpenFindings(db))}`);
+  await undoRelease(db, deps, rel7);
+  console.log('ok one folder for two spellings');
+
+  // Placing the copies fails after the switch: everything is put back.
+  write('Music/Case/Store/01 Less.mp3', 'AUD9', 'Less', 1);
+  write('Music/Case/Store/02 More.mp3', 'AUD10', 'More', 2);
+  listed.push(
+    { pid: 'P9', name: 'Music/Case/Store/01 Less.mp3', rel: 'rel6', album: 'At the Store', artist: 'Case', pos: 1, title: 'Less' },
+    { pid: 'P10', name: 'Music/Case/Store/02 More.mp3', rel: 'rel6', album: 'At the Store', artist: 'Case', pos: 2, title: 'More' },
+  );
+  await sync();
+  const rel = releaseOf('Less');
+  const links = () => JSON.stringify(db.prepare(`SELECT entity_id, external_id FROM source_link WHERE source = 'local' ORDER BY entity_id`).all());
+  const before = links();
+  failRename = '02 More.mp3';
+  const bad = await runTakeover(db, deps, createTakeoverRun(db, [rel]), { root: booth });
+  failRename = null;
+  assert(bad.failed === 1 && links() === before, `a failure placing copies switches nothing, got ${JSON.stringify(bad)}`);
+  assert(!db.prepare(`SELECT 1 FROM audio_file WHERE copy_of IS NOT NULL AND path LIKE ?`).get(`${booth}/Case/%`), 'no copy rows left');
+  assert(!listAudioFiles(booth).some((x) => x.includes('/Case/')) && stagingLeft() === 0, `and no copies left, got ${listAudioFiles(booth)}`);
+  const ok = await runTakeover(db, deps, createTakeoverRun(db, [rel]), { root: booth });
+  assert(ok.done === 1 && fileOfTrack('More').ownership === 'booth', 'a later run takes it over');
+  console.log('ok failed placement is reversed');
 }
 
 assert(originals() === origBefore, 'after everything, the originals are untouched');
