@@ -3,6 +3,9 @@ import { ulid } from 'ulid';
 import { collate, type CollateSummary } from './collate';
 import type { FileScanSummary } from './fileList';
 import { refreshFindings, type FindingsSummary } from './findings';
+import { importRekordbox, type RekordboxImportSummary } from './rekordbox';
+import { rekordboxXmlPath } from './rekordbox_env';
+import { readRekordboxCollection } from '../cdj/rekordbox-xml';
 import { relinkMissing, type RelinkSummary } from './relink';
 import { resolveGenres } from '../genres/resolve';
 import { assignStyleColors } from '../genres/colors';
@@ -57,6 +60,8 @@ export type SyncRunSummary = CollateSummary & {
   files?: FileScanSummary;
   /** Needs-attention findings after this run (local source only). */
   findings?: FindingsSummary;
+  /** rekordbox's collection export, read after the local sync when connected. */
+  rekordbox?: RekordboxImportSummary | { path: string; error: string };
   /**
    * Playlist entries / crate records re-attached by name after this run.
    * Absent when nothing was re-linked, like `analysis` and `ingest`.
@@ -126,6 +131,17 @@ async function runSyncNow(db: Database, sourceId: string): Promise<SyncRunRow> {
     if (result.files) summary.files = result.files;
     // After collate, so a file the user excluded has already lost its track.
     if (result.fileIds) summary.findings = refreshFindings(db, id, result.fileIds);
+
+    // rekordbox describes the files this sync just mapped; a bad export is
+    // reported on the run, never a failed sync.
+    const rbPath = sourceId === 'local' ? rekordboxXmlPath() : null;
+    if (rbPath) {
+      try {
+        summary.rekordbox = importRekordbox(db, rbPath, readRekordboxCollection(rbPath));
+      } catch (e) {
+        summary.rekordbox = { path: rbPath, error: e instanceof Error ? e.message : String(e) };
+      }
+    }
 
     if (result.input) {
       summary.input = result.input;

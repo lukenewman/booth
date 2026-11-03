@@ -56,3 +56,86 @@ export function readRekordboxCues(xmlPath: string): Map<string, Cue[]> {
 	}
 	return byPath;
 }
+
+/** One beat-grid section: from `start` seconds the beat is `bpm`, `beat` (1–4) is that first beat's place in the bar. */
+export interface GridSection {
+	start: number;
+	bpm: number;
+	meter: string;
+	beat: number;
+}
+
+/** One track of the collection export, as rekordbox knows it. Blank or zero values are null. */
+export interface RekordboxTrack {
+	trackId: string;
+	/** Decoded from the file URL, not Unicode-normalised: match it against the file list with normalisation on both sides. */
+	path: string;
+	title: string | null;
+	artist: string | null;
+	bpm: number | null;
+	key: string | null;
+	grid: GridSection[];
+	cues: Cue[];
+	rating: number | null;
+	playCount: number | null;
+	dateAdded: string | null;
+}
+
+function decodedPath(location: string): string | null {
+	const m = /^file:\/\/(?:localhost)?(\/.*)$/.exec(location);
+	if (!m) return null;
+	try {
+		return decodeURIComponent(m[1]);
+	} catch {
+		return null;
+	}
+}
+
+const positive = (s: string | undefined) => {
+	const n = Number(s);
+	return s !== undefined && s !== '' && Number.isFinite(n) && n > 0 ? n : null;
+};
+const text = (s: string | undefined) => (s && s.trim() ? s : null);
+
+/** Every collection track with a local file. Playlist entries (self-closing `<TRACK Key=…/>`) are not tracks. */
+export function readRekordboxCollection(xmlPath: string): RekordboxTrack[] {
+	const xml = readFileSync(xmlPath, 'utf8');
+	const out: RekordboxTrack[] = [];
+	for (const m of xml.matchAll(/<TRACK\s([^>]*[^/])>([\s\S]*?)<\/TRACK>/g)) {
+		const t = attrs(m[1]);
+		const path = t.Location && decodedPath(t.Location);
+		if (!path || !t.TrackID) continue;
+		const grid: GridSection[] = [];
+		for (const tm of m[2].matchAll(/<TEMPO\s([^>]*)\/?>/g)) {
+			const a = attrs(tm[1]);
+			const start = Number(a.Inizio);
+			const bpm = Number(a.Bpm);
+			if (!Number.isFinite(start) || !(bpm > 0)) continue;
+			grid.push({ start, bpm, meter: a.Metro ?? '4/4', beat: Number(a.Battito ?? 1) });
+		}
+		const cues: Cue[] = [];
+		for (const pm of m[2].matchAll(/<POSITION_MARK\s([^>]*)\/?>/g)) {
+			const a = attrs(pm[1]);
+			const type = Number(a.Type);
+			if (type !== 0 && type !== 4) continue;
+			const cue: Cue = { start: Number(a.Start), num: Number(a.Num ?? -1), name: a.Name ?? '' };
+			if (type === 4 && a.End !== undefined) cue.end = Number(a.End);
+			if (a.Red !== undefined && a.Green !== undefined && a.Blue !== undefined) cue.rgb = [Number(a.Red), Number(a.Green), Number(a.Blue)];
+			cues.push(cue);
+		}
+		out.push({
+			trackId: t.TrackID,
+			path,
+			title: text(t.Name),
+			artist: text(t.Artist),
+			bpm: positive(t.AverageBpm),
+			key: text(t.Tonality),
+			grid,
+			cues,
+			rating: positive(t.Rating),
+			playCount: positive(t.PlayCount),
+			dateAdded: text(t.DateAdded),
+		});
+	}
+	return out;
+}
