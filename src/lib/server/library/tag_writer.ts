@@ -55,6 +55,15 @@ export async function writeTags(
     const tagInput: Record<string, unknown> = { ...write.custom };
     if (write.comment !== undefined) tagInput.comment = write.comment;
     if (write.bpm !== undefined) tagInput.bpm = write.bpm;
+    if (write.names) {
+      const n = write.names;
+      tagInput.title = n.title;
+      tagInput.artist = n.artist;
+      if (n.album) tagInput.album = n.album;
+      if (n.albumArtist) tagInput.albumArtist = n.albumArtist;
+      if (n.year) tagInput.year = n.year;
+      if (n.trackNumber) tagInput.track = n.trackNumber;
+    }
 
     // Copy first, and tag the copy. `applyTags` rewrites the file it is handed
     // as well as returning the tagged bytes, so handing it `sourcePath` edits

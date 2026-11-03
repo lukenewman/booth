@@ -14,7 +14,7 @@ import { toTagWrite, type BoothTrackFacts } from './tag_schema';
  */
 
 /** Containers the tag writer can actually write. Anything else is reported, not guessed at. */
-const WRITABLE = new Set(['.mp3', '.m4a', '.flac', '.aiff', '.aif']);
+export const WRITABLE = new Set(['.mp3', '.m4a', '.flac', '.aiff', '.aif']);
 
 export type EntryStatus =
   /** Ready to copy, tag and verify. */
@@ -208,6 +208,7 @@ function loadDiscogsIds(db: Database): Map<string, string> {
 export function fieldsFor(facts: BoothTrackFacts): string[] {
   const w = toTagWrite(facts);
   return [
+    ...(w.names ? ['names'] : []),
     ...Object.keys(w.custom),
     ...(w.comment !== undefined ? ['comment'] : []),
     ...(w.bpm !== undefined ? ['bpm'] : []),

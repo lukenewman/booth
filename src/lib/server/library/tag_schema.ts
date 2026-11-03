@@ -36,7 +36,19 @@ export const BOOTH_KEYS = {
  */
 export const POPM_STAR_VALUES = [0, 1, 64, 128, 196, 255] as const;
 
+/** The names Booth shows, written into a taken-over copy's standard tags so the copy says what Booth says. */
+export interface TrackNames {
+  title: string;
+  artist: string;
+  album?: string;
+  albumArtist?: string;
+  year?: number;
+  trackNumber?: number;
+}
+
 export interface BoothTrackFacts {
+  /** Standard name tags. Absent: the file's own names are left as they are. */
+  names?: TrackNames;
   /** Effective acquisition date — recovered where the overlay supplied one. */
   dateAdded?: string;
   /** What Music.app reported, kept so a grafted date stays distinguishable. */
@@ -57,6 +69,7 @@ export interface BoothTrackFacts {
 }
 
 export interface TagWrite {
+  names?: TrackNames;
   comment?: string;
   bpm?: number;
   /** 0..5; undefined means "write no rating", which is not the same as zero stars. */
@@ -82,6 +95,7 @@ export function toTagWrite(facts: BoothTrackFacts): TagWrite {
   if (facts.vetted) put(BOOTH_KEYS.vetted, '1');
 
   const write: TagWrite = { custom };
+  if (facts.names) write.names = facts.names;
   if (facts.note) write.comment = facts.note;
   if (facts.bpm !== undefined) write.bpm = facts.bpm;
   if (facts.starred) write.ratingStars = 5;

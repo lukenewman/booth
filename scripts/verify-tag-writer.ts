@@ -83,6 +83,17 @@ for (const [label, codec, ext] of [['mp3', 'libmp3lame', 'mp3'], ['m4a', 'aac', 
   check(`${label}: existing tags are preserved`, back.title, 'Original Title');
 }
 
+// Takeover writes the names Booth shows into the copy's standard tags.
+const NAMES = { title: 'Booth Title', artist: 'Booth Artist', album: 'Booth Album', albumArtist: 'Booth Album Artist', year: 1997, trackNumber: 4 };
+for (const [label, codec, ext] of [['mp3', 'libmp3lame', 'mp3'], ['m4a', 'aac', 'm4a']] as const) {
+  const src = await tone(`n.${ext}`, codec);
+  const dest = join(tmp, `nd.${ext}`);
+  await writeTags(src, { names: NAMES }, dest);
+  const back = await readTags(dest);
+  check(`${label}: names round-trip`, [back.title, back.artist, back.album, back.albumArtist, back.year, back.trackNumber], Object.values(NAMES));
+  check(`${label}: source keeps its own names`, (await readTags(src)).title, 'Original Title');
+}
+
 // The standard rating is the rekordbox-visible carrier, and only MP3 gets it.
 const mp3Rating = (await readTags(join(tmp, 'd.mp3'))).rating;
 check('mp3: a star writes full marks to the standard rating', mp3Rating, 100);
