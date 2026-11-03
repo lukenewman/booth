@@ -27,7 +27,7 @@ export function libraryRoots(db: Database): string[] {
 
 /**
  * The places copies are kept under, most specific first: Booth's own folders,
- * Music.app's media folder, then folder sources in the order they were added
+ * Music.app's media folder (as "Apple Music"), then folder sources in the order they were added
  * (so adding a folder never renames an earlier one's copies).
  */
 export function backupPlaces(db: Database): Place[] {

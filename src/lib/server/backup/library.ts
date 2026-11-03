@@ -58,8 +58,8 @@ export interface Destination { id: string; path: string; sameDisk: boolean; onli
 /** A folder the music lives in and the name its copies are kept under; `match` finds the folder from a file's path. */
 export type Place = { name: string; path: string } | { name: string; match: RegExp };
 
-/** Music.app's own media folder: …/Media(.localized)/Music. */
-export const MUSIC_APP_PLACE: Place = { name: 'Music.app', match: /^(.*\/Media(?:\.localized)?\/Music)\// };
+/** Music.app's own media folder: …/Media(.localized)/Music. Not named "Music.app": Finder would show that folder as an app. */
+export const MUSIC_APP_PLACE: Place = { name: 'Apple Music', match: /^(.*\/Media(?:\.localized)?\/Music)\// };
 
 /** Where a library file's copy goes, relative to `files`. */
 export function copyPathFor(path: string, places: Place[]): string {
@@ -72,6 +72,8 @@ export function copyPathFor(path: string, places: Place[]): string {
   return join('Other', path.replace(/^\/+/, ''));
 }
 
+const PACKAGE_EXT = /\.(app|bundle|framework|plugin|kext|pkg|mpkg|photoslibrary|musiclibrary|tvlibrary|logicx|band|rtfd|scptd|component|vst3?|aaxplugin)$/i;
+
 /**
  * Names for folder places, unique and stable as long as the list's order is:
  * a folder's own name, or "<name> 2", "<name> 3"… when an earlier place has it.
@@ -79,7 +81,8 @@ export function copyPathFor(path: string, places: Place[]): string {
 export function namePlaces(folders: { path: string; name?: string }[], taken: string[] = []): Place[] {
   const used = new Set(taken.map((t) => t.toLowerCase()));
   return folders.map((f) => {
-    const base = (f.name ?? f.path.split(sep).filter(Boolean).pop() ?? 'Folder').replace(/^\.+/, '') || 'Folder';
+    // No leading dot (hidden) and no package extension (Finder shows those as apps or documents, not folders).
+    const base = (f.name ?? f.path.split(sep).filter(Boolean).pop() ?? 'Folder').replace(/^\.+/, '').replace(PACKAGE_EXT, '') || 'Folder';
     let name = base;
     for (let i = 2; used.has(name.toLowerCase()); i++) name = `${base} ${i}`;
     used.add(name.toLowerCase());

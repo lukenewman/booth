@@ -24,7 +24,7 @@ import { collate } from '../src/lib/server/library/collate';
 import type { FileListDeps } from '../src/lib/server/library/fileList';
 import { buildLocalResult } from '../src/lib/server/sources/local/localResult';
 import { releaseIdForTags } from '../src/lib/server/sources/local/sync';
-import { addDestination, backupStatus, copyPathFor, listDestinations, namePlaces, removeDestination, runLibraryBackup, type BackupDeps, type Place } from '../src/lib/server/backup/library';
+import { addDestination, backupStatus, copyPathFor, listDestinations, MUSIC_APP_PLACE, namePlaces, removeDestination, runLibraryBackup, type BackupDeps, type Place } from '../src/lib/server/backup/library';
 
 function fail(msg: string): never { console.error(`FAIL: ${msg}`); process.exit(1); }
 function assert(cond: unknown, msg: string): asserts cond { if (!cond) fail(msg); }
@@ -253,7 +253,9 @@ const copyOf = (n: string, at = dest) => join(at, 'Booth Backup', 'files', 'Musi
 
 // --- layout: short place names, and copies moved rather than re-copied ---------
 {
-  assert(copyPathFor('/Users/x/Music/Music/Media.localized/Music/Artist/Album/01.mp3', [{ name: 'Music.app', match: /^(.*\/Media(?:\.localized)?\/Music)\// }]) === 'Music.app/Artist/Album/01.mp3', 'Music.app media folder');
+  assert(copyPathFor('/Users/x/Music/Music/Media.localized/Music/Artist/Album/01.mp3', [MUSIC_APP_PLACE]) === 'Apple Music/Artist/Album/01.mp3', 'Music.app media folder, under a name Finder shows as a folder');
+  const bundles = namePlaces([{ path: '/a/Mixes.app' }, { path: '/b/Old.photoslibrary' }]);
+  assert(bundles.map((x) => x.name).join('|') === 'Mixes|Old', `no place name looks like an app or package to Finder, got ${JSON.stringify(bundles)}`);
   assert(copyPathFor('/elsewhere/a.mp3', places) === 'Other/elsewhere/a.mp3', 'a file outside every place keeps its whole path');
   const named = namePlaces([{ path: '/a/Downloads' }, { path: '/b/Downloads/' }], ['Booth']);
   assert(named.map((x) => x.name).join('|') === 'Downloads|Downloads 2', `names are unique, got ${JSON.stringify(named)}`);
