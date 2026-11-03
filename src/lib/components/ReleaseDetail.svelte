@@ -1,4 +1,5 @@
 <script lang="ts">
+  import TakeoverControl from './TakeoverControl.svelte';
   import StylePill from './StylePill.svelte';
   import TagEditor from './TagEditor.svelte';
   import { display } from '$lib/genres';
@@ -287,6 +288,7 @@
       <SourceGrid present={sources.map((src) => src.source)} />
     </div>
     <div class="artist">{release.artist}{release.year ? ` · ${release.year}` : ''}</div>
+    <TakeoverControl releaseId={release.id} />
     {#if release.label || release.catno || release.country || release.format}
       <div class="release-meta">
         {[

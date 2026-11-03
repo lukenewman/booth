@@ -2,13 +2,13 @@
   import { onMount } from 'svelte';
   import { toast } from '$lib/stores/toast.svelte';
 
-  type Kind = 'missing' | 'duplicate' | 'unsupported';
+  type Kind = 'missing' | 'duplicate' | 'unsupported' | 'takeover';
   interface FFile {
     fileId: string; path: string; present: boolean;
     track: { id: string; title: string; artist: string; album: string | null } | null;
     starred: boolean; note: string | null; playlists: string[]; alsoIn: string[];
   }
-  interface Finding { id: string; kind: Kind; raisedAt: string; files: FFile[] }
+  interface Finding { id: string; kind: Kind; raisedAt: string; files: FFile[]; detail: string | null }
 
   let { onChanged }: { onChanged?: () => void } = $props();
 
@@ -23,6 +23,7 @@
     { kind: 'missing', title: 'Missing files', detail: 'Music.app lists these, but the file isn’t on disk. Putting the file back, or fixing it in Music.app, clears it.', bulk: 'Leave all as they are' },
     { kind: 'duplicate', title: 'Duplicates', detail: 'The same audio in more than one file. Same recording on an album and a compilation can be fine.', bulk: 'Keep all copies' },
     { kind: 'unsupported', title: 'Unsupported files', detail: 'Booth can’t read these files’ tags. They stay listed in their source.', bulk: 'Acknowledge all' },
+    { kind: 'takeover', title: 'Couldn’t take over', detail: 'Booth left these releases exactly as they were. Taking one over again after fixing the reason clears it.', bulk: 'Acknowledge all' },
   ];
   const groups = $derived(KINDS.map((k) => ({ ...k, items: findings.filter((f) => f.kind === k.kind) })).filter((g) => g.items.length));
 
@@ -87,6 +88,7 @@
       <p class="detail">{g.detail}</p>
       {#each g.items as f (f.id)}
         <div class="finding" class:busy={busy === f.id}>
+          {#if f.detail}<div class="reason">{f.detail}</div>{/if}
           {#each f.files as file (file.fileId)}
             <div class="file">
               <div class="what">
@@ -133,6 +135,7 @@
   .attention { padding: 16px 20px; overflow-y: auto; height: 100%; }
   .empty { color: var(--text-subtle); padding: 40px 0; text-align: center; }
   .group { margin-bottom: 28px; }
+  .reason { color: var(--warn, #d69a2c); font-size: 12px; margin-bottom: 4px; }
   header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   h2 { font-size: 14px; font-weight: 600; margin: 0; }
   .n { color: var(--text-subtle); font-weight: 400; margin-left: 4px; }

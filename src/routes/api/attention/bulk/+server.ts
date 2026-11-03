@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { settleAllOfKind, type FindingKind } from '$lib/server/library/findings';
 
-const KINDS: FindingKind[] = ['missing', 'duplicate', 'unsupported'];
+const KINDS: FindingKind[] = ['missing', 'duplicate', 'unsupported', 'takeover'];
 
 export const POST: RequestHandler = async ({ request }) => {
   const { kind } = (await request.json()) as { kind: FindingKind };

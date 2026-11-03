@@ -3,6 +3,7 @@
   import RekordboxPanel from './RekordboxPanel.svelte';
   import FolderSourcesPanel from './FolderSourcesPanel.svelte';
   import BackupPanel from './BackupPanel.svelte';
+  import TakeoverPanel from './TakeoverPanel.svelte';
   /**
    * Right-pane surface shown when a Sources rail item is selected with no
    * entity highlighted. Lists recent sync_run rows for that source.
@@ -225,7 +226,7 @@
     <span class="caption">Sync history</span>
   </div>
 
-  {#if sourceId === 'local'}<BandcampPanel /><RekordboxPanel onConnected={() => void load()} /><FolderSourcesPanel onChanged={() => void load()} /><BackupPanel />{/if}
+  {#if sourceId === 'local'}<BandcampPanel /><RekordboxPanel onConnected={() => void load()} /><FolderSourcesPanel onChanged={() => void load()} /><BackupPanel /><TakeoverPanel />{/if}
 
   {#snippet runRow(run: SyncRun)}
     {@const stale = staleLabel(run)}
