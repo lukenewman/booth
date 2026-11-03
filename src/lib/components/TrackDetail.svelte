@@ -119,6 +119,11 @@
         <button class="tempo-clear" onclick={clearTap}>clear and re-tap</button>
       {/if}
     </div>
+  {:else}
+    <TapTempo
+      trackId={track.id}
+      onSaved={(value) => (override = { id: track.id, bpm: { value, provider: 'tapped' } })}
+    />
   {/if}
   {#if rekordbox}
     <div class="rekordbox-line">
@@ -127,11 +132,6 @@
       {#if rekordbox.grid}<span>beat grid</span>{/if}
       {#if rekordbox.cues}<span>{rekordbox.cues} cue{rekordbox.cues === 1 ? '' : 's'}</span>{/if}
     </div>
-  {:else}
-    <TapTempo
-      trackId={track.id}
-      onSaved={(value) => (override = { id: track.id, bpm: { value, provider: 'tapped' } })}
-    />
   {/if}
 
   {#if release}
