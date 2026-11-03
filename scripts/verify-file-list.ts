@@ -14,6 +14,7 @@ import { runMigrations } from '../src/lib/server/db/migrate';
 import { FfmpegMissingError } from '../src/lib/server/analysis/decode';
 import { fileByPath, scanFiles, type FileListDeps } from '../src/lib/server/library/fileList';
 import type { FileTags } from '../src/lib/server/library/tags';
+import { applyCatalogMoves, recordCatalogEntries } from '../src/lib/server/library/catalogs';
 
 function fail(msg: string): never {
   console.error(`FAIL: ${msg}`);
@@ -183,7 +184,48 @@ const want = (...names: string[]) => names.map((n) => ({ path: p(n), ownership: 
   assert(rows === 4, `no duplicate rows: ${rows}`);
 }
 
-// @@CATALOG@@
+// --- a catalog's own id recognises a file it moved -----------------
+{
+  const db = freshDb();
+  write('Old Album/01.mp3', 'AUDIO-CAT', 'Cat');
+  const refs1 = [{ catalogId: 'PID1', path: p('Old Album/01.mp3') }];
+  assert(applyCatalogMoves(db, 'music', refs1) === 0, 'nothing to move on first sight');
+  const s1 = await scanFiles(db, want('Old Album/01.mp3'), deps);
+  recordCatalogEntries(db, 'music', refs1, s1.files);
+  const before = s1.files.get(p('Old Album/01.mp3'))!;
+
+  // Music.app renames the folder after a retag; same Persistent ID.
+  mkdirSync(p('New Album'), { recursive: true });
+  renameSync(p('Old Album/01.mp3'), p('New Album/01.mp3'));
+  const refs2 = [{ catalogId: 'PID1', path: p('New Album/01.mp3') }];
+  assert(applyCatalogMoves(db, 'music', refs2) === 1, 'the catalog id carries the file across');
+  reset();
+  const s2 = await scanFiles(db, want('New Album/01.mp3'), deps);
+  recordCatalogEntries(db, 'music', refs2, s2.files);
+  assert(s2.files.get(p('New Album/01.mp3'))!.id === before.id, 'same file id at the new location');
+  assert(calls.readTags === 0, 'a rename keeps size and mtime, so nothing is re-read');
+
+  const entry = db.prepare(`SELECT file_id, location FROM catalog_entry WHERE catalog='music' AND catalog_id='PID1'`).get() as { file_id: string; location: string };
+  assert(entry.file_id === before.id && entry.location === p('New Album/01.mp3'), `listing updated: ${JSON.stringify(entry)}`);
+
+  // A listing that disappears from the catalog is dropped from catalog_entry.
+  recordCatalogEntries(db, 'music', [], new Map());
+  const left = (db.prepare(`SELECT COUNT(*) AS n FROM catalog_entry`).get() as { n: number }).n;
+  assert(left === 0, 'de-listed entries are removed');
+  assert(fileByPath(db, p('New Album/01.mp3')), 'the file row itself stays');
+}
+
+// --- a catalog move never lands on a path another file holds --------
+{
+  const db = freshDb();
+  write('x/1.mp3', 'AUDIO-X1', 'X1');
+  write('x/2.mp3', 'AUDIO-X2', 'X2');
+  const s = await scanFiles(db, want('x/1.mp3', 'x/2.mp3'), deps);
+  recordCatalogEntries(db, 'music', [{ catalogId: 'P1', path: p('x/1.mp3') }, { catalogId: 'P2', path: p('x/2.mp3') }], s.files);
+  // The catalog now claims P1 lives where P2 is.
+  assert(applyCatalogMoves(db, 'music', [{ catalogId: 'P1', path: p('x/2.mp3') }]) === 0, 'refused: path already has a file');
+  assert(fileByPath(db, p('x/1.mp3')), 'the first file is left alone');
+}
 
 rmSync(root, { recursive: true, force: true });
 console.log('PASS: file list');
