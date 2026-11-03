@@ -132,6 +132,18 @@ export function knownPathsByNfc(db: Database): Map<string, string> {
   return out;
 }
 
+/**
+ * Booth's copies, keyed by the original each replaced (takeover). An original
+ * with a copy is superseded: the copy is its track's file from then on.
+ */
+export function copiesByOriginal(db: Database): Map<string, { id: string; path: string }> {
+  const out = new Map<string, { id: string; path: string }>();
+  for (const r of db.prepare(`SELECT id, path, copy_of FROM audio_file WHERE copy_of IS NOT NULL AND excluded = 0`).all() as { id: string; path: string; copy_of: string }[]) {
+    out.set(r.copy_of, { id: r.id, path: r.path });
+  }
+  return out;
+}
+
 export function fileByPath(db: Database, path: string): FileRow | null {
   const r = db.prepare(`SELECT * FROM audio_file WHERE path = ?`).get(path) as DbRow | null;
   return r ? toFileRow(r) : null;

@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite';
 import { applyCatalogMoves, recordCatalogEntries, type CatalogRef } from '../../library/catalogs';
-import { trackedFilesUnder, knownPathsByNfc, scanFiles, type FileListDeps, type FileRow, type FileScanSummary } from '../../library/fileList';
+import { copiesByOriginal, trackedFilesUnder, knownPathsByNfc, scanFiles, type FileListDeps, type FileRow, type FileScanSummary } from '../../library/fileList';
 import type { FileTags } from '../../library/tags';
 import type { SourceRelease, SourceTrack } from '../types';
 import { ingestedFromFiles } from './ingest';
@@ -92,9 +92,13 @@ export async function buildLocalResult(
   let catalogMoves = 0;
   for (const c of catalogs) catalogMoves += applyCatalogMoves(db, c.id, refsOf(c));
 
+  // Booth's copies are always asked about, so a copy that went missing is
+  // seen as missing rather than quietly not listed by the folder walk.
+  const copies = copiesByOriginal(db);
   const wanted = [
     ...catalogs.flatMap((c) => c.tracks.map((t) => ({ path: t.path, ownership: 'in_place' as const }))),
     ...boothFiles.map((path) => ({ path, ownership: 'booth' as const })),
+    ...[...copies.values()].map((c) => ({ path: c.path, ownership: 'booth' as const })),
     ...folders.filter((f) => f.online).flatMap((f) => f.files.map((path) => ({ path, ownership: 'in_place' as const }))),
   ];
   const { files, summary } = await scanFiles(db, wanted, deps);
@@ -105,11 +109,16 @@ export async function buildLocalResult(
   const tracks: SourceTrack[] = [];
   const releases = new Map<string, SourceRelease>();
   const emitted = new Set<string>();
+  /** The file a track should point at: the original, or Booth's copy once it was taken over. */
+  const standIn = (f: FileRow | undefined): FileRow | undefined => {
+    const c = f && copies.get(f.id);
+    return (c && files.get(c.path)) || f;
+  };
 
   for (const c of catalogs) {
     for (const r of c.releases) if (!releases.has(r.externalId)) releases.set(r.externalId, r);
     for (const ct of c.tracks) {
-      const file = files.get(ct.path);
+      const file = standIn(files.get(ct.path));
       if (!file || file.excluded || emitted.has(file.id)) continue;
       emitted.add(file.id);
       tracks.push({ ...ct.track, externalId: file.id, durableId: true, filePath: file.path });
@@ -118,7 +127,8 @@ export async function buildLocalResult(
 
   const unlisted = (rows: (FileRow | undefined)[]) => {
     const out: FileRow[] = [];
-    for (const f of rows) {
+    for (const row of rows) {
+      const f = standIn(row);
       if (!f || f.excluded || emitted.has(f.id)) continue;
       emitted.add(f.id);
       out.push(f);
