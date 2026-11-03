@@ -4,6 +4,7 @@
    * Adding one starts a sync; removing one first says which tracks go with it.
    */
   import { onMount } from 'svelte';
+  import { chooseFolder } from '$lib/pickFolder';
 
   interface Folder { id: string; path: string; files: number | null; online: boolean | null }
   interface Impact { tracks: number; starred: number; withNotes: number; inPlaylists: number }
@@ -13,6 +14,7 @@
   let folders = $state<Folder[]>([]);
   let path = $state('');
   let busy = $state(false);
+  let typing = $state(false);
   let problem = $state<string | null>(null);
   let removing = $state<{ id: string; impact: Impact } | null>(null);
 
@@ -20,14 +22,24 @@
     folders = (await fetch('/api/folders').then((r) => r.json()).catch(() => ({ folders }))).folders;
   }
 
-  async function add() {
+  async function pick() {
+    busy = true;
+    problem = null;
+    const r = await chooseFolder('Choose a folder of music for Booth to read', '~/Music');
+    busy = false;
+    if (r.error) { problem = r.error; typing = true; return; }
+    if (r.path) await add(r.path);
+  }
+
+  async function add(given = path.trim()) {
     busy = true;
     problem = null;
     try {
-      const res = await fetch('/api/folders', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path: path.trim() }) });
+      const res = await fetch('/api/folders', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path: given }) });
       const body = await res.json();
       if (!res.ok) { problem = body.error ?? 'Something went wrong.'; return; }
       path = '';
+      typing = false;
       await load();
       setTimeout(async () => { await load(); onChanged?.(); }, 5000);
     } finally {
@@ -79,11 +91,19 @@
   {#if !folders.length}
     <p>Point Booth at a folder of music, like a downloads folder or a drive. It reads the files where they are and never changes them.</p>
   {/if}
-  <form onsubmit={(e) => { e.preventDefault(); if (path.trim()) void add(); }}>
-    <label class="visually-hidden" for="folder-path">Folder path</label>
-    <input id="folder-path" bind:value={path} placeholder="~/Music/Downloads" spellcheck="false" autocomplete="off" disabled={busy} />
-    <button class="button secondary" type="submit" disabled={!path.trim() || busy}>Add folder</button>
-  </form>
+  {#if typing}
+    <form onsubmit={(e) => { e.preventDefault(); if (path.trim()) void add(); }}>
+      <label class="visually-hidden" for="folder-path">Folder path</label>
+      <input id="folder-path" bind:value={path} placeholder="~/Music/Downloads" spellcheck="false" autocomplete="off" disabled={busy} />
+      <button class="button secondary" type="submit" disabled={!path.trim() || busy}>Add folder</button>
+      <button class="inline-link" type="button" onclick={() => (typing = false)}>use the chooser</button>
+    </form>
+  {:else}
+    <div class="row">
+      <button class="button secondary" disabled={busy} onclick={pick}>{busy ? 'Choosing…' : 'Add folder…'}</button>
+      <button class="inline-link" type="button" onclick={() => (typing = true)}>type a path</button>
+    </div>
+  {/if}
   {#if problem}<p class="problem">{problem}</p>{/if}
 </section>
 
@@ -97,6 +117,8 @@
   .confirm { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: var(--text-muted); font-size: 12px; }
   .link { background: none; border: 0; padding: 0; color: var(--text-subtle); cursor: pointer; font: inherit; font-size: 12px; margin-left: auto; }
   .link:hover { color: var(--text); }
+  .row { display: flex; gap: 12px; align-items: center; }
+  .inline-link { background: none; border: 0; padding: 0; color: var(--text-subtle); cursor: pointer; font: inherit; font-size: 12px; text-decoration: underline; }
   p { margin: 0 0 8px; line-height: 1.5; color: var(--text-muted); }
   .problem { color: var(--danger); margin-top: 8px; }
   form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }

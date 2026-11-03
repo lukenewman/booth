@@ -79,9 +79,13 @@ export function setDestination(db: Database, path: string, opts: { libraryRoots:
   try {
     dest = realpathSync(path);
     if (!statSync(dest).isDirectory()) throw new Error();
+  } catch {
+    throw new BackupError('There’s no folder at that path. Create it first, or choose one.');
+  }
+  try {
     accessSync(dest, constants.W_OK);
   } catch {
-    throw new BackupError('That folder doesn’t exist, or Booth can’t write to it.');
+    throw new BackupError('Booth can’t write to that folder.');
   }
   if (opts.libraryRoots.map(real).some((r) => inside(dest, r))) {
     throw new BackupError('That folder is inside your music library. Pick one outside it, ideally on another drive.');

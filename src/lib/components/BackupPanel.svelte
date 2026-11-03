@@ -5,20 +5,31 @@
    */
   import { onMount } from 'svelte';
   import { backup, formatBytes } from '$lib/stores/backup.svelte';
+  import { chooseFolder } from '$lib/pickFolder';
 
   let path = $state('');
   let busy = $state(false);
   let problem = $state<string | null>(null);
   let changing = $state(false);
+  let typing = $state(false);
 
   const s = $derived(backup.status);
   const n = (x: number) => x.toLocaleString();
 
-  async function choose() {
+  async function choose(given = path.trim()) {
     busy = true;
-    problem = await backup.setDestination(path.trim());
+    problem = await backup.setDestination(given);
     busy = false;
-    if (!problem) { changing = false; path = ''; }
+    if (!problem) { changing = false; typing = false; path = ''; }
+  }
+
+  async function pick() {
+    busy = true;
+    problem = null;
+    const r = await chooseFolder('Choose where Booth should keep its backup', '/Volumes');
+    busy = false;
+    if (r.error) { problem = r.error; typing = true; return; }
+    if (r.path) await choose(r.path);
   }
 
   function when(iso: string): string {
@@ -61,12 +72,21 @@
     {/if}
   {:else if s}
     <p>Pick a folder on another drive (an external disk, a NAS, or a folder your cloud storage syncs). Booth copies your music and its database there, checks each copy, and keeps track of what isn’t backed up yet. It adds and updates copies and never removes your music from that folder; it keeps the newest 10 database snapshots.</p>
-    <form onsubmit={(e) => { e.preventDefault(); if (path.trim()) void choose(); }}>
-      <label class="visually-hidden" for="backup-path">Backup folder</label>
-      <input id="backup-path" bind:value={path} placeholder="/Volumes/Backup" spellcheck="false" autocomplete="off" disabled={busy} />
-      <button class="button secondary" type="submit" disabled={!path.trim() || busy}>Use this folder</button>
-      {#if changing}<button class="link" type="button" onclick={() => (changing = false)}>cancel</button>{/if}
-    </form>
+    {#if typing}
+      <form onsubmit={(e) => { e.preventDefault(); if (path.trim()) void choose(); }}>
+        <label class="visually-hidden" for="backup-path">Backup folder</label>
+        <input id="backup-path" bind:value={path} placeholder="/Volumes/Backup" spellcheck="false" autocomplete="off" disabled={busy} />
+        <button class="button secondary" type="submit" disabled={!path.trim() || busy}>Use this folder</button>
+        <button class="link" type="button" onclick={() => (typing = false)}>use the chooser</button>
+        {#if changing}<button class="link" type="button" onclick={() => (changing = false)}>cancel</button>{/if}
+      </form>
+    {:else}
+      <div class="row">
+        <button class="button secondary" disabled={busy} onclick={pick}>{busy ? 'Choosing…' : 'Choose folder…'}</button>
+        <button class="link" type="button" onclick={() => (typing = true)}>type a path</button>
+        {#if changing}<button class="link" type="button" onclick={() => (changing = false)}>cancel</button>{/if}
+      </div>
+    {/if}
     {#if problem}<p class="problem">{problem}</p>{/if}
   {/if}
 </section>
