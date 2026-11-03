@@ -46,11 +46,12 @@ export function createExplorerController() {
     starredTracks: 0,
     unvettedReleases: 0,
     untaggedReleases: 0,
+    attention: 0,
   });
   let syncing = $state<string | null>(null); // source id being synced
 
   async function loadSourcesAndCounts() {
-    const [srcRes, allRel, allTrk, allArt, starTrk, unvetRel, untagRel] = await Promise.all([
+    const [srcRes, allRel, allTrk, allArt, starTrk, unvetRel, untagRel, att] = await Promise.all([
       fetch('/api/sources').then((r) => r.json()),
       fetch('/api/library/releases?limit=1').then((r) => r.json()),
       fetch('/api/library/tracks?limit=1').then((r) => r.json()),
@@ -58,6 +59,7 @@ export function createExplorerController() {
       fetch('/api/library/tracks?starred=1&limit=1').then((r) => r.json()),
       fetch('/api/library/releases?vetted=0&limit=1').then((r) => r.json()),
       fetch('/api/library/releases?untagged=1&limit=1').then((r) => r.json()),
+      fetch('/api/attention?count=1').then((r) => r.json()),
     ]);
     sources = srcRes;
     counts = {
@@ -67,6 +69,7 @@ export function createExplorerController() {
       starredTracks: starTrk.total ?? 0,
       unvettedReleases: unvetRel.total ?? 0,
       untaggedReleases: untagRel.total ?? 0,
+      attention: att.open ?? 0,
     };
   }
 
@@ -104,6 +107,8 @@ export function createExplorerController() {
     // Playlist view owns its own data (PlaylistView reads playlists.openPlaylist);
     // never fire library fetches for the playlist section.
     if (explorerState.nav.section === 'playlist') return;
+    // So does the needs-attention view.
+    if (isAttentionView) return;
     const gen = reset ? ++loadGen : loadGen;
     listLoading = true;
     const offset = reset ? 0 : listItems.length;
@@ -377,6 +382,7 @@ export function createExplorerController() {
   );
   const isSourcesView = $derived(explorerState.nav.section === 'sources');
   const isPlaylistView = $derived(explorerState.nav.section === 'playlist');
+  const isAttentionView = $derived(explorerState.nav.section === 'library' && explorerState.nav.item === 'attention');
 
   /**
    * The filters the library queue is built from. These MUST mirror exactly what
@@ -992,6 +998,7 @@ export function createExplorerController() {
     get isAddView() { return isAddView; },
     get isSourcesView() { return isSourcesView; },
     get isPlaylistView() { return isPlaylistView; },
+    get isAttentionView() { return isAttentionView; },
     get libraryQuery() { return libraryQuery; },
     get drilledMaster() { return drilledMaster; },
     get addItems() { return addItems; },
@@ -1018,6 +1025,7 @@ export function createExplorerController() {
     handleUndo,
     handleSync,
     reloadAfterSync,
+    reloadCounts: loadSourcesAndCounts,
     vetAndAdvance,
     tagAndAdvance,
     tagPlaylistRelease,

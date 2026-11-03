@@ -19,6 +19,7 @@
     starredTracks: number;
     unvettedReleases: number;
     untaggedReleases?: number;
+    attention?: number;
   }
 
   let {
@@ -180,6 +181,18 @@
       <span>Untagged</span>
       <span class="count">{(counts.untaggedReleases ?? 0).toLocaleString()}</span>
     </button>
+    <!-- Problems the syncs found that need a person: missing files,
+         duplicates, unreadable files. Hidden while there are none. -->
+    {#if (counts.attention ?? 0) > 0 || isActive('library', 'attention')}
+      <button
+        class="item"
+        class:active={isActive('library', 'attention')}
+        onclick={() => onSelect?.({ section: 'library', item: 'attention' })}
+      >
+        <span>Needs attention</span>
+        <span class="count attention">{(counts.attention ?? 0).toLocaleString()}</span>
+      </button>
+    {/if}
   </div>
 
   <div class="section">
@@ -321,6 +334,7 @@
   .dot.discogs   { background: var(--src-discogs); }
   .dot.local    { background: var(--src-local); }
   .dot.dim { opacity: 0.35; }
+  .item .count.attention { color: var(--accent); }
 
   .item.drop-target {
     background: var(--accent-bg);

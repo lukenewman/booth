@@ -42,6 +42,7 @@
         failed: { path: string; error: string }[];
         tracked: number;
       };
+      findings?: { new: number; cleared: number; open: number };
     } | null;
     error: string | null;
   }
@@ -202,6 +203,16 @@
     if (parts.length === 0) return null;
     return { text: parts.join(' · '), warn: false };
   }
+
+  /** What this run added to (or took off) the Needs attention list. Silent when nothing changed. */
+  function findingsLabel(run: SyncRun): { text: string; warn: boolean } | null {
+    const f = run.summary?.findings;
+    if (!f || run.error || (f.new === 0 && f.cleared === 0)) return null;
+    const parts: string[] = [];
+    if (f.new) parts.push(`${f.new} new to review`);
+    if (f.cleared) parts.push(`${f.cleared} resolved ${f.cleared === 1 ? 'itself' : 'themselves'}`);
+    return { text: parts.join(' · '), warn: f.new > 0 };
+  }
 </script>
 
 <div class="history">
@@ -217,6 +228,7 @@
     {@const stale = staleLabel(run)}
     {@const analysis = analysisLabel(run)}
     {@const ingest = ingestLabel(run)}
+    {@const findings = findingsLabel(run)}
     {@const details = detailLines(run)}
     <div
       class="row"
@@ -245,6 +257,9 @@
           class:muted={!ingest.warn}
           title={ingest.warn ? run.summary?.ingest?.failed.map((f) => `${f.path}: ${f.error}`).join('\n') : undefined}
         >{ingest.text}</span>
+      {/if}
+      {#if findings}
+        <span class="warn" class:muted={!findings.warn} title="Library → Needs attention">{findings.text}</span>
       {/if}
       {#if details}
         <details class="details">

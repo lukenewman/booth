@@ -21,6 +21,7 @@
   import PlayerBar from './PlayerBar.svelte';
   import RecordSession from './RecordSession.svelte';
   import RunoutFilter from './RunoutFilter.svelte';
+  import AttentionView from './AttentionView.svelte';
 import RecordingPill from './RecordingPill.svelte';
   import MusicLibraryBanner from './MusicLibraryBanner.svelte';
   import { musicLibrary } from '$lib/stores/musicLibrary.svelte';
@@ -49,6 +50,7 @@ import RecordingPill from './RecordingPill.svelte';
   const isAddView = $derived(c.isAddView);
   const isSourcesView = $derived(c.isSourcesView);
   const isPlaylistView = $derived(c.isPlaylistView);
+  const isAttention = $derived(c.isAttentionView);
   // A gig always has a right pane: the crate, or a crate record's tracklist.
   const isGig = $derived(isPlaylistView && !!playlists.openPlaylist?.isGig);
 
@@ -124,7 +126,7 @@ import RecordingPill from './RecordingPill.svelte';
 <Player />
 
 <div class="shell">
-  <div class="explorer" class:no-detail={isPlaylistView && !plDetail && !isGig}>
+  <div class="explorer" class:no-detail={(isPlaylistView && !plDetail && !isGig) || isAttention}>
   <Rail
     nav={explorerState.nav}
     entity={currentEntity}
@@ -173,6 +175,8 @@ import RecordingPill from './RecordingPill.svelte';
         onReleaseSelect={(id) => openPlaylistEntity('release', id)}
         onDeleted={() => explorerState.setNav({ section: 'library', item: 'all' })}
       />
+    {:else if isAttention}
+      <AttentionView onChanged={() => c.reloadCounts()} />
     {:else}
     <ListviewToolbar
       bind:query={explorerState.q}
@@ -332,7 +336,7 @@ import RecordingPill from './RecordingPill.svelte';
         <CratePanel onOpenRelease={(id) => openPlaylistEntity('release', id)} />
       </section>
     {/if}
-  {:else}
+  {:else if !isAttention}
   <section class="right">
     {#if !explorerState.id && isSourcesView && selectedSource}
       <SyncRunHistory
