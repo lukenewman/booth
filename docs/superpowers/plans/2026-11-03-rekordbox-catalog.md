@@ -1,0 +1,23 @@
+# rekordbox as a Catalog Source Implementation Plan (step 3a)
+
+> Executed inline (superpowers:executing-plans) overnight on Luke's standing instruction to keep going on the migration project, trusting judgement and stopping only for calls that are his. Written compactly: the executor is the author.
+
+**Goal:** Read rekordbox's collection export (File → Export Collection in xml format) on every local sync and attach what it knows (tempo, key, beat grid, cues, rating, play count, date added) to the Booth tracks whose files it names. Show the connection and its matches in Sources → Local (BOO-82).
+
+**Spec:** `docs/superpowers/specs/2026-11-02-migration-and-sources-design.md`, sections 1 and 4, build step 3. Linear: BOO-82, BOO-102.
+
+## Decisions (mine, recorded for Luke)
+
+- **Facts only, no tracks.** rekordbox entries attach facts to files already in the file list (matched by path, Unicode-normalised on both sides: 59 of Booth's paths aren't NFC and rekordbox writes NFC). Entries with no Booth track are listed in the panel, not imported. The spec also calls for a missing-file finding per rekordbox location with no file; deferred, because adding rekordbox's locations to the file list's scan needs the NFC reconciliation and would raise 29 findings about rekordbox's own stale paths before there is any relocate tool to act on them.
+- **Stored as track facets under source `rekordbox`**, which the BPM resolver already ranks first (Luke's earlier decision: rekordbox numbers have been through a DJ's hands). Connecting therefore changes the shown BPM for most tracks; the panel says so.
+- **Not connected automatically.** Connecting writes a setting and changes thousands of BPMs in Luke's real library; that is his click. The panel offers the standard location (`~/Documents/rekordbox.xml`).
+- **Stars from rekordbox ratings: deferred** ("starred anywhere counts" needs a decision about un-starring; Luke's export has 1 rated track). **rekordbox playlists: deferred** (1 playlist).
+- **"Edited in Booth owns it": nothing to build yet** — Booth has no cue, grid or key editing. Tapped BPM stays last in the resolver as already designed.
+- **"Sources disagree" and "possibly the same record" findings** move to step 3b, measured on the real library first.
+
+## Tasks
+
+1. **Reader.** `readRekordboxCollection(xmlPath): RekordboxTrack[]` in the existing rekordbox XML reader: track id, decoded path (not normalised), title, artist, bpm, key (Tonality), grid (TEMPO: start, bpm, meter, beat), cues (existing cue parsing), rating, play count, date added. *Test* `scripts/verify-rekordbox-catalog.ts` with an inline fixture XML: entities, `file://localhost` paths with percent-encoding, a track with no TEMPO, a loop cue, a self-closing playlist TRACK ignored.
+2. **Import.** `importRekordbox(db, tracks): RekordboxImportSummary` in a new library module: NFC path index over the file list (not excluded) → track via its local link → upsert facets `bpm`, `key`, `grid`, `cues`, `rating`, `playCount`, `dateAdded` (only those present); remove `rekordbox` facets from tracks no longer matched; summary `{ path, entries, matched, withGrid, withCues, unmatched: {path,title,artist}[] (first 200), unmatchedCount }`. Called in the sync run after collate for the local source when `REKORDBOX_XML_PATH` is set; result stored as `summary.rekordbox`; a read failure is recorded there as `{ error }` and never fails the sync. *Tests:* matched by path, NFD/NFC mismatch matches, an unmatched entry is reported, re-import is idempotent (facet rows unchanged), an entry dropped from the export loses its facets, the resolver now reports provider `rekordbox`.
+3. **Setup endpoint and panel.** `GET/POST /api/setup/rekordbox`: GET returns the setting and the last summary; POST `{ path? }` checks the file (exists, readable, a rekordbox `DJ_PLAYLISTS` export) with `~/Documents/rekordbox.xml` as the default, saves `REKORDBOX_XML_PATH`, and starts a fresh local sync. `RekordboxPanel.svelte` under the Bandcamp panel in Sources → Local: not connected → what it brings + path field + Connect; connected → path, export date, matched / entries, grids, cues, unmatched list in a disclosure, and the note that cues set on a USB stick inside rekordbox never reach the export. Track detail shows a "rekordbox" line (key, grid, cue count) when the track has rekordbox facts. *Verify:* `bun check`; copy server + headless Chrome.
+4. **Probe and context.** `scripts/probe-rekordbox.ts` on a backup copy with `~/Documents/rekordbox.xml`: matched count, unmatched count, how many tracks' shown BPM changes, second import changes no facet rows, no track deleted. CONTEXT.md bullet.
