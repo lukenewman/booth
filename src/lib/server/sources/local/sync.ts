@@ -181,6 +181,7 @@ export async function syncITunesLibrary(): Promise<SyncResult> {
     releases: built.releases,
     input,
     files: built.files,
+    fileIds: built.fileIds,
     ingest: {
       ingested: ingest.ingested,
       waiting: ingest.waiting,

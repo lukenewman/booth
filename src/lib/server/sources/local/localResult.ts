@@ -16,7 +16,9 @@ import { ingestedFromFiles } from './ingest';
  * Booth's folder that no catalog lists is built from its tags.
  *
  * Catalog-listed files that are missing on disk are still emitted, as they
- * were before, so their tracks and everything attached to them stay.
+ * were before, so their tracks and everything attached to them stay. A file
+ * the user excluded from the needs-attention list is never emitted, so the
+ * prune removes its track.
  */
 
 export interface CatalogTrack {
@@ -38,6 +40,8 @@ export interface LocalResult {
   files: FileScanSummary;
   /** Tracks built from Booth's folder rather than a catalog. */
   boothTracked: number;
+  /** Every file this sync asked about, excluded ones included (findings filter them). */
+  fileIds: string[];
 }
 
 export async function buildLocalResult(
@@ -66,7 +70,7 @@ export async function buildLocalResult(
     for (const r of c.releases) if (!releases.has(r.externalId)) releases.set(r.externalId, r);
     for (const ct of c.tracks) {
       const file = files.get(ct.path);
-      if (!file || emitted.has(file.id)) continue;
+      if (!file || file.excluded || emitted.has(file.id)) continue;
       emitted.add(file.id);
       tracks.push({ ...ct.track, externalId: file.id, durableId: true, filePath: file.path });
     }
@@ -74,10 +78,16 @@ export async function buildLocalResult(
 
   const unlisted = input.boothFiles
     .map((path) => files.get(path))
-    .filter((f): f is NonNullable<typeof f> => !!f && !emitted.has(f.id));
+    .filter((f): f is NonNullable<typeof f> => !!f && !f.excluded && !emitted.has(f.id));
   const ingested = ingestedFromFiles(unlisted, input.groupIdFor);
   tracks.push(...ingested.tracks);
   for (const r of ingested.releases) if (!releases.has(r.externalId)) releases.set(r.externalId, r);
 
-  return { tracks, releases: [...releases.values()], files: summary, boothTracked: ingested.tracks.length };
+  return {
+    tracks,
+    releases: [...releases.values()],
+    files: summary,
+    boothTracked: ingested.tracks.length,
+    fileIds: [...new Set([...files.values()].map((f) => f.id))],
+  };
 }

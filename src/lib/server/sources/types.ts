@@ -72,6 +72,8 @@ export interface SyncResult {
   ingest?: IngestReport;
   /** What the file list did this run. Only the local source populates it. */
   files?: FileScanSummary;
+  /** Local source: the file-list ids this sync asked about, for findings. */
+  fileIds?: string[];
 }
 
 export interface MusicSource {

@@ -31,6 +31,8 @@ export interface FileRow {
   tags: FileTags | null;
   ownership: Ownership;
   present: boolean;
+  /** Taken out of the library from the needs-attention list. */
+  excluded: boolean;
 }
 
 export interface FileListDeps {
@@ -62,6 +64,7 @@ interface DbRow {
   tags: string | null;
   ownership: Ownership;
   present: number;
+  excluded: number;
 }
 
 interface Job {
@@ -92,6 +95,7 @@ function toFileRow(r: DbRow): FileRow {
     tags: r.tags ? (JSON.parse(r.tags) as FileTags) : null,
     ownership: r.ownership,
     present: r.present === 1,
+    excluded: r.excluded === 1,
   };
 }
 
