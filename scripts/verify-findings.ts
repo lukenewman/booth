@@ -165,4 +165,72 @@ const openOf = (kind: string) => findings().filter((f) => f.kind === kind && f.s
   refreshFindings(db, 'run-12', (await sync(five)).fileIds);
 }
 
+// --- Task 3: settling --------------------------------------------------------
+const { listOpenFindings, settleFinding, settleAllOfKind, openFindingCount } = await import('../src/lib/server/library/findings');
+const { createPlaylist, addTrack } = await import('../src/lib/server/library/playlists');
+const trackOfPath = (name: string) => (db.prepare(
+  `SELECT sl.entity_id AS id FROM source_link sl JOIN audio_file f ON f.id = sl.external_id
+    WHERE sl.source = 'local' AND sl.entity_kind = 'track' AND f.path = ?`,
+).get(p(name)) as { id: string } | null)?.id ?? null;
+{
+  const five: Listed[] = [
+    ...two,
+    { pid: 'P3', name: 'B/01 copy.mp3', pos: 3, title: 'One copy' },
+    { pid: 'P4', name: 'C/01 again.mp3', pos: 4, title: 'One again' },
+    { pid: 'P5', name: 'D/broken.mp3', pos: 5, title: 'Broken' },
+  ];
+
+  // The view names each file and what hangs off its track.
+  const original = trackOfPath('A/01.mp3')!;
+  const copy = trackOfPath('B/01 copy.mp3')!;
+  db.prepare(`UPDATE track SET starred_at = '2026-01-01', note = 'copy note' WHERE id = ?`).run(copy);
+  const pl = createPlaylist(db, 'Warmup');
+  addTrack(db, pl.id, copy);
+  const dup = listOpenFindings(db).find((f) => f.kind === 'duplicate')!;
+  const copyFile = dup.files.find((f) => f.path === p('B/01 copy.mp3'))!;
+  assert(copyFile.starred && copyFile.note === 'copy note' && copyFile.playlists.join() === 'Warmup', `view shows the copy's annotations, got ${JSON.stringify(copyFile)}`);
+
+  // Keep one: the others leave the library; their star, note and playlist entry move to the kept track.
+  const keep = dup.files.find((f) => f.path === p('A/01.mp3'))!.fileId;
+  const r = settleFinding(db, dup.id, { type: 'keep_one', fileId: keep });
+  assert(r.needsSync, 'keep one asks for a sync so the others leave');
+  await sync(five);
+  assert(!trackOfPath('B/01 copy.mp3') && !trackOfPath('C/01 again.mp3'), 'the other copies are no longer tracks');
+  const kept = db.prepare(`SELECT starred_at, note FROM track WHERE id = ?`).get(original) as { starred_at: string | null; note: string | null };
+  assert(kept.starred_at && kept.note === 'copy note', `star and note moved to the kept track, got ${JSON.stringify(kept)}`);
+  assert(db.prepare(`SELECT 1 FROM playlist_track WHERE playlist_id = ? AND track_id = ?`).get(pl.id, original), 'playlist entry moved to the kept track');
+  let s = refreshFindings(db, 'run-13', (await sync(five)).fileIds);
+  assert(s.new === 0 && listOpenFindings(db).every((f) => f.kind !== 'duplicate'), `no duplicate comes back, got ${JSON.stringify(listOpenFindings(db))}`);
+  assert(readFileSync(p('B/01 copy.mp3'), 'utf8').startsWith('AUDIO-1'), 'the file itself is untouched');
+  console.log('ok keep one');
+
+  // Forget a missing track: it and its playlist entries go; the decision holds.
+  renameSync(p('A/02.mp3'), p('gone-02.mp3'));
+  refreshFindings(db, 'run-14', (await sync(five)).fileIds);
+  const two2 = trackOfPath('A/02.mp3')!;
+  addTrack(db, pl.id, two2);
+  const missing = listOpenFindings(db).find((f) => f.kind === 'missing')!;
+  assert(missing.files[0].playlists.join() === 'Warmup', 'forget shows the playlists first');
+  settleFinding(db, missing.id, { type: 'forget' });
+  await sync(five);
+  assert(!trackOfPath('A/02.mp3'), 'forgotten track is gone');
+  assert(!db.prepare(`SELECT 1 FROM playlist_track WHERE playlist_id = ? AND snap_title = 'Two'`).get(pl.id), 'forget removed the playlist entry rather than leaving it for relink');
+  s = refreshFindings(db, 'run-15', (await sync(five)).fileIds);
+  assert(s.new === 0 && openFindingCount(db) === 1, `forgotten file raises nothing; only unsupported remains, got ${JSON.stringify(listOpenFindings(db))}`);
+  console.log('ok forget');
+
+  // Wrong action for the kind is refused.
+  const uns = listOpenFindings(db).find((f) => f.kind === 'unsupported')!;
+  let refused = false;
+  try { settleFinding(db, uns.id, { type: 'forget' }); } catch { refused = true; }
+  assert(refused, 'forget is not an action for an unsupported file');
+
+  // Bulk: the non-destructive action, and it says how many.
+  assert(settleAllOfKind(db, 'unsupported') === 1, 'bulk acknowledge settles one');
+  assert(openFindingCount(db) === 0, 'nothing open after bulk');
+  refreshFindings(db, 'run-16', (await sync(five)).fileIds);
+  assert(openFindingCount(db) === 0, 'acknowledged stays settled');
+  console.log('ok bulk, refusals');
+}
+
 console.log('PASS verify-findings');

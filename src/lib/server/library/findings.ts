@@ -90,3 +90,140 @@ export function refreshFindings(db: Database, runId: string | null, fileIds: str
   summary.open = (db.prepare(`SELECT COUNT(*) AS n FROM finding WHERE state = 'open'`).get() as { n: number }).n;
   return summary;
 }
+
+export class FindingError extends Error {}
+
+export type SettleAction =
+  | { type: 'keep_both' }
+  | { type: 'keep_one'; fileId: string }
+  | { type: 'leave' }
+  | { type: 'forget' }
+  | { type: 'acknowledge' };
+
+const ACTIONS: Record<FindingKind, SettleAction['type'][]> = {
+  duplicate: ['keep_both', 'keep_one'],
+  missing: ['leave', 'forget'],
+  unsupported: ['acknowledge'],
+};
+/** What "settle all like this" does per kind: never anything that removes a track. */
+const BULK: Record<FindingKind, SettleAction['type']> = { duplicate: 'keep_both', missing: 'leave', unsupported: 'acknowledge' };
+
+export interface FindingFile {
+  fileId: string;
+  path: string;
+  present: boolean;
+  track: { id: string; title: string; artist: string; album: string | null } | null;
+  starred: boolean;
+  note: string | null;
+  playlists: string[];
+}
+export interface FindingView { id: string; kind: FindingKind; raisedAt: string; files: FindingFile[] }
+
+function trackIdOf(db: Database, fileId: string): string | null {
+  const r = db.prepare(`SELECT entity_id FROM source_link WHERE source = 'local' AND entity_kind = 'track' AND external_id = ?`).get(fileId) as { entity_id: string } | null;
+  return r?.entity_id ?? null;
+}
+
+function fileView(db: Database, fileId: string): FindingFile | null {
+  const f = db.prepare(`SELECT id, path, present FROM audio_file WHERE id = ?`).get(fileId) as { id: string; path: string; present: number } | null;
+  if (!f) return null;
+  const tid = trackIdOf(db, fileId);
+  const t = tid
+    ? (db.prepare(
+        `SELECT track.id, track.title, artist.name AS artist, track.album, track.starred_at, track.note
+           FROM track JOIN artist ON artist.id = track.artist_id WHERE track.id = ?`,
+      ).get(tid) as { id: string; title: string; artist: string; album: string | null; starred_at: string | null; note: string | null } | null)
+    : null;
+  const playlists = t
+    ? (db.prepare(
+        `SELECT DISTINCT pl.name FROM playlist_track pt JOIN playlist pl ON pl.id = pt.playlist_id WHERE pt.track_id = ? ORDER BY pl.name`,
+      ).all(t.id) as { name: string }[]).map((r) => r.name)
+    : [];
+  return {
+    fileId: f.id,
+    path: f.path,
+    present: f.present === 1,
+    track: t ? { id: t.id, title: t.title, artist: t.artist, album: t.album } : null,
+    starred: !!t?.starred_at,
+    note: t?.note ?? null,
+    playlists,
+  };
+}
+
+export function listOpenFindings(db: Database): FindingView[] {
+  const rows = db
+    .prepare(`SELECT id, kind, raised_at, file_ids FROM finding WHERE state = 'open' ORDER BY kind, raised_at`)
+    .all() as { id: string; kind: FindingKind; raised_at: string; file_ids: string }[];
+  return rows.map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    raisedAt: r.raised_at,
+    files: (JSON.parse(r.file_ids) as string[]).map((id) => fileView(db, id)).filter((f): f is FindingFile => !!f),
+  }));
+}
+
+export function openFindingCount(db: Database): number {
+  return (db.prepare(`SELECT COUNT(*) AS n FROM finding WHERE state = 'open'`).get() as { n: number }).n;
+}
+
+/** Move what the user put on `from` onto `to`: starred anywhere counts, notes are kept side by side, playlist entries follow. */
+function moveAnnotations(db: Database, from: string, to: string): void {
+  const a = db.prepare(`SELECT starred_at, note FROM track WHERE id = ?`).get(from) as { starred_at: string | null; note: string | null } | null;
+  const b = db.prepare(`SELECT starred_at, note FROM track WHERE id = ?`).get(to) as { starred_at: string | null; note: string | null } | null;
+  if (!a || !b) return;
+  const note = !a.note ? b.note : !b.note || b.note === a.note ? a.note : `${b.note}\n\n${a.note}`;
+  db.prepare(`UPDATE track SET starred_at = COALESCE(starred_at, ?), note = ? WHERE id = ?`).run(a.starred_at, note, to);
+  // One entry per track per playlist: where the kept track is already there, the moved entry goes.
+  db.prepare(
+    `DELETE FROM playlist_track WHERE track_id = ? AND playlist_id IN (SELECT playlist_id FROM playlist_track WHERE track_id = ?)`,
+  ).run(from, to);
+  db.prepare(`UPDATE playlist_track SET track_id = ? WHERE track_id = ?`).run(to, from);
+}
+
+function settle(db: Database, id: string, resolution: string): void {
+  db.prepare(`UPDATE finding SET state = 'settled', resolution = ?, settled_at = ? WHERE id = ?`).run(resolution, now(), id);
+}
+
+export function settleFinding(db: Database, id: string, action: SettleAction): { needsSync: boolean } {
+  const f = db.prepare(`SELECT kind, state, file_ids FROM finding WHERE id = ?`).get(id) as { kind: FindingKind; state: FindingState; file_ids: string } | null;
+  if (!f) throw new FindingError(`no such finding: ${id}`);
+  if (f.state !== 'open') throw new FindingError('this finding is no longer open');
+  if (!ACTIONS[f.kind].includes(action.type)) throw new FindingError(`${action.type} doesn't apply to a ${f.kind} finding`);
+  const fileIds = JSON.parse(f.file_ids) as string[];
+  const exclude = db.prepare(`UPDATE audio_file SET excluded = 1 WHERE id = ?`);
+
+  let needsSync = false;
+  db.transaction(() => {
+    if (action.type === 'keep_one') {
+      if (!fileIds.includes(action.fileId)) throw new FindingError('that file is not part of this finding');
+      const keptTrack = trackIdOf(db, action.fileId);
+      for (const other of fileIds) {
+        if (other === action.fileId) continue;
+        const from = trackIdOf(db, other);
+        if (from && keptTrack && from !== keptTrack) moveAnnotations(db, from, keptTrack);
+        exclude.run(other);
+      }
+      settle(db, id, `keep_one:${action.fileId}`);
+      needsSync = true;
+    } else if (action.type === 'forget') {
+      const tid = trackIdOf(db, fileIds[0]);
+      // The user saw these entries before confirming; left in place, the
+      // relinker would re-attach them by name to some other track.
+      if (tid) db.prepare(`DELETE FROM playlist_track WHERE track_id = ?`).run(tid);
+      exclude.run(fileIds[0]);
+      settle(db, id, 'forget');
+      needsSync = true;
+    } else {
+      settle(db, id, action.type);
+    }
+  })();
+  return { needsSync };
+}
+
+/** "Settle all like this": the kind's non-destructive action on every open finding of that kind. Returns how many. */
+export function settleAllOfKind(db: Database, kind: FindingKind): number {
+  const res = db
+    .prepare(`UPDATE finding SET state = 'settled', resolution = ?, settled_at = ? WHERE kind = ? AND state = 'open'`)
+    .run(BULK[kind], now(), kind);
+  return res.changes;
+}
