@@ -2,6 +2,7 @@ import type { Database } from 'bun:sqlite';
 import { ulid } from 'ulid';
 import { collate, type CollateSummary } from './collate';
 import type { FileScanSummary } from './fileList';
+import { refreshFindings, type FindingsSummary } from './findings';
 import { relinkMissing, type RelinkSummary } from './relink';
 import { resolveGenres } from '../genres/resolve';
 import { assignStyleColors } from '../genres/colors';
@@ -54,6 +55,8 @@ export type SyncRunSummary = CollateSummary & {
   ingest?: IngestReport;
   /** What the file list did this run (local source only). */
   files?: FileScanSummary;
+  /** Needs-attention findings after this run (local source only). */
+  findings?: FindingsSummary;
   /**
    * Playlist entries / crate records re-attached by name after this run.
    * Absent when nothing was re-linked, like `analysis` and `ingest`.
@@ -121,6 +124,8 @@ async function runSyncNow(db: Database, sourceId: string): Promise<SyncRunRow> {
       summary.ingest = result.ingest;
     }
     if (result.files) summary.files = result.files;
+    // After collate, so a file the user excluded has already lost its track.
+    if (result.fileIds) summary.findings = refreshFindings(db, id, result.fileIds);
 
     if (result.input) {
       summary.input = result.input;

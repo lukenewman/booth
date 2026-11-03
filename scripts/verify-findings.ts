@@ -90,4 +90,79 @@ const two: Listed[] = [
   console.log('ok exclusion');
 }
 
+// --- Task 2: raise, clear, reopen, settled stays settled -------------------
+const { refreshFindings } = await import('../src/lib/server/library/findings');
+const findings = () => db.prepare(`SELECT kind, state, file_ids FROM finding ORDER BY kind, raised_at`).all() as { kind: string; state: string; file_ids: string }[];
+const openOf = (kind: string) => findings().filter((f) => f.kind === kind && f.state === 'open');
+{
+  // Clean library: nothing to report.
+  let built = await sync(two);
+  let s = refreshFindings(db, 'run-1', built.fileIds);
+  assert(s.new === 0 && s.open === 0, `clean library raises nothing, got ${JSON.stringify(s)}`);
+
+  // A missing file is raised once, not again on the next sync.
+  renameSync(p('A/02.mp3'), p('elsewhere-02.mp3'));
+  built = await sync(two);
+  s = refreshFindings(db, 'run-2', built.fileIds);
+  assert(s.new === 1 && openOf('missing').length === 1, `missing raised, got ${JSON.stringify(s)}`);
+  built = await sync(two);
+  s = refreshFindings(db, 'run-3', built.fileIds);
+  assert(s.new === 0 && s.open === 1, `missing not raised twice, got ${JSON.stringify(s)}`);
+
+  // It comes back: clears itself. It goes again: the same row reopens.
+  renameSync(p('elsewhere-02.mp3'), p('A/02.mp3'));
+  built = await sync(two);
+  s = refreshFindings(db, 'run-4', built.fileIds);
+  assert(s.cleared === 1 && s.open === 0, `returning file clears, got ${JSON.stringify(s)}`);
+  renameSync(p('A/02.mp3'), p('elsewhere-02.mp3'));
+  built = await sync(two);
+  s = refreshFindings(db, 'run-5', built.fileIds);
+  assert(s.new === 1 && findings().filter((f) => f.kind === 'missing').length === 1, `same problem reopens the same row, got ${JSON.stringify(findings())}`);
+  renameSync(p('elsewhere-02.mp3'), p('A/02.mp3'));
+  refreshFindings(db, 'run-6', (await sync(two)).fileIds);
+  console.log('ok missing raise/clear/reopen');
+
+  // Duplicates: a copy of One listed as a third track.
+  write('B/01 copy.mp3', 'AUDIO-1', 'One copy');
+  const three: Listed[] = [...two, { pid: 'P3', name: 'B/01 copy.mp3', pos: 3, title: 'One copy' }];
+  built = await sync(three);
+  s = refreshFindings(db, 'run-7', built.fileIds);
+  assert(openOf('duplicate').length === 1, `duplicate raised, got ${JSON.stringify(findings())}`);
+  const dupId = (db.prepare(`SELECT id FROM finding WHERE kind='duplicate'`).get() as { id: string }).id;
+
+  // Settled stays settled across syncs.
+  db.prepare(`UPDATE finding SET state='settled', resolution='keep_both' WHERE id = ?`).run(dupId);
+  built = await sync(three);
+  s = refreshFindings(db, 'run-8', built.fileIds);
+  assert(s.new === 0 && openOf('duplicate').length === 0, `settled duplicate stays settled, got ${JSON.stringify(findings())}`);
+
+  // A third copy is a new circumstance: a new finding; the settled pair stays settled.
+  write('C/01 again.mp3', 'AUDIO-1', 'One again');
+  const four: Listed[] = [...three, { pid: 'P4', name: 'C/01 again.mp3', pos: 4, title: 'One again' }];
+  built = await sync(four);
+  s = refreshFindings(db, 'run-9', built.fileIds);
+  assert(s.new === 1 && openOf('duplicate').length === 1, `third copy raises a new finding, got ${JSON.stringify(findings())}`);
+  assert((db.prepare(`SELECT state FROM finding WHERE id = ?`).get(dupId) as { state: string }).state === 'settled', 'the settled pair stays settled');
+  assert((JSON.parse(openOf('duplicate')[0].file_ids) as string[]).length === 3, 'the new finding names all three files');
+  console.log('ok duplicate settled/third copy');
+
+  // Unsupported: a file whose tags can't be read.
+  write('D/broken.mp3', 'AUDIO-9', 'UNREADABLE');
+  const five: Listed[] = [...four, { pid: 'P5', name: 'D/broken.mp3', pos: 5, title: 'Broken' }];
+  built = await sync(five);
+  s = refreshFindings(db, 'run-10', built.fileIds);
+  assert(openOf('unsupported').length === 1, `unsupported raised, got ${JSON.stringify(findings())}`);
+
+  // Excluded files raise nothing: exclude the broken one.
+  db.prepare(`UPDATE audio_file SET excluded = 1 WHERE path = ?`).run(p('D/broken.mp3'));
+  built = await sync(five);
+  s = refreshFindings(db, 'run-11', built.fileIds);
+  assert(openOf('unsupported').length === 0, `excluded file's finding clears, got ${JSON.stringify(findings())}`);
+  db.prepare(`UPDATE audio_file SET excluded = 0 WHERE path = ?`).run(p('D/broken.mp3'));
+  console.log('ok unsupported, excluded ignored');
+
+  // Leave the library as five-listed for Task 3.
+  refreshFindings(db, 'run-12', (await sync(five)).fileIds);
+}
+
 console.log('PASS verify-findings');
