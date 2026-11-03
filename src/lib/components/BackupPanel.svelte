@@ -65,11 +65,12 @@
     const r = d.lastRun;
     if (!r || r.state !== 'done' || !r.finishedAt) return null;
     const parts = [];
-    if (r.verify) parts.push(`checked ${n(r.checked + r.copied)} cop${r.checked + r.copied === 1 ? 'y' : 'ies'}${r.copied ? `, replaced ${n(r.copied)} that didn’t match` : ', all match'}`);
+    // A verify also copies what's new, so `copied` is new files plus damaged copies replaced.
+    if (r.verify) parts.push(`${n(r.checked)} cop${r.checked === 1 ? 'y' : 'ies'} intact${r.copied ? `, ${n(r.copied)} copied fresh (new, or no longer matching)` : ''}`);
     else if (r.copied) parts.push(`copied ${n(r.copied)} file${r.copied === 1 ? '' : 's'}`);
     if (r.moved) parts.push(`moved ${n(r.moved)} into the new folder layout`);
     if (!parts.length) parts.push('nothing new to copy');
-    return `${r.verify ? 'Check' : 'Backup'} finished ${when(r.finishedAt)}: ${parts.join('; ')}.`;
+    return `${r.verify ? 'Verify' : 'Backup'} finished ${when(r.finishedAt)}: ${parts.join('; ')}.`;
   }
 
   // Keep "just now" honest without a reload.
@@ -123,10 +124,10 @@
       {:else if !d.running}
         <div class="row">
           {#if isPending(d.destination.id) && d.destination.online}
-            <span class="working" role="status"><span class="spinner" aria-hidden="true"></span>{pending?.verify ? 'Checking every copy…' : 'Backing up…'}</span>
+            <span class="working" role="status"><span class="spinner" aria-hidden="true"></span>{pending?.verify ? 'Verifying backup…' : 'Backing up…'}</span>
           {:else if d.destination.online && !s?.running}
             <button class="button secondary" disabled={!!pending} onclick={() => run(d.destination.id)}>Back up now</button>
-            {#if d.lastBackupAt}<button class="link" disabled={!!pending} title="Re-read every copy and replace any that differ from what was backed up" onclick={() => run(d.destination.id, true)}>check every copy</button>{/if}
+            {#if d.lastBackupAt}<button class="link" disabled={!!pending} title="Re-read every copy and replace any that no longer match what was backed up" onclick={() => run(d.destination.id, true)}>verify backup</button>{/if}
           {/if}
           <button class="link right" onclick={() => (removing = d.destination.id)}>remove</button>
         </div>
