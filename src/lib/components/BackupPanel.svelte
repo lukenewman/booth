@@ -12,6 +12,18 @@
   let problem = $state<string | null>(null);
   let typing = $state(false);
   let removing = $state<string | null>(null);
+  /** A run just asked for: a destination id, or 'all'. Shown as working even when the run is over in a blink. */
+  let pending = $state<{ id: string; verify: boolean } | null>(null);
+
+  async function run(id: string | null, verify = false) {
+    pending = { id: id ?? 'all', verify };
+    const t0 = Date.now();
+    await backup.start({ destinationId: id ?? undefined, verify });
+    await new Promise((r) => setTimeout(r, Math.max(0, 900 - (Date.now() - t0))));
+    await backup.load();
+    pending = null;
+  }
+  const isPending = (id: string) => !!pending && (pending.id === id || pending.id === 'all');
 
   const s = $derived(backup.status);
   const dests = $derived(s?.destinations ?? []);
@@ -75,7 +87,7 @@
 
 <section class="backup">
   <div class="line"><span class="label">backups</span>
-    {#if connected.length > 1 && !s?.running}<button class="link right" onclick={() => backup.start()}>back up all</button>{/if}
+    {#if connected.length > 1 && !s?.running}<button class="link right" disabled={!!pending} onclick={() => run(null)}>back up all</button>{/if}
     {#if s?.running}<button class="link right" onclick={() => backup.stop()}>stop</button>{/if}
   </div>
 
@@ -91,7 +103,7 @@
         {#if d.destination.sameDisk}<span class="tag" title="It won’t help if the disk your music is on fails.">same disk as your music</span>{/if}
       </div>
       {#if d.running}
-        <div class="muted">{#if d.running.filesTotal}Backing up… {n(d.running.filesDone)} of {n(d.running.filesTotal)} files · {formatBytes(d.running.bytesDone)} of {formatBytes(d.running.bytesTotal)}{:else}Looking at what needs copying…{/if}</div>
+        <div class="muted"><span class="spinner" aria-hidden="true"></span>{#if d.running.filesTotal}Backing up… {n(d.running.filesDone)} of {n(d.running.filesTotal)} files · {formatBytes(d.running.bytesDone)} of {formatBytes(d.running.bytesTotal)}{:else}Looking at what needs copying…{/if}</div>
         <progress max={d.running.bytesTotal || 1} value={d.running.bytesDone}></progress>
       {:else if !d.destination.online}
         <div class="muted">Not connected{#if d.lastBackupAt}; last backup {when(d.lastBackupAt)}{/if}. Connect it to back up or check it.</div>
@@ -110,9 +122,11 @@
           <button class="link" onclick={() => (removing = null)}>cancel</button></div>
       {:else if !d.running}
         <div class="row">
-          {#if d.destination.online && !s?.running}
-            <button class="button secondary" onclick={() => backup.start({ destinationId: d.destination.id })}>Back up now</button>
-            {#if d.lastBackupAt}<button class="link" title="Re-read every copy and replace any that differ from what was backed up" onclick={() => backup.start({ destinationId: d.destination.id, verify: true })}>check every copy</button>{/if}
+          {#if isPending(d.destination.id) && d.destination.online}
+            <span class="working" role="status"><span class="spinner" aria-hidden="true"></span>{pending?.verify ? 'Checking every copy…' : 'Backing up…'}</span>
+          {:else if d.destination.online && !s?.running}
+            <button class="button secondary" disabled={!!pending} onclick={() => run(d.destination.id)}>Back up now</button>
+            {#if d.lastBackupAt}<button class="link" disabled={!!pending} title="Re-read every copy and replace any that differ from what was backed up" onclick={() => run(d.destination.id, true)}>check every copy</button>{/if}
           {/if}
           <button class="link right" onclick={() => (removing = d.destination.id)}>remove</button>
         </div>
@@ -148,6 +162,14 @@
   .dest { padding: 8px 0; border-top: 1px solid var(--border); }
   .dest:first-of-type { border-top: 0; }
   .right { margin-left: auto; }
+  .working { display: inline-flex; align-items: center; height: 28px; color: var(--text-muted); font-size: 12px; }
+  .spinner {
+    display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px;
+    border: 1.5px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
   .confirm { color: var(--text-muted); font-size: 12px; flex-wrap: wrap; }
   .muted { color: var(--text-subtle); display: block; }
   p { margin: 0 0 8px; line-height: 1.5; color: var(--text-muted); }
