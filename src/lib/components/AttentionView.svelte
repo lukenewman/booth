@@ -6,7 +6,7 @@
   interface FFile {
     fileId: string; path: string; present: boolean;
     track: { id: string; title: string; artist: string; album: string | null } | null;
-    starred: boolean; note: string | null; playlists: string[];
+    starred: boolean; note: string | null; playlists: string[]; alsoIn: string[];
   }
   interface Finding { id: string; kind: Kind; raisedAt: string; files: FFile[] }
 
@@ -64,6 +64,7 @@
     if (f.playlists.length) parts.push(`its place in ${f.playlists.join(', ')}`);
     return parts.length ? parts.join(', ') : 'nothing you added';
   }
+  function sourceName(id: string): string { return id === 'discogs' ? 'Discogs' : id; }
   function fileName(path: string): string { return path.split('/').slice(-3).join('/'); }
 </script>
 
@@ -97,7 +98,7 @@
               </div>
               {#if f.kind === 'duplicate'}
                 {#if confirming?.id === f.id && confirming.fileId === file.fileId}
-                  <span class="confirm">Keep only this one? The others leave the library (their files stay on disk); their stars, notes and playlist places move here.
+                  <span class="confirm">Keep only this one? The others leave the library (their files stay on disk); their stars, notes, tapped BPMs and playlist places move here.
                     <button class="primary" onclick={() => settle(f.id, { type: 'keep_one', fileId: file.fileId })}>Keep this one</button>
                     <button onclick={() => (confirming = null)}>Cancel</button></span>
                 {:else}
@@ -112,7 +113,7 @@
             {:else if f.kind === 'missing'}
               <button onclick={() => settle(f.id, { type: 'leave' })}>Leave it</button>
               {#if confirming?.id === f.id && confirming.type === 'forget'}
-                <span class="confirm">Forget this track? It goes with {losses(f.files[0])}.
+                <span class="confirm">{#if f.files[0].alsoIn.length}The track stays (it’s also in {f.files[0].alsoIn.map(sourceName).join(', ')}); this only takes the missing file out of the library.{:else}Forget this track? It goes with {losses(f.files[0])}.{/if}
                   <button class="danger" onclick={() => settle(f.id, { type: 'forget' })}>Forget</button>
                   <button onclick={() => (confirming = null)}>Cancel</button></span>
               {:else}

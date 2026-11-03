@@ -617,6 +617,9 @@ export function listTrackIds(db: Database, args: TrackFilterArgs): string[] {
   const playableClause = `track.id IN (
       SELECT entity_id FROM source_link
        WHERE entity_kind='track' AND source IN (${playable.map(() => '?').join(',')})
+    ) AND track.id NOT IN (
+      SELECT sl.entity_id FROM source_link sl JOIN audio_file f ON f.id = sl.external_id
+       WHERE sl.source = 'local' AND sl.entity_kind = 'track' AND f.present = 0
     )`;
   const combinedWhere = whereSql
     ? `${whereSql} AND ${playableClause}`

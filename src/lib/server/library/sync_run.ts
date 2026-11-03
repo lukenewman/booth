@@ -339,3 +339,18 @@ function parseRow(row: {
     error: row.error,
   };
 }
+
+/**
+ * Wait for `running` (if any) to settle, however it ends, then start a run.
+ * A change that must be picked up by a sync can't join one already under way:
+ * that run read its inputs before the change was made.
+ */
+export async function joinThenRun<T>(running: Promise<unknown> | undefined, start: () => Promise<T>): Promise<T> {
+  if (running) await running.catch(() => {});
+  return start();
+}
+
+/** A sync that starts after now: waits out one in progress rather than joining it. */
+export function runFreshSync(db: Database, sourceId: string): Promise<SyncRunRow> {
+  return joinThenRun(inFlight.get(sourceId), () => runSync(db, sourceId));
+}

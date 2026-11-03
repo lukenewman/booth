@@ -95,7 +95,7 @@ function toFileRow(r: DbRow): FileRow {
     tags: r.tags ? (JSON.parse(r.tags) as FileTags) : null,
     ownership: r.ownership,
     present: r.present === 1,
-    excluded: r.excluded === 1,
+    excluded: r.excluded !== 0,
   };
 }
 
@@ -216,10 +216,12 @@ function writeJob(db: Database, d: ReadResult, wanted: Map<string, Ownership>, s
   // A new path. Is it a file we already know, moved? Only if exactly one
   // known file has this audio, nobody still asks for its old path, and
   // nothing is there any more. A copy turning up beside a present original
-  // is a duplicate, never a move.
+  // is a duplicate, never a move. A file the user took out of the library is
+  // never the candidate: a new copy of its audio would silently inherit that
+  // decision and vanish (catalog moves still carry it, by catalog id).
   if (d.fingerprint) {
     const candidates = (db
-      .prepare(`SELECT id, path FROM audio_file WHERE fingerprint = ?`)
+      .prepare(`SELECT id, path FROM audio_file WHERE fingerprint = ? AND excluded = 0`)
       .all(d.fingerprint) as { id: string; path: string }[]).filter((c) => !wanted.has(c.path) && !existsSync(c.path));
     if (candidates.length === 1) {
       db.prepare(

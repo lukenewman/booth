@@ -4,6 +4,7 @@ import { scanFiles, type FileListDeps, type FileScanSummary } from '../../librar
 import type { FileTags } from '../../library/tags';
 import type { SourceRelease, SourceTrack } from '../types';
 import { ingestedFromFiles } from './ingest';
+import { restoreOrphanedCopies } from '../../library/findings';
 
 /**
  * The local source's result, built from the file list.
@@ -61,6 +62,7 @@ export async function buildLocalResult(
   const { files, summary } = await scanFiles(db, wanted, deps);
   summary.moved += catalogMoves;
   for (const c of input.catalogs) recordCatalogEntries(db, c.id, refsOf(c), files);
+  restoreOrphanedCopies(db, files);
 
   const tracks: SourceTrack[] = [];
   const releases = new Map<string, SourceRelease>();

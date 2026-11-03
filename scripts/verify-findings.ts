@@ -211,8 +211,9 @@ const trackOfPath = (name: string) => (db.prepare(
   addTrack(db, pl.id, two2);
   const missing = listOpenFindings(db).find((f) => f.kind === 'missing')!;
   assert(missing.files[0].playlists.join() === 'Warmup', 'forget shows the playlists first');
-  settleFinding(db, missing.id, { type: 'forget' });
+  const forgot = settleFinding(db, missing.id, { type: 'forget' });
   await sync(five);
+  forgot.afterSync?.();
   assert(!trackOfPath('A/02.mp3'), 'forgotten track is gone');
   assert(!db.prepare(`SELECT 1 FROM playlist_track WHERE playlist_id = ? AND snap_title = 'Two'`).get(pl.id), 'forget removed the playlist entry rather than leaving it for relink');
   s = refreshFindings(db, 'run-15', (await sync(five)).fileIds);
