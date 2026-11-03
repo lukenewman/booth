@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
+import { runMigrations } from '$lib/server/db/migrate';
 import { addDestination, backupStatus, BackupError } from '$lib/server/backup/library';
 import { libraryRoots, recoverOnce } from '$lib/server/backup/runner';
 import { expandHome, tildePath } from '$lib/server/sources/local/music_library';
@@ -8,6 +9,8 @@ import { expandHome, tildePath } from '$lib/server/sources/local/music_library';
 /** GET → the backup status: each destination's last backup, what's not in it, a run in progress. */
 export const GET: RequestHandler = () => {
   const db = getDb();
+  // The dev server reloads code without reopening the database, so a new migration may not be applied yet.
+  runMigrations(db);
   recoverOnce(db);
   const s = backupStatus(db, { libraryRoots: libraryRoots(db) });
   return json({ ...s, destinations: s.destinations.map((d) => ({ ...d, destination: { ...d.destination, path: tildePath(d.destination.path) } })) });

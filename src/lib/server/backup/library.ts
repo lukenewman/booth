@@ -188,6 +188,10 @@ export interface BackupResult {
   state: 'done' | 'failed' | 'stopped';
   filesCopied: number;
   filesSkipped: number;
+  /** Copies moved to a new place within the backup. */
+  filesMoved: number;
+  /** Copies re-read and found intact ("check every copy"). */
+  filesChecked: number;
   bytesCopied: number;
   failed: { path: string; error: string }[];
   error?: string;
@@ -218,15 +222,16 @@ export async function runLibraryBackup(
   if (!dest) throw new BackupError('No backup destination set.');
   const places = opts.places ?? [MUSIC_APP_PLACE];
   const runId = ulid();
-  db.prepare(`INSERT INTO backup_run (id, destination_id) VALUES (?, ?)`).run(runId, dest.id);
-  const result: BackupResult = { state: 'done', filesCopied: 0, filesSkipped: 0, bytesCopied: 0, failed: [] };
+  db.prepare(`INSERT INTO backup_run (id, destination_id, verify) VALUES (?, ?, ?)`).run(runId, dest.id, opts.verify ? 1 : 0);
+  const result: BackupResult = { state: 'done', filesCopied: 0, filesSkipped: 0, filesMoved: 0, filesChecked: 0, bytesCopied: 0, failed: [] };
   const finish = (state: BackupResult['state'], error?: string) => {
     result.state = state;
     if (error) result.error = error;
     db.prepare(
-      `UPDATE backup_run SET state = ?, finished_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), files_done = ?, bytes_done = ?, failed = ?, error = ? WHERE id = ?`,
+      `UPDATE backup_run SET state = ?, finished_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), files_done = ?, bytes_done = ?,
+         files_copied = ?, files_moved = ?, files_checked = ?, failed = ?, error = ? WHERE id = ?`,
     ).run(
-      state, result.filesCopied + result.filesSkipped, result.bytesCopied,
+      state, result.filesCopied + result.filesSkipped, result.bytesCopied, result.filesCopied, result.filesMoved, result.filesChecked,
       result.failed.length ? JSON.stringify({ count: result.failed.length, first: result.failed.slice(0, 50) }) : null,
       error ?? null, runId,
     );
@@ -264,6 +269,7 @@ export async function runLibraryBackup(
             mkdirSync(dirname(to), { recursive: true });
             renameSync(held.dest_path, to);
             moveRecord.run(to, dest.id, file.id);
+            result.filesMoved++;
             vacated.add(dirname(held.dest_path));
           }
         } catch { /* left where it is; copied again below */ }
@@ -302,6 +308,7 @@ export async function runLibraryBackup(
         } catch { intact = false; }
         if (intact) {
           result.filesSkipped++;
+          result.filesChecked++;
           bytesDone += j.size;
           progress.run(result.filesCopied + result.filesSkipped, bytesDone, runId);
           continue;
@@ -390,7 +397,7 @@ export interface DestinationStatus {
   /** Files the destination holds. */
   filesHeld: number;
   running: { startedAt: string; filesTotal: number; filesDone: number; bytesTotal: number; bytesDone: number } | null;
-  lastRun: { state: string; finishedAt: string | null; error: string | null; failed: number } | null;
+  lastRun: { state: string; finishedAt: string | null; error: string | null; failed: number; copied: number; moved: number; checked: number; verify: boolean } | null;
 }
 
 export interface BackupStatus {
@@ -420,14 +427,15 @@ export function backupStatus(db: Database, opts: { libraryRoots?: string[]; now?
     const done = db.prepare(`SELECT finished_at FROM backup_run WHERE destination_id = ? AND state = 'done' ORDER BY started_at DESC LIMIT 1`).get(destination.id) as { finished_at: string } | null;
     if (done) { st.lastBackupAt = done.finished_at; st.daysSince = days(done.finished_at); }
     const run = db.prepare(`SELECT * FROM backup_run WHERE destination_id = ? ORDER BY started_at DESC LIMIT 1`).get(destination.id) as
-      | { state: string; started_at: string; finished_at: string | null; files_total: number; files_done: number; bytes_total: number; bytes_done: number; error: string | null; failed: string | null }
+      | { state: string; started_at: string; finished_at: string | null; files_total: number; files_done: number; bytes_total: number; bytes_done: number; error: string | null; failed: string | null;
+          files_copied: number; files_moved: number; files_checked: number; verify: number }
       | null;
     if (run?.state === 'running') {
       st.running = { startedAt: run.started_at, filesTotal: run.files_total, filesDone: run.files_done, bytesTotal: run.bytes_total, bytesDone: run.bytes_done };
     } else if (run) {
       let failed = 0;
       try { failed = run.failed ? (JSON.parse(run.failed) as { count: number }).count : 0; } catch { failed = 0; }
-      st.lastRun = { state: run.state, finishedAt: run.finished_at, error: run.error, failed };
+      st.lastRun = { state: run.state, finishedAt: run.finished_at, error: run.error, failed, copied: run.files_copied, moved: run.files_moved, checked: run.files_checked, verify: run.verify === 1 };
     }
     const outstanding = new Set<string>();
     for (const f of files) {

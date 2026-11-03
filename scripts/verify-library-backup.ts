@@ -268,8 +268,11 @@ const copyOf = (n: string, at = dest) => join(at, 'Booth Backup', 'files', 'Musi
   assert(r.state === 'done' && r.filesCopied === 0, `the new layout moves copies instead of copying, got ${JSON.stringify(r)}`);
   assert(existsSync(copyOf('A/01.mp3', third)) && !existsSync(oldCopy), 'the copy is at its new place');
   assert(!existsSync(join(third, 'Booth Backup', 'files', 'Other')), 'and the emptied old folders are gone');
+  const lastRun = () => backupStatus(db).destinations.find((d) => d.destination.id === t.id)!.lastRun!;
+  assert(lastRun().moved === 3 && lastRun().copied === 0 && !lastRun().verify, `the run says what it did, got ${JSON.stringify(lastRun())}`);
   r = await runLibraryBackup(db, deps, { places, destinationId: t.id, verify: true });
   assert(r.state === 'done' && r.filesCopied === 0, `moved copies still check out, got ${JSON.stringify(r)}`);
+  assert(lastRun().verify && lastRun().checked === 3 && lastRun().copied === 0, `a check says how many it checked, got ${JSON.stringify(lastRun())}`);
   console.log('ok layout and moves');
 }
 

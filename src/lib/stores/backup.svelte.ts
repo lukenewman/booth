@@ -11,7 +11,7 @@ export interface DestinationStatus {
   bytesToCopy: number;
   filesHeld: number;
   running: { startedAt: string; filesTotal: number; filesDone: number; bytesTotal: number; bytesDone: number } | null;
-  lastRun: { state: string; finishedAt: string | null; error: string | null; failed: number } | null;
+  lastRun: { state: string; finishedAt: string | null; error: string | null; failed: number; copied: number; moved: number; checked: number; verify: boolean } | null;
 }
 
 export interface BackupStatus {

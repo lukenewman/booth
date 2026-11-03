@@ -68,11 +68,11 @@ export function startBackup(db: Database, opts: { destinationIds?: string[]; ver
   state.stopRequested = false;
   const ids = opts.destinationIds ?? listDestinations(db).filter((d) => d.online).map((d) => d.id);
   state.running = (async () => {
-    let last: BackupResult = { state: 'done', filesCopied: 0, filesSkipped: 0, bytesCopied: 0, failed: [] };
+    let last: BackupResult = { state: 'done', filesCopied: 0, filesSkipped: 0, filesMoved: 0, filesChecked: 0, bytesCopied: 0, failed: [] };
     for (const destinationId of ids) {
       if (state.stopRequested) break;
       last = await runLibraryBackup(db, realDeps(db), { destinationId, places: backupPlaces(db), verify: opts.verify, shouldStop: () => state.stopRequested });
-      console.log(`[backup] ${destinationId} ${last.state}: ${last.filesCopied} copied, ${last.filesSkipped} already there, ${last.failed.length} failed${last.error ? ` — ${last.error}` : ''}`);
+      console.log(`[backup] ${destinationId} ${last.state}: ${last.filesCopied} copied, ${last.filesMoved} moved, ${last.filesChecked} checked, ${last.filesSkipped} already there, ${last.failed.length} failed${last.error ? ` — ${last.error}` : ''}`);
     }
     return last;
   })()

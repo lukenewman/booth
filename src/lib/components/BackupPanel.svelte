@@ -40,9 +40,29 @@
   }
 
   function when(iso: string): string {
-    const days = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
+    const ms = Date.now() - Date.parse(iso);
+    const mins = Math.floor(ms / 60_000);
+    if (mins < 2) return 'just now';
+    if (mins < 60) return `${mins} minutes ago`;
+    const days = Math.floor(ms / 86_400_000);
     return days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
   }
+
+  /** What the last finished run did, so a quick run still visibly happened. */
+  function lastResult(d: DestinationStatus): string | null {
+    const r = d.lastRun;
+    if (!r || r.state !== 'done' || !r.finishedAt) return null;
+    const parts = [];
+    if (r.verify) parts.push(`checked ${n(r.checked + r.copied)} cop${r.checked + r.copied === 1 ? 'y' : 'ies'}${r.copied ? `, replaced ${n(r.copied)} that didn’t match` : ', all match'}`);
+    else if (r.copied) parts.push(`copied ${n(r.copied)} file${r.copied === 1 ? '' : 's'}`);
+    if (r.moved) parts.push(`moved ${n(r.moved)} into the new folder layout`);
+    if (!parts.length) parts.push('nothing new to copy');
+    return `${r.verify ? 'Check' : 'Backup'} finished ${when(r.finishedAt)}: ${parts.join('; ')}.`;
+  }
+
+  // Keep "just now" honest without a reload.
+  let tick = $state(0);
+  onMount(() => { const t = setInterval(() => tick++, 30_000); return () => clearInterval(t); });
 
   function summary(d: DestinationStatus): string {
     const last = d.lastBackupAt ? `Last backup ${when(d.lastBackupAt)}.` : d.filesHeld ? 'A backup was started but hasn’t finished.' : 'No backup yet.';
@@ -76,7 +96,8 @@
       {:else if !d.destination.online}
         <div class="muted">Not connected{#if d.lastBackupAt}; last backup {when(d.lastBackupAt)}{/if}. Connect it to back up or check it.</div>
       {:else}
-        <div class="muted">{summary(d)}</div>
+        {#key tick}<div class="muted">{summary(d)}</div>
+        {#if lastResult(d)}<div class="muted">{lastResult(d)}</div>{/if}{/key}
         {#if d.lastRun && d.lastRun.state !== 'done'}
           <p class="warn">{d.lastRun.state === 'stopped' ? 'The last backup was stopped part-way; backing up again carries on from there.' : d.lastRun.error ?? 'The last backup failed.'}</p>
         {:else if d.lastRun?.failed}
