@@ -151,7 +151,7 @@ src/
           username.ts                         lazy /oauth/identity username cache
           sync.ts                             full collection re-pull → SyncResult; populates instanceIds facet
           hydrateDiscogsTracks.ts             post-sync: fetch /releases/{id}.tracklist for Discogs releases lacking track rows → insert track rows (title, duration_ms when present, sequential position) + discogsPosition facet ("A1","B2"); merges onto existing local tracks via release_position. Called from sync_run after each discogs collate, and fire-and-forget on add.
-          videos.ts                           fetchReleaseVideos(externalId) → release .videos[] (deduped by uri, YouTube ids parsed)
+          media.ts                            fetchReleaseMedia(externalId) → { images, videos } from one /releases/{id} call (both deduped by uri)
           youtube.ts                          parseYouTubeId(uri) — pure URL → video-id helper (youtube.com / youtu.be / music. / m.)
           format.ts                           buildFormatLabel(formats[]) — pure: rich "Vinyl, LP, Album, Clear, 180g" string from a search result's formats[] (name + descriptions + text)
           index.ts                            discogsSource: MusicSource & CollectionWritable
@@ -187,7 +187,7 @@ src/
         +server.ts                            GET → [{ id, name, isStub, lastSyncedAt, lastSummary }] for the rail Sources section
         [id]/sync/+server.ts                  POST → runSync(getDb(), id) → return summary; 404 unknown, 501 stub
         [id]/runs/+server.ts                  GET ?limit= → { items: SyncRunRow[] } recent sync_run rows for the given source (default 20, max 200)
-        discogs/releases/[id]/videos/+server.ts  GET → { videos: [{url,title,youtubeId}] } for a release ULID; resolves ULID→Discogs external_id, fetches /releases/{id}.videos[]; empty when no discogs link/videos
+        discogs/releases/[id]/media/+server.ts   GET → { images: [{url,thumb,width,height,primary}], videos: [{url,title,youtubeId}] } for a release ULID; resolves ULID→Discogs external_id, fetches /releases/{id}; empty when no discogs link
       library/
         tracks/+server.ts                     GET ?source=&q=&multiSource=&limit=&offset=  paginated tracks
         tracks/ids/+server.ts                 GET ?source=&q=&sort= → { ids } — every matching playable track id in listview order, unpaginated; the library playback queue
@@ -340,7 +340,9 @@ docs/
 - **The outcome retro-updates a run row already marked finished**, so its timestamps predate its own final text. Accepted deliberately: the alternatives were never reporting the outcome, or giving analysis its own rows and doubling the length of the history list. The update re-reads the stored summary rather than reusing the in-memory object, since minutes may have passed.
 - **90s excerpt from 30s in, mono at 16 kHz.** Tempo is a global property, the head is where intros and needle drops live, and an onset envelope has no use for the top of the spectrum. 0.12s per track at concurrency 4 — the whole library in nine minutes, nothing like a rekordbox analysis session.
 
-### Release videos
+### Release photos and videos
+- **Photos and videos share one Discogs request.** Both live on the full `/releases/{id}` response, so the detail pane fetches `/api/sources/discogs/releases/{id}/media` once rather than one endpoint per section — opening releases quickly would otherwise spend the 60/min budget twice as fast. (This replaced a videos-only endpoint.)
+- **Photos** render as a thumbnail strip under the cover, only when Discogs has **more than one** image — a lone image is the cover already shown. Clicking one opens `PhotoViewer` (full-size, ←/→ wraps, Esc / backdrop / × closes, "Open ↗" for the original). The viewer takes focus on open and stops key propagation, otherwise the explorer's window-level shortcuts would act on arrows and Esc underneath it. Images hotlink Discogs' signed CDN URLs (the same ones covers already use); nothing is cached locally.
 - **Discogs release detail lazy-loads YouTube videos.** `ReleaseDetail.svelte` fetches `/api/sources/discogs/releases/{id}/videos` when a release with a Discogs `source_link` opens, and renders a list of `<iframe>` embeds (`loading="lazy"`, `youtube-nocookie.com`), each captioned with the Discogs video title. A `$effect` keyed on `release.id` cancels stale fetches when the user switches releases.
 - **Server**: `fetchReleaseVideos(externalId)` (`discogs/videos.ts`) calls the full `/releases/{id}` Discogs endpoint and returns its `.videos[]`, deduped by uri (Discogs sometimes repeats one); `parseYouTubeId` (`discogs/youtube.ts`, pure) resolves the embeddable id. A non-YouTube uri renders as a plain link instead of an embed.
 - **Endpoint** returns `{ videos: [] }` (not 404) when the release has no Discogs link or no videos; a Discogs 429 surfaces as HTTP 429.

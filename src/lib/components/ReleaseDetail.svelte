@@ -9,6 +9,7 @@
   import StarButton from './StarButton.svelte';
   import TrackNote from './TrackNote.svelte';
   import TapTempo from './TapTempo.svelte';
+  import PhotoViewer, { type Photo } from './PhotoViewer.svelte';
   import { annotations } from '$lib/stores/annotations.svelte';
   import { player } from '$lib/stores/player.svelte';
   import { translucentDragImage } from '$lib/dnd';
@@ -198,23 +199,33 @@
 
   interface ReleaseVideo { url: string; title: string; youtubeId: string | null; }
   let videos = $state<ReleaseVideo[]>([]);
+  let photos = $state<Photo[]>([]);
+  /** Photo open in the viewer, or null. */
+  let photoIndex = $state<number | null>(null);
   let videosLoading = $state(false);
   let videosError = $state(false);
 
-  // Lazy-load Discogs videos when a release with a Discogs link is shown.
+  // Lazy-load Discogs photos and videos when a release with a Discogs link is
+  // shown. One request: both come from the same Discogs release response.
   $effect(() => {
     const rid = release.id;
     const hasDiscogs = sources.some((s) => s.source === 'discogs');
     videos = [];
+    photos = [];
+    photoIndex = null;
     videosError = false;
     videosLoading = false;
     if (!hasDiscogs) return;
 
     let cancelled = false;
     videosLoading = true;
-    fetch(`/api/sources/discogs/releases/${rid}/videos`)
+    fetch(`/api/sources/discogs/releases/${rid}/media`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((data) => { if (!cancelled) videos = data.videos ?? []; })
+      .then((data) => {
+        if (cancelled) return;
+        videos = data.videos ?? [];
+        photos = data.images ?? [];
+      })
       .catch(() => { if (!cancelled) videosError = true; })
       .finally(() => { if (!cancelled) videosLoading = false; });
     return () => { cancelled = true; };
@@ -255,6 +266,18 @@
   {:else}
     <div class="cover"></div>
   {/if}
+  <!-- A lone Discogs photo is the cover already shown above; the strip is for
+       the rest (back sleeve, labels, inserts). -->
+  {#if photos.length > 1}
+    <div class="photos" aria-label="Discogs photos">
+      {#each photos as p, i (p.url)}
+        <button class="photo-thumb" onclick={() => (photoIndex = i)} title="Photo {i + 1} of {photos.length}">
+          <img src={p.thumb} alt="{release.title} photo {i + 1}" loading="lazy">
+        </button>
+      {/each}
+    </div>
+  {/if}
+  <PhotoViewer {photos} bind:index={photoIndex} title={release.title} />
   <div class="release-header">
     <div class="title-row">
       <div class="title">{release.title}</div>
@@ -877,6 +900,23 @@
     word-break: break-word;
   }
 
+  .photos {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+    gap: 6px;
+    margin: -6px 0 14px;
+  }
+  .photo-thumb {
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--bg-raised);
+    aspect-ratio: 1;
+    overflow: hidden;
+    cursor: zoom-in;
+  }
+  .photo-thumb:hover { border-color: var(--text-subtle); }
+  .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .videos {
     margin-top: 18px;
     border-top: 1px solid var(--border);
